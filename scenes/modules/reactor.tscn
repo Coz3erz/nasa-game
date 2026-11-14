@@ -1,0 +1,28 @@
+[gd_scene format=3 uid="uid://cjisgeknfhwem"]
+
+[ext_resource type="Script" uid="uid://dv88uhj3s8rfr" path="res://scripts/game systems/reactor.gd" id="1_4exvv"]
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_tll7k"]
+size = Vector2(128, 128)
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_e1aqq"]
+size = Vector2(150, 150)
+
+[node name="Reactor" type="StaticBody2D" unique_id=1376995217]
+z_index = 1
+script = ExtResource("1_4exvv")
+
+[node name="Visual" type="ColorRect" parent="." unique_id=1795314088]
+offset_right = 128.0
+offset_bottom = 128.0
+color = Color(1, 1, 0, 1)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="." unique_id=1935794386]
+position = Vector2(64, 64)
+shape = SubResource("RectangleShape2D_tll7k")
+
+[node name="InteractArea" type="Area2D" parent="." unique_id=1618979187]
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="InteractArea" unique_id=93277108]
+position = Vector2(64, 64)
+shape = SubResource("RectangleShape2D_e1aqq")

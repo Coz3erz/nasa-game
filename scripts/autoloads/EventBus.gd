@@ -1,0 +1,16 @@
+extends Node
+
+@warning_ignore("unused_signal")
+signal show_dialogue(portrait: Texture2D, text: String, position: String)
+@warning_ignore("unused_signal")
+signal hazard_started(hazard_name: String)
+@warning_ignore("unused_signal")
+signal hazard_ended(hazard_name: String)
+@warning_ignore("unused_signal")
+signal power_changed(current: float, max_power: float)
+@warning_ignore("unused_signal")
+signal module_broken(module_name: String)
+@warning_ignore("unused_signal")
+signal game_over(reason: String)
+@warning_ignore("unused_signal")
+signal tutorial_step_advanced(step: int)

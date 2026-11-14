@@ -1,0 +1,37 @@
+[gd_scene format=3 uid="uid://65xbkmaftctv"]
+
+[ext_resource type="Script" uid="uid://diwdfx7m6301u" path="res://scripts/game systems/Grid.gd" id="1_84jgu"]
+[ext_resource type="PackedScene" uid="uid://djd077rlqr7g7" path="res://scenes/modules/life_support.tscn" id="2_vqc5o"]
+[ext_resource type="PackedScene" uid="uid://cx3w35fxbp283" path="res://scenes/modules/thermal.tscn" id="3_nhvkb"]
+[ext_resource type="PackedScene" uid="uid://bq52wni01fcr2" path="res://scenes/entities/player.tscn" id="4_vqc5o"]
+[ext_resource type="PackedScene" uid="uid://cjisgeknfhwem" path="res://scenes/modules/reactor.tscn" id="5_nhvkb"]
+
+[sub_resource type="Environment" id="Environment_nhvkb"]
+tonemap_mode = 3
+glow_enabled = true
+glow_intensity = 1.0
+glow_bloom = 1.0
+
+[node name="Game" type="Node2D" unique_id=1192000315]
+
+[node name="ColorRect" type="ColorRect" parent="." unique_id=877574180]
+offset_left = -807.0
+offset_top = -1103.0
+offset_right = 1713.0
+offset_bottom = 1417.0
+color = Color(0, 0, 0, 1)
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="." unique_id=386054076]
+environment = SubResource("Environment_nhvkb")
+
+[node name="Camera2D" type="Camera2D" parent="." unique_id=545144320]
+position = Vector2(320, 320)
+
+[node name="Grid" type="Node2D" parent="." unique_id=991224328]
+script = ExtResource("1_84jgu")
+reactor_scene = ExtResource("5_nhvkb")
+life_support_scene = ExtResource("2_vqc5o")
+thermal_scene = ExtResource("3_nhvkb")
+
+[node name="Player" parent="." unique_id=1215049810 instance=ExtResource("4_vqc5o")]
+position = Vector2(-9, 702)

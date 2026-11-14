@@ -1,0 +1,19 @@
+[gd_scene format=3 uid="uid://bw7mjm563g20s"]
+
+[ext_resource type="Script" uid="uid://ymxcwnobphie" path="res://scripts/main scenes/cutscene.gd" id="1_vg5b8"]
+
+[node name="cutscene" type="Control" unique_id=877909203]
+layout_mode = 3
+anchors_preset = 0
+script = ExtResource("1_vg5b8")
+total_duration = 10.0
+sol_type_delay = 3.0
+sol_char_delay = 0.7
+ship_size_multiplier = 0.2
+sun_center_y_ratio = 0.0
+sun_radius_a = 0.5
+gas_radius = 3.8
+lens_strength = 0.0
+sol_text = "mars"
+sol_color = Color(0, 1, 0.25490198, 1)
+next_scene = "uid://65xbkmaftctv"

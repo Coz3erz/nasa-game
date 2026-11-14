@@ -1,0 +1,29 @@
+[gd_scene format=3 uid="uid://djd077rlqr7g7"]
+
+[ext_resource type="Script" uid="uid://bprqgioap2kon" path="res://scripts/inheritance/BaseModule.gd" id="1_phupd"]
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_nmh8c"]
+size = Vector2(256, 256)
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_cd5l1"]
+size = Vector2(220, 220)
+
+[node name="LifeSupport" type="StaticBody2D" unique_id=1504524606]
+script = ExtResource("1_phupd")
+module_name = "Life Support"
+grid_size = Vector2i(4, 4)
+
+[node name="Visual" type="ColorRect" parent="." unique_id=1196083350]
+offset_right = 256.0
+offset_bottom = 256.0
+color = Color(0, 1, 1, 1)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="." unique_id=415435957]
+position = Vector2(128, 128)
+shape = SubResource("RectangleShape2D_nmh8c")
+
+[node name="InteractArea" type="Area2D" parent="." unique_id=300405844]
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="InteractArea" unique_id=1488378712]
+position = Vector2(128, 128)
+shape = SubResource("RectangleShape2D_cd5l1")
