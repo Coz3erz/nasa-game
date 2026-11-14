@@ -21,6 +21,7 @@ Transition="*uid://biwie4aohk6df"
 EventBus="*uid://bl05nu4e54tqs"
 GameManager="*uid://ecq8du2oji08"
 BaseManager="*uid://ckvgjnnhg08wv"
+Polish="*uid://bn3mme6x63rk3"
 
 [display]
 

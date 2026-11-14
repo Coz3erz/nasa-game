@@ -1,0 +1,22 @@
+[gd_scene format=3 uid="uid://cnpheotxx6vuw"]
+
+[ext_resource type="Script" uid="uid://de2ehpjpprnst" path="res://scripts/game systems/wire_module.gd" id="1_g02y3"]
+[ext_resource type="PackedScene" uid="uid://c3rfjno122apm" path="res://scenes/modules/wire.tscn" id="2_aqpkq"]
+[ext_resource type="Texture2D" uid="uid://60ym2wkfl78l" path="res://sprites/modules/wire_module_sprite.png" id="2_hi8lo"]
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_hi8lo"]
+size = Vector2(10, 20)
+
+[node name="WireSource" type="StaticBody2D" unique_id=1441731912]
+script = ExtResource("1_g02y3")
+wire_scene = ExtResource("2_aqpkq")
+
+[node name="Sprite2D" type="Sprite2D" parent="." unique_id=354901439]
+texture_filter = 1
+position = Vector2(-9.536743e-07, 1.9073486e-06)
+scale = Vector2(0.3125, 0.3125)
+texture = ExtResource("2_hi8lo")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="." unique_id=1010814124]
+shape = SubResource("RectangleShape2D_hi8lo")
+one_way_collision_margin = 0.0

@@ -25,6 +25,12 @@ extends Control
 @export var ship_facing_left: bool = true
 @export var ship_sun_light: float = 1.0
 
+@export_group("Mars")
+@export var mars_center_x_ratio: float = 0.14
+@export var mars_center_y_ratio: float = 0.52
+@export var mars_size_ratio: float = 0.56
+@export var mars_rotation_speed: float = 0.025
+
 @export_group("Sun Position")
 @export var sun_center_x_ratio: float = 1.50
 @export var sun_center_y_ratio: float = 0.50
@@ -45,22 +51,16 @@ extends Control
 @export var corona_far_color: Color = Color(0.95, 0.28, 0.06)
 
 @export_group("Sun Life")
-## Seconds per full breath of the star.
 @export var breath_period: float = 7.5
-## 0 = static, 1 = normal, 2 = violent.
 @export_range(0.0, 2.0, 0.05) var breath_depth: float = 1.0
-## Dark sunspot pits. Radius is in screen heights.
 @export var sunspot_radius: float = 0.22
-## Seconds between surface eruptions (smaller = more).
 @export var flare_interval: float = 1.6
-## Brightness of the white-hot limb ring.
 @export var limb_ring_strength: float = 0.9
 
 @export_group("Background")
 @export var nebula_a_color: Color = Color(0.05, 0.02, 0.12)
 @export var nebula_b_color: Color = Color(0.12, 0.02, 0.06)
 @export var star_color: Color = Color(0.88, 0.94, 1.0)
-## How hard the sun bends starlight around its edge.
 @export_range(0.0, 1.5, 0.05) var lens_strength: float = 0.85
 
 @export_group("Cinematic")
@@ -137,7 +137,6 @@ vec3 star_layer(vec2 sp, float scale, float density, float size, float seed, flo
 void fragment() {
 	vec2 p = vec2(UV.x * aspect, UV.y);
 
-	// gravitational lensing: starlight is dragged around the sun's limb
 	vec2 d = p - lens_center;
 	float r = max(length(d), 0.0001);
 	float R = lens_radius;
@@ -146,7 +145,6 @@ void fragment() {
 	float x = r / R;
 	float mag = 1.0 + 0.9 * lens_strength * exp(-(x - 1.0) * 7.0) * step(1.0, x + 0.15);
 
-	// nebula with dust lanes and a faint galactic band
 	vec2 np = sp * 0.9;
 	float n1 = fbm(np + vec2(time * 0.004, time * 0.002));
 	float n2 = fbm(np * 1.7 + vec2(-time * 0.006, time * 0.003) + vec2(3.7, 1.2));
@@ -157,7 +155,6 @@ void fragment() {
 	float band = exp(-pow(dot(sp - vec2(1.2, 0.5), normalize(vec2(0.45, 1.0))) * 1.9, 2.0));
 	col += mix(nebula_a.rgb, vec3(0.5, 0.3, 0.4), 0.5) * band * (0.25 + 0.5 * n2) * 0.7;
 
-	// stars: three depths, bigger ones get diffraction spikes
 	vec3 st = vec3(0.0);
 	st += star_layer(sp, 70.0, 0.955, 0.10, 1.0, 0.0);
 	st += star_layer(sp, 130.0, 0.965, 0.085, 13.7, 0.0) * 0.9;
@@ -166,6 +163,97 @@ void fragment() {
 	col += st * (band * 1.6 + 1.0) * mag;
 
 	COLOR = vec4(col, 1.0);
+}
+"""
+
+const MARS_SHADER := """
+shader_type canvas_item;
+uniform float time = 0.0;
+uniform float rotation_speed = 0.025;
+uniform vec2 light_dir = vec2(0.85, -0.35);
+uniform float breath = 0.0;
+
+float hash21(vec2 p) {
+	vec3 p3 = fract(vec3(p.xyx) * 0.1031);
+	p3 += dot(p3, p3.yzx + 33.33);
+	return fract((p3.x + p3.y) * p3.z);
+}
+float noise(vec2 p) {
+	vec2 i = floor(p);
+	vec2 f = fract(p);
+	vec2 u = f * f * (3.0 - 2.0 * f);
+	return mix(mix(hash21(i), hash21(i + vec2(1.0, 0.0)), u.x),
+	           mix(hash21(i + vec2(0.0, 1.0)), hash21(i + vec2(1.0, 1.0)), u.x), u.y);
+}
+float fbm(vec2 p) {
+	float v = 0.0;
+	float a = 0.5;
+	for (int i = 0; i < 5; i++) {
+		v += a * noise(p);
+		p = p * 2.03 + vec2(2.3, 5.7);
+		a *= 0.5;
+	}
+	return v;
+}
+
+void fragment() {
+	vec2 uv = (UV - 0.5) * 2.4;
+	float r = length(uv);
+	if (r > 1.2) { discard; }
+
+	vec2 L2 = normalize(light_dir + vec2(0.0001));
+	vec3 L = normalize(vec3(L2, 0.35));
+
+	float atmo_halo = exp(-max(r - 0.98, 0.0) * 14.0) * smoothstep(1.2, 0.98, r);
+	float sun_side = clamp(dot(normalize(uv + vec2(0.0001)), L2) * 0.6 + 0.4, 0.0, 1.0);
+
+	if (r > 1.0) {
+		vec3 halo_col = vec3(1.0, 0.48, 0.22) * atmo_halo * sun_side * (0.65 + 0.2 * breath);
+		COLOR = vec4(halo_col, atmo_halo * sun_side * 0.75);
+	} else {
+		float z = sqrt(max(1.0 - r * r, 0.0));
+		vec3 N = normalize(vec3(uv, z));
+
+		float lat = asin(clamp(uv.y, -0.999, 0.999));
+		float lon = atan(uv.x, max(z, 0.0001)) - time * rotation_speed;
+		vec2 S = vec2(lon * cos(lat), lat);
+
+		float n1 = fbm(S * 2.6 + vec2(1.4, 3.2));
+		float n2 = fbm(S * 6.5 - vec2(2.1, 0.8) + n1 * 0.45);
+		float n3 = fbm(S * 16.0 + n2 * 0.35);
+		float ridge = 1.0 - abs(fbm(S * 5.0 + 4.0) * 2.0 - 1.0);
+
+		vec3 dark_rock = vec3(0.32, 0.12, 0.07);
+		vec3 mid_rust = vec3(0.76, 0.29, 0.13);
+		vec3 bright_ochre = vec3(0.95, 0.52, 0.26);
+
+		vec3 albedo = mix(dark_rock, mid_rust, smoothstep(0.28, 0.62, n1));
+		albedo = mix(albedo, bright_ochre, smoothstep(0.52, 0.85, n2) * 0.75);
+		albedo *= 0.82 + 0.32 * n3;
+		albedo = mix(albedo, vec3(0.22, 0.08, 0.05), pow(ridge, 6.0) * 0.45);
+
+		float pole = smoothstep(0.78, 0.95, abs(uv.y) + (n2 - 0.5) * 0.12);
+		albedo = mix(albedo, vec3(0.92, 0.84, 0.78), pole * 0.65);
+
+		vec3 N_bump = normalize(N + vec3((n2 - 0.5) * 0.18, (n3 - 0.5) * 0.18, 0.0));
+		float ndl = clamp(dot(N_bump, L), 0.0, 1.0);
+		float terminator = smoothstep(-0.12, 0.25, dot(N, L));
+
+		vec3 ambient = vec3(0.08, 0.03, 0.04);
+		vec3 surface = albedo * (ambient + vec3(1.05, 0.88, 0.72) * pow(ndl, 0.85) * 1.25 * terminator);
+
+		float rim = pow(1.0 - z, 2.6);
+		vec3 atmo_col = mix(vec3(0.85, 0.32, 0.14), vec3(1.0, 0.68, 0.38), sun_side);
+		surface = mix(surface, atmo_col, rim * (0.35 + 0.50 * sun_side));
+		surface += atmo_col * rim * sun_side * (0.35 + 0.15 * breath);
+
+		float edge_aa = 1.0 - smoothstep(0.985, 1.0, r);
+		vec3 halo_col = vec3(1.0, 0.48, 0.22) * atmo_halo * sun_side * 0.5;
+		vec3 final_col = mix(halo_col, surface, edge_aa);
+		float final_alpha = max(edge_aa, atmo_halo * sun_side * 0.75);
+
+		COLOR = vec4(final_col, final_alpha);
+	}
 }
 """
 
@@ -210,7 +298,6 @@ float fbm(vec2 p) {
 	for (int i = 0; i < 4; i++) { v += a * noise(p); p = p * 2.03 + vec2(3.1, 7.3); a *= 0.5; }
 	return v;
 }
-// x = nearest cell dist, y = second nearest, z = per-cell random
 vec3 voro(vec2 p, float t) {
 	vec2 n = floor(p);
 	vec2 f = fract(p);
@@ -233,7 +320,6 @@ vec3 voro(vec2 p, float t) {
 vec3 aces(vec3 x) {
 	return clamp((x * (2.51 * x + 0.03)) / (x * (2.43 * x + 0.59) + 0.14), 0.0, 1.0);
 }
-// returns x = umbra, y = penumbra
 vec2 sunspot(vec2 S, vec2 c, float r, float seed) {
 	vec2 d = S - c;
 	float dl = length(d);
@@ -262,14 +348,12 @@ void fragment() {
 	uv.x /= sun_aspect.x;
 	uv.y /= sun_aspect.y;
 
-	// the star breathes: its whole body contracts and swells a little
 	float R = 1.0 - 0.011 * breath;
 	float dist = length(uv) / R;
 	if (dist > 1.0) { discard; }
 	vec2 q = uv / R;
 	float mu = sqrt(max(1.0 - dist * dist, 0.0));
 
-	// real sphere mapping: granules foreshorten toward the limb
 	float lat = asin(clamp(q.y, -0.999, 0.999));
 	float lon = atan(q.x, max(mu, 0.0001));
 	lon -= time * rotation_speed * (1.0 - 0.28 * q.y * q.y);
@@ -277,12 +361,9 @@ void fragment() {
 	vec2 S = vec2(lon * cos(lat), lat) * swell;
 	float t = time;
 
-	// turbulent magnetic flow warps everything
 	vec2 warp = vec2(fbm(S * 2.4 + vec2(t * 0.050, 0.0)), fbm(S * 2.4 + vec2(5.2, 1.3) - vec2(0.0, t * 0.040))) - 0.5;
 	vec2 Sw = S + warp * 0.22;
 
-	// convection hierarchy: giant cells, mesogranules, granules
-	// wobble the cell borders so nothing looks like stained glass
 	vec2 w2 = vec2(noise(Sw * 30.0 + t * 0.15), noise(Sw * 30.0 + 17.0 - t * 0.15)) - 0.5;
 	vec3 g1 = voro(Sw * 4.0 + w2 * 0.25, t * 0.22);
 	vec3 g2 = voro(Sw * 15.0 + 3.3 + w2 * 0.45, t * 0.45);
@@ -301,13 +382,11 @@ void fragment() {
 	x += fbm(Sw * 90.0 + t * 0.3) * 0.08;
 	x *= 1.45;
 
-	// glowing magma veins cracking the surface
 	float rv1 = 1.0 - abs(fbm(Sw * 4.2 + vec2(t * 0.035, -t * 0.028)) * 2.0 - 1.0);
 	float rv2 = 1.0 - abs(fbm(Sw * 11.0 - vec2(t * 0.05, t * 0.03) + 4.0) * 2.0 - 1.0);
 	float veins = (pow(rv1, 14.0) * 1.1 + pow(rv2, 18.0) * 0.6) * (1.0 - 0.7 * lane2);
 	x += veins * (0.45 + 0.9 * breath + 0.7 * tension);
 
-	// sunspot pits: dark umbra, fibrous penumbra
 	vec2 sp1 = vec2(0.0);
 	vec2 sp2 = vec2(0.0);
 	if (spot_a.z > 0.0) {
@@ -325,29 +404,23 @@ void fragment() {
 	float umbral_dots = pow(noise(S * 120.0 + t * 0.4), 6.0) * 0.5;
 	x *= 1.0 - sp.y * 0.55 * (1.0 - sp.x);
 	x = mix(x, 0.07 + umbral_dots * 0.35, sp.x);
-	// bright plage around the pits
 	float plage = smoothstep(0.0, 0.8, sp.y) * (1.0 - sp.x) * (1.0 - lane2) * 0.30;
 	x += plage;
 
-	// limb darkening + red shift, faculae flare up near the edge
 	float limb = mix(0.40, 1.0, pow(mu, 0.55));
 	x *= limb;
 	x += (1.0 - lane2) * (1.0 - mu) * (1.0 - mu) * 0.30 * fbm(Sw * 18.0);
 
-	// breathing: pressure waves roll outward, whole star brightens on the exhale
 	float wave = 0.5 + 0.5 * sin(dist * 16.0 - breath_phase * 6.2831);
 	x *= (0.80 + 0.36 * breath) * (1.0 + 0.09 * wave * (0.4 + breath));
 	x *= 1.0 + 0.10 * tension;
 
-	// eruptions
 	x += flare_burst(uv, flare_a) + flare_burst(uv, flare_b) + flare_burst(uv, flare_c);
 
-	// Interstellar-style razor limb ring with doppler beaming
 	float doppler = 1.0 + 0.35 * q.x;
 	float ring = smoothstep(0.955, 0.994, dist) * (1.0 - smoothstep(0.994, 1.0, dist));
 	x += ring * ring_strength * (0.9 + 0.9 * breath) * doppler;
 
-	// plasma temperature ramp: ember red -> orange -> gold -> white hot
 	vec3 c1 = mix(edge_col.rgb * vec3(0.55, 0.12, 0.05), edge_col.rgb, smoothstep(0.0, 0.55, x));
 	c1 = mix(c1, mid_col.rgb, smoothstep(0.50, 1.15, x));
 	c1 = mix(c1, core_col.rgb, smoothstep(1.05, 1.90, x));
@@ -449,27 +522,23 @@ void fragment() {
 	vec2 sd = uv - sun_uv;
 	sd.x *= aspect;
 
-	// heat haze rising off the star
 	float w = heat_shimmer / (1.0 + length(sd) * 0.45);
 	vec2 haze = vec2(sin(uv.y * 85.0 + time * 3.1 + sin(uv.x * 37.0 + time * 1.3) * 2.0),
 	                 cos(uv.x * 63.0 - time * 2.4 + sin(uv.y * 29.0 + time) * 2.0)) * 0.00085 * w;
 	vec2 suv = uv + haze;
 
-	// lens chromatic aberration, stronger toward the edges
 	float ca = chroma_strength * 0.0045 * (0.25 + dot(c, c) * 3.0);
 	vec3 col;
 	col.r = textureLod(screen_tex, suv + c * ca, 0.0).r;
 	col.g = textureLod(screen_tex, suv, 0.0).g;
 	col.b = textureLod(screen_tex, suv - c * ca, 0.0).b;
 
-	// bloom from the mip chain: the dark ship gets eaten by light
 	vec3 hi = textureLod(screen_tex, suv, 3.0).rgb * 0.5 + textureLod(screen_tex, suv, 4.5).rgb * 0.5;
 	vec3 avg = textureLod(screen_tex, suv, 7.0).rgb;
 	vec3 bl = max(hi - avg * 0.80, vec3(0.0));
 	col += bl * 0.70 * bloom_strength * (0.80 + 0.55 * breath + 0.35 * tension);
 	col += avg * 0.10 * bloom_strength;
 
-	// anamorphic streak, only the hottest pixels
 	vec3 st = vec3(0.0);
 	for (int i = -4; i <= 4; i++) {
 		vec3 s = textureLod(screen_tex, suv + vec2(float(i) * 0.028, 0.0), 4.0).rgb;
@@ -479,17 +548,14 @@ void fragment() {
 	float st_l = dot(st, vec3(0.30, 0.59, 0.11));
 	col += st * vec3(0.55, 0.78, 1.0) * smoothstep(0.80, 1.00, st_l) * 0.10 * bloom_strength;
 
-	// grade: cold crushed shadows, filmic contrast
 	float lum = dot(col, vec3(0.30, 0.59, 0.11));
 	col = mix(col, col * vec3(0.90, 0.97, 1.10), 1.0 - smoothstep(0.0, 0.30, lum));
 	col = mix(col, col * col * (3.0 - 2.0 * col), 0.30);
 	col *= 1.0 + 0.05 * (breath - 0.5);
 
-	// vignette tightens as dread builds
 	float vig = smoothstep(0.30, 1.05, length(c * vec2(aspect * 0.62, 1.0)) * 1.35);
 	col *= 1.0 - vig * (vignette_strength + 0.20 * tension);
 
-	// grain + dither
 	float n = hash21(FRAGCOORD.xy + fract(time) * vec2(37.0, 91.0)) - 0.5;
 	col += n * grain_strength * (0.030 + 0.035 * (1.0 - clamp(lum, 0.0, 1.0)));
 
@@ -523,7 +589,6 @@ void fragment() {
 	vec3 ambient = vec3(0.62, 0.36, 0.22) * (0.8 + 0.5 * breath);
 	vec3 lit = base * 1.25 * (ambient + sun_light * ndl * 1.5) * light_amount;
 	lit += sun_light * rim * 1.4 * light_amount;
-	// sun glinting off the glass
 	lit += vec3(1.0, 0.8, 0.5) * pow(max(dot(n, normalize(L + vec3(0.0, 0.0, 1.0))), 0.0), 40.0) * 0.5 * light_amount;
 	COLOR.rgb = mix(lit, base * 1.1, emissive);
 }
@@ -713,6 +778,7 @@ var bg_layer: ColorRect
 var sun_container: Control
 var sun_inner: ColorRect
 var sun_outer: ColorRect
+var mars_rect: ColorRect
 var ship_node: ShipRenderer
 var engine_glow: EngineGlow
 var embers: EmberField
@@ -723,6 +789,7 @@ var typing_player: AudioStreamPlayer
 var bg_mat: ShaderMaterial
 var sun_inner_mat: ShaderMaterial
 var sun_outer_mat: ShaderMaterial
+var mars_mat: ShaderMaterial
 var ship_mat: ShaderMaterial
 var post_mat: ShaderMaterial
 var typing_started: bool = false
@@ -731,6 +798,7 @@ var scene_ending: bool = false
 
 var rng := RandomNumberGenerator.new()
 var sun_center: Vector2 = Vector2.ZERO
+var mars_center: Vector2 = Vector2.ZERO
 var container_size: float = 1.0
 var breath: float = 0.0
 var breath_phase: float = 0.0
@@ -763,6 +831,7 @@ func _ready() -> void:
 
 	_build_background()
 	_build_sun()
+	_build_mars()
 	_build_ship()
 	_build_embers()
 	_build_sol_text()
@@ -812,6 +881,13 @@ func _build_sun() -> void:
 	sun_outer.material = sun_outer_mat
 	sun_container.add_child(sun_outer)
 	sun_outer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+
+func _build_mars() -> void:
+	mars_rect = ColorRect.new()
+	mars_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	mars_mat = _make_mat(MARS_SHADER)
+	mars_rect.material = mars_mat
+	world.add_child(mars_rect)
 
 func _build_ship() -> void:
 	ship_node = ShipRenderer.new()
@@ -889,6 +965,12 @@ func _layout() -> void:
 	sun_container.size = Vector2(container_size, container_size)
 	sun_container.position = sun_center - Vector2(container_size, container_size) * 0.5
 
+	if mars_rect:
+		mars_center = Vector2(view_size.x * mars_center_x_ratio, view_size.y * mars_center_y_ratio)
+		var m_size: float = view_size.y * mars_size_ratio
+		mars_rect.size = Vector2(m_size, m_size)
+		mars_rect.position = mars_center - Vector2(m_size, m_size) * 0.5
+
 	if ship_node:
 		var ship_scale: float = view_size.y / 780.0 * ship_size_multiplier
 		var x_sign := -1.0 if ship_facing_left else 1.0
@@ -912,7 +994,6 @@ func _layout() -> void:
 	sol_base_pos = Vector2(pad, pad)
 	sol_label.position = sol_base_pos
 
-	# lensing + post need to know where the sun sits on screen
 	var aspect := view_size.x / view_size.y
 	bg_mat.set_shader_parameter("aspect", aspect)
 	bg_mat.set_shader_parameter("lens_center", Vector2(sun_center.x / view_size.y, sun_center.y / view_size.y))
@@ -920,7 +1001,6 @@ func _layout() -> void:
 	post_mat.set_shader_parameter("aspect", aspect)
 	post_mat.set_shader_parameter("sun_uv", Vector2(sun_center.x / view_size.x, sun_center.y / view_size.y))
 
-	# two hand-placed sunspot pits, anchored on the visible surface
 	var r_uv := sunspot_radius / (sun_container_size_ratio * 0.5)
 	var la := _sun_uv_to_lonlat(_screen_to_sun_uv(Vector2(view_size.x * 0.74, view_size.y * 0.30)))
 	var lb := _sun_uv_to_lonlat(_screen_to_sun_uv(Vector2(view_size.x * 0.30, view_size.y * 0.22)))
@@ -997,6 +1077,12 @@ func _apply_sun_uniforms() -> void:
 	sun_outer_mat.set_shader_parameter("mid_col", corona_mid_color)
 	sun_outer_mat.set_shader_parameter("far_col", corona_far_color)
 
+	if mars_mat:
+		mars_mat.set_shader_parameter("time", time)
+		mars_mat.set_shader_parameter("rotation_speed", mars_rotation_speed)
+		mars_mat.set_shader_parameter("light_dir", (sun_center - mars_center).normalized())
+		mars_mat.set_shader_parameter("breath", breath)
+
 	bg_mat.set_shader_parameter("time", time)
 	bg_mat.set_shader_parameter("nebula_a", nebula_a_color)
 	bg_mat.set_shader_parameter("nebula_b", nebula_b_color)
@@ -1004,7 +1090,6 @@ func _apply_sun_uniforms() -> void:
 	bg_mat.set_shader_parameter("lens_strength", lens_strength)
 
 func _update_breath(delta: float) -> void:
-	# slow, uneven breathing: quick swell, long exhale, plus a nervous tremor as dread builds
 	breath_phase += delta / maxf(breath_period, 0.5) * (1.0 + 0.18 * sin(time * 0.41))
 	var c := fposmod(breath_phase, 1.0)
 	var b := 0.0
@@ -1055,7 +1140,6 @@ func _update_ship(delta: float) -> void:
 		embers.intensity = 0.8 + 0.5 * breath + 0.4 * tension
 
 func _update_camera() -> void:
-	# slow push-in toward the star, with a rumble that grows as the scene runs
 	var s := 1.018 + camera_push * tension + 0.004 * breath
 	var amp := minf(camera_shake * (view_size.y / 1080.0) * (1.2 + 3.5 * tension + 1.6 * breath), 14.0)
 	var off := Vector2(

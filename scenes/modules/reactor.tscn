@@ -1,21 +1,28 @@
 [gd_scene format=3 uid="uid://cjisgeknfhwem"]
 
 [ext_resource type="Script" uid="uid://dv88uhj3s8rfr" path="res://scripts/game systems/reactor.gd" id="1_4exvv"]
+[ext_resource type="Texture2D" uid="uid://cwue8o6lixb0i" path="res://sprites/space station tileset/x2/objects/reactor/reactor_core_cyan_off.png" id="2_5wc5p"]
+[ext_resource type="PackedScene" uid="uid://cnpheotxx6vuw" path="res://scenes/modules/wire_module.tscn" id="2_tll7k"]
+[ext_resource type="Texture2D" uid="uid://dnjwutdxdwufc" path="res://sprites/modules/wire_module_sprite_blue.png" id="3_0noln"]
+[ext_resource type="Texture2D" uid="uid://dl8mx1lopes1y" path="res://sprites/modules/wire_module_sprite_red.png" id="4_5wc5p"]
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_tll7k"]
-size = Vector2(128, 128)
+size = Vector2(256, 112)
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_e1aqq"]
-size = Vector2(150, 150)
+size = Vector2(256, 256)
 
 [node name="Reactor" type="StaticBody2D" unique_id=1376995217]
 z_index = 1
 script = ExtResource("1_4exvv")
+module_name = "Reactor"
 
-[node name="Visual" type="ColorRect" parent="." unique_id=1795314088]
-offset_right = 128.0
-offset_bottom = 128.0
-color = Color(1, 1, 0, 1)
+[node name="Sprite2D" type="Sprite2D" parent="." unique_id=338502177]
+texture_filter = 1
+position = Vector2(32.999996, 63.999996)
+rotation = -1.5707964
+scale = Vector2(2.7, 2.7)
+texture = ExtResource("2_5wc5p")
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="." unique_id=1935794386]
 position = Vector2(64, 64)
@@ -26,3 +33,24 @@ shape = SubResource("RectangleShape2D_tll7k")
 [node name="CollisionShape2D" type="CollisionShape2D" parent="InteractArea" unique_id=93277108]
 position = Vector2(64, 64)
 shape = SubResource("RectangleShape2D_e1aqq")
+
+[node name="WireSource" parent="." unique_id=1441731912 instance=ExtResource("2_tll7k")]
+z_index = 100
+position = Vector2(192, 64)
+scale = Vector2(5, 5)
+wire_color = Color(1.732707e-06, 0.5217645, 0.64275795, 1)
+module_texture = ExtResource("3_0noln")
+
+[node name="WireSource2" parent="." unique_id=1203439808 instance=ExtResource("2_tll7k")]
+z_index = 100
+position = Vector2(64, 190)
+rotation = 1.5707964
+scale = Vector2(5, 5)
+wire_color = Color(0.49411765, 1, 0.15686275, 1)
+
+[node name="WireSource3" parent="." unique_id=1569734716 instance=ExtResource("2_tll7k")]
+z_index = 100
+position = Vector2(64, -64)
+rotation = -1.5707964
+scale = Vector2(5, 5)
+module_texture = ExtResource("4_5wc5p")

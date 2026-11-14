@@ -1,0 +1,10 @@
+[gd_scene format=3 uid="uid://c3rfjno122apm"]
+
+[ext_resource type="Script" uid="uid://dno0b87m0uao8" path="res://scripts/game systems/wire.gd" id="1_uujsw"]
+
+[node name="wire" type="Node2D" unique_id=184295566]
+script = ExtResource("1_uujsw")
+
+[node name="Line2DShadow" type="Line2D" parent="." unique_id=376095137]
+
+[node name="Line2D" type="Line2D" parent="." unique_id=472976256]

@@ -3,9 +3,10 @@ extends BaseModule
 var active_wires: Array = []
 
 func _ready() -> void:
-	super._ready()
+	module_name = "Reactor"
 	can_accept_wires = false
-
+	is_powered = true
+	super._ready()
 func request_new_wire(player_pos: Vector2) -> Dictionary:
 	var center = global_position + Vector2(64, 64)
 	var dir = (player_pos - center).normalized()
@@ -46,5 +47,5 @@ func request_new_wire(player_pos: Vector2) -> Dictionary:
 
 func release_wire(wire_data: Dictionary) -> void:
 	active_wires.erase(wire_data)
-	wire_data["wire"].queue_free()
-	wire_data["shadow"].queue_free()
+	if is_instance_valid(wire_data["wire"]): wire_data["wire"].queue_free()
+	if is_instance_valid(wire_data["shadow"]): wire_data["shadow"].queue_free()

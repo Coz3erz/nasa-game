@@ -1,6 +1,7 @@
 [gd_scene format=3 uid="uid://cx3w35fxbp283"]
 
 [ext_resource type="Script" uid="uid://bprqgioap2kon" path="res://scripts/inheritance/BaseModule.gd" id="1_usfmk"]
+[ext_resource type="PackedScene" uid="uid://byhs3dvmk7nry" path="res://scenes/modules/wire_reciever.tscn" id="2_xg636"]
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_xg636"]
 size = Vector2(192, 192)
@@ -29,3 +30,7 @@ shape = SubResource("RectangleShape2D_xg636")
 [node name="CollisionShape2D" type="CollisionShape2D" parent="InteractArea" unique_id=1349020887]
 position = Vector2(96, 96)
 shape = SubResource("RectangleShape2D_jk2iq")
+
+[node name="WireReciever" parent="." unique_id=1806018912 instance=ExtResource("2_xg636")]
+position = Vector2(204, 96)
+scale = Vector2(1.5, 1.5)
