@@ -4,9 +4,17 @@ extends Node2D
 @onready var player: CharacterBody2D = $Player
 @onready var rover: Node2D = $Rover
 
+const CARD_W := 250.0
+const GAP := 14
+
 var shop_layer: CanvasLayer
 var mass_label: Label
 var count_labels: Dictionary = {}
+var plus_buttons: Dictionary = {}
+var minus_buttons: Dictionary = {}
+var scroll: ScrollContainer
+var grid: GridContainer
+var scroll_hint: Label
 
 func _ready() -> void:
 	GameManager.current_phase = GameManager.Phase.BUILD
@@ -14,6 +22,28 @@ func _ready() -> void:
 	if rover != null:
 		rover.visible = false
 	_build_shop_ui()
+	get_viewport().size_changed.connect(_fit_columns)
+
+func _process(_delta: float) -> void:
+	if scroll == null or not is_instance_valid(scroll) or scroll_hint == null:
+		return
+	var bar := scroll.get_v_scroll_bar()
+	scroll_hint.visible = bar.max_value - bar.page > float(scroll.scroll_vertical) + 6.0
+
+func _label(text: String, size: int, col: Color) -> Label:
+	var l := Label.new()
+	l.text = text
+	l.add_theme_font_size_override("font_size", size)
+	l.add_theme_color_override("font_color", col)
+	return l
+
+func _card_style(accent: Color) -> StyleBoxFlat:
+	var s := StyleBoxFlat.new()
+	s.bg_color = Color(0.13, 0.16, 0.30, 1.0)
+	s.border_color = accent
+	s.set_border_width_all(3)
+	s.set_corner_radius_all(16)
+	return s
 
 func _build_shop_ui() -> void:
 	shop_layer = CanvasLayer.new()
@@ -21,109 +51,131 @@ func _build_shop_ui() -> void:
 	add_child(shop_layer)
 
 	var bg := ColorRect.new()
-	bg.color = Color(0.05, 0.07, 0.1, 0.94)
+	bg.color = Color(0.06, 0.08, 0.16, 1.0)
 	bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	shop_layer.add_child(bg)
 
 	var margin := MarginContainer.new()
 	margin.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	margin.add_theme_constant_override("margin_left", 60)
-	margin.add_theme_constant_override("margin_right", 60)
-	margin.add_theme_constant_override("margin_top", 40)
-	margin.add_theme_constant_override("margin_bottom", 40)
+	margin.add_theme_constant_override("margin_left", 28)
+	margin.add_theme_constant_override("margin_right", 28)
+	margin.add_theme_constant_override("margin_top", 16)
+	margin.add_theme_constant_override("margin_bottom", 16)
 	shop_layer.add_child(margin)
 
-	var main_vbox := VBoxContainer.new()
-	main_vbox.add_theme_constant_override("separation", 20)
-	margin.add_child(main_vbox)
+	var root := VBoxContainer.new()
+	root.add_theme_constant_override("separation", 10)
+	margin.add_child(root)
 
+	# --- top bar: title + how much weight is left (always visible) ---
 	var header := HBoxContainer.new()
-	main_vbox.add_child(header)
-
-	var title := Label.new()
-	title.text = "ARES PAYLOAD MANIFEST // SOL " + str(GameManager.current_sol)
-	title.add_theme_font_size_override("font_size", 32)
-	title.add_theme_color_override("font_color", Color(0.4, 1.0, 0.55))
+	root.add_child(header)
+	var title := _label("Pick your gear", 30, Color(1.0, 0.92, 0.55))
 	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	header.add_child(title)
-
-	mass_label = Label.new()
-	mass_label.add_theme_font_size_override("font_size", 28)
-	mass_label.add_theme_color_override("font_color", Color(1.0, 0.85, 0.3))
+	mass_label = _label("", 22, Color(1.0, 0.85, 0.4))
 	header.add_child(mass_label)
 
-	var cards_grid := HBoxContainer.new()
-	cards_grid.add_theme_constant_override("separation", 24)
-	cards_grid.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	main_vbox.add_child(cards_grid)
+	# --- middle: cards inside a scroll area ---
+	scroll = ScrollContainer.new()
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
+	root.add_child(scroll)
+	scroll.resized.connect(_fit_columns)
+
+	grid = GridContainer.new()
+	grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	grid.add_theme_constant_override("h_separation", GAP)
+	grid.add_theme_constant_override("v_separation", GAP)
+	scroll.add_child(grid)
 
 	for item in GameManager.catalog:
-		var card := PanelContainer.new()
-		card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		cards_grid.add_child(card)
+		_make_card(item)
 
-		var card_margin := MarginContainer.new()
-		card_margin.add_theme_constant_override("margin_left", 20)
-		card_margin.add_theme_constant_override("margin_right", 20)
-		card_margin.add_theme_constant_override("margin_top", 20)
-		card_margin.add_theme_constant_override("margin_bottom", 20)
-		card.add_child(card_margin)
+	scroll_hint = _label("Scroll down for more", 16, Color(0.8, 0.9, 1.0, 0.8))
+	scroll_hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	scroll_hint.visible = false
+	root.add_child(scroll_hint)
 
-		var vbox := VBoxContainer.new()
-		vbox.add_theme_constant_override("separation", 12)
-		card_margin.add_child(vbox)
-
-		var name_lbl := Label.new()
-		name_lbl.text = item["id"].to_upper()
-		name_lbl.add_theme_font_size_override("font_size", 24)
-		name_lbl.add_theme_color_override("font_color", Color(0.3, 0.85, 1.0))
-		vbox.add_child(name_lbl)
-
-		var stats_lbl := Label.new()
-		stats_lbl.text = "MASS: %d kg   |   POWER DRAW: %d kW" % [int(item["mass"]), int(item["power"])]
-		stats_lbl.add_theme_font_size_override("font_size", 16)
-		stats_lbl.add_theme_color_override("font_color", Color(0.85, 0.85, 0.85))
-		vbox.add_child(stats_lbl)
-
-		var desc_lbl := Label.new()
-		desc_lbl.text = item["desc"]
-		desc_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		desc_lbl.size_flags_vertical = Control.SIZE_EXPAND_FILL
-		desc_lbl.add_theme_color_override("font_color", Color(0.7, 0.75, 0.8))
-		vbox.add_child(desc_lbl)
-
-		var btn_row := HBoxContainer.new()
-		btn_row.add_theme_constant_override("separation", 12)
-		vbox.add_child(btn_row)
-
-		var minus_btn := Button.new()
-		minus_btn.text = " - "
-		minus_btn.custom_minimum_size = Vector2(48, 44)
-		minus_btn.pressed.connect(_on_refund_item.bind(item))
-		btn_row.add_child(minus_btn)
-
-		var qty_lbl := Label.new()
-		qty_lbl.text = "MANIFEST: 0"
-		qty_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		qty_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		qty_lbl.add_theme_font_size_override("font_size", 20)
-		btn_row.add_child(qty_lbl)
-		count_labels[item["id"]] = qty_lbl
-
-		var plus_btn := Button.new()
-		plus_btn.text = " + BUY "
-		plus_btn.custom_minimum_size = Vector2(90, 44)
-		plus_btn.pressed.connect(_on_buy_item.bind(item))
-		btn_row.add_child(plus_btn)
-
-	var launch_btn := Button.new()
-	launch_btn.text = "CONFIRM MANIFEST & DEPLOY ROVER >>"
-	launch_btn.custom_minimum_size = Vector2(0, 64)
-	launch_btn.add_theme_font_size_override("font_size", 24)
-	launch_btn.pressed.connect(_on_confirm_delivery)
-	main_vbox.add_child(launch_btn)
+	# --- bottom: big go button (always visible) ---
+	var go := Button.new()
+	go.text = "Let's go!"
+	go.custom_minimum_size = Vector2(0, 56)
+	go.add_theme_font_size_override("font_size", 26)
+	go.set_meta("polish_primary", true)
+	go.pressed.connect(_on_confirm_delivery)
+	root.add_child(go)
 
 	_refresh_shop_ui()
+	_fit_columns.call_deferred()
+
+func _make_card(item: Dictionary) -> void:
+	var accent: Color = item.get("color", Color(0.4, 0.85, 1.0))
+	var card := PanelContainer.new()
+	card.custom_minimum_size = Vector2(CARD_W, 0)
+	card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	card.add_theme_stylebox_override("panel", _card_style(accent))
+	grid.add_child(card)
+
+	var pad := MarginContainer.new()
+	for side in ["left", "right", "top", "bottom"]:
+		pad.add_theme_constant_override("margin_" + side, 14)
+	card.add_child(pad)
+
+	var vb := VBoxContainer.new()
+	vb.add_theme_constant_override("separation", 6)
+	pad.add_child(vb)
+
+	vb.add_child(_label(str(item["id"]), 24, accent))
+
+	var stats := "Weighs %d kg" % int(item["mass"])
+	if float(item["power"]) > 0.0:
+		stats += "  -  needs %d power" % int(item["power"])
+	else:
+		stats += "  -  needs no power"
+	vb.add_child(_label(stats, 15, Color(0.82, 0.86, 0.95)))
+
+	var desc := _label(str(item["desc"]), 17, Color(1, 1, 1))
+	desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	desc.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	vb.add_child(desc)
+
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 10)
+	vb.add_child(row)
+
+	var minus_btn := Button.new()
+	minus_btn.text = "-"
+	minus_btn.custom_minimum_size = Vector2(52, 44)
+	minus_btn.add_theme_font_size_override("font_size", 24)
+	minus_btn.pressed.connect(_on_refund_item.bind(item))
+	row.add_child(minus_btn)
+	minus_buttons[item["id"]] = minus_btn
+
+	var qty := _label("0", 24, Color(1, 1, 1))
+	qty.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	qty.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(qty)
+	count_labels[item["id"]] = qty
+
+	var plus_btn := Button.new()
+	plus_btn.text = "+"
+	plus_btn.custom_minimum_size = Vector2(52, 44)
+	plus_btn.add_theme_font_size_override("font_size", 24)
+	plus_btn.pressed.connect(_on_buy_item.bind(item))
+	row.add_child(plus_btn)
+	plus_buttons[item["id"]] = plus_btn
+
+## As many cards per row as fit the window - and the scroll area handles the rest.
+func _fit_columns() -> void:
+	if grid == null or not is_instance_valid(grid) or scroll == null or not is_instance_valid(scroll):
+		return
+	var w := scroll.size.x - 12.0
+	if w <= 50.0:
+		w = get_viewport().get_visible_rect().size.x - 80.0
+	grid.columns = maxi(1, int(w / (CARD_W + GAP)))
 
 func _on_buy_item(item: Dictionary) -> void:
 	var cost: float = item["mass"]
@@ -139,14 +191,19 @@ func _on_refund_item(item: Dictionary) -> void:
 		_refresh_shop_ui()
 
 func _refresh_shop_ui() -> void:
-	mass_label.text = "REMAINING MASS BUDGET: %d kg" % int(GameManager.mass_budget)
-	for item_id in count_labels.keys():
-		count_labels[item_id].text = "MANIFEST: %d" % GameManager.get_item_count(item_id)
+	mass_label.text = "Weight left: %d kg" % int(GameManager.mass_budget)
+	for item in GameManager.catalog:
+		var id: String = item["id"]
+		count_labels[id].text = "x%d" % GameManager.get_item_count(id)
+		(plus_buttons[id] as Button).disabled = GameManager.mass_budget < float(item["mass"])
+		(minus_buttons[id] as Button).disabled = GameManager.get_item_count(id) <= 0
 
 func _on_confirm_delivery() -> void:
 	if shop_layer != null:
 		shop_layer.queue_free()
 		shop_layer = null
+	scroll = null
+	scroll_hint = null
 	_start_rover_transition()
 
 func _start_rover_transition() -> void:
@@ -156,9 +213,9 @@ func _start_rover_transition() -> void:
 		rover.visible = true
 		rover.position = Vector2(1100, 560)
 		var tw := create_tween().set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
-		tw.tween_property(rover, "position", Vector2(420, 560), 2.2)
+		tw.tween_property(rover, "position", Vector2(420, 560), 3.2)
 		await tw.finished
-		await get_tree().create_timer(0.8).timeout
+		await get_tree().create_timer(1.2).timeout
 
 	build_camera.enabled = false
 	if player != null and player.has_method("enable_player"):
@@ -168,6 +225,6 @@ func _start_rover_transition() -> void:
 
 	if rover != null:
 		var tw_out := create_tween().set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN)
-		tw_out.tween_property(rover, "position", Vector2(1200, 560), 2.0)
+		tw_out.tween_property(rover, "position", Vector2(1200, 560), 2.8)
 		await tw_out.finished
 		rover.visible = false

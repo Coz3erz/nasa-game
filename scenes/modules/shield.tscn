@@ -1,0 +1,32 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://scripts/inheritance/BaseModule.gd" id="1_base"]
+[ext_resource type="PackedScene" path="res://scenes/modules/wire_reciever.tscn" id="2_wire"]
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_body"]
+size = Vector2(192, 192)
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_area"]
+size = Vector2(168, 168)
+
+[node name="Shield" type="StaticBody2D"]
+script = ExtResource("1_base")
+module_name = "Shield"
+mass_cost = 600.0
+power_draw = 25.0
+can_accept_wires = true
+build_time = 10.0
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+position = Vector2(96.0, 96.0)
+shape = SubResource("RectangleShape2D_body")
+
+[node name="InteractArea" type="Area2D" parent="."]
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="InteractArea"]
+position = Vector2(96.0, 96.0)
+shape = SubResource("RectangleShape2D_area")
+
+[node name="WireReciever" parent="." instance=ExtResource("2_wire")]
+position = Vector2(192, 96.0)
+scale = Vector2(1.5, 1.5)

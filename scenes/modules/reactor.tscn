@@ -5,6 +5,7 @@
 [ext_resource type="PackedScene" uid="uid://cnpheotxx6vuw" path="res://scenes/modules/wire_module.tscn" id="2_tll7k"]
 [ext_resource type="Texture2D" uid="uid://dnjwutdxdwufc" path="res://sprites/modules/wire_module_sprite_blue.png" id="3_0noln"]
 [ext_resource type="Texture2D" uid="uid://dl8mx1lopes1y" path="res://sprites/modules/wire_module_sprite_red.png" id="4_5wc5p"]
+[ext_resource type="PackedScene" uid="uid://byhs3dvmk7nry" path="res://scenes/modules/wire_reciever.tscn" id="6_0qorl"]
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_tll7k"]
 size = Vector2(256, 112)
@@ -15,7 +16,6 @@ size = Vector2(256, 256)
 [node name="Reactor" type="StaticBody2D" unique_id=1376995217]
 z_index = 1
 script = ExtResource("1_4exvv")
-module_name = "Reactor"
 
 [node name="Sprite2D" type="Sprite2D" parent="." unique_id=338502177]
 texture_filter = 1
@@ -36,10 +36,14 @@ shape = SubResource("RectangleShape2D_e1aqq")
 
 [node name="WireSource" parent="." unique_id=1441731912 instance=ExtResource("2_tll7k")]
 z_index = 100
-position = Vector2(192, 64)
+position = Vector2(180, -5.9999924)
 scale = Vector2(5, 5)
 wire_color = Color(1.732707e-06, 0.5217645, 0.64275795, 1)
 module_texture = ExtResource("3_0noln")
+rotatable = null
+click_radius = null
+reach = null
+edge_margin = null
 
 [node name="WireSource2" parent="." unique_id=1203439808 instance=ExtResource("2_tll7k")]
 z_index = 100
@@ -47,6 +51,10 @@ position = Vector2(64, 190)
 rotation = 1.5707964
 scale = Vector2(5, 5)
 wire_color = Color(0.49411765, 1, 0.15686275, 1)
+rotatable = null
+click_radius = null
+reach = null
+edge_margin = null
 
 [node name="WireSource3" parent="." unique_id=1569734716 instance=ExtResource("2_tll7k")]
 z_index = 100
@@ -54,3 +62,15 @@ position = Vector2(64, -64)
 rotation = -1.5707964
 scale = Vector2(5, 5)
 module_texture = ExtResource("4_5wc5p")
+rotatable = null
+click_radius = null
+reach = null
+edge_margin = null
+
+[node name="WireReciever" parent="." unique_id=1806018912 instance=ExtResource("6_0qorl")]
+position = Vector2(181, 129)
+scale = Vector2(-1.5, -1.5)
+rotatable = null
+click_radius = null
+reach = null
+edge_margin = null

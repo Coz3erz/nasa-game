@@ -7,9 +7,18 @@ var reactor_energy: float = 100.0
 var oxygen_level: float = 100.0
 var temp_level: float = 100.0
 
-var failure_roll_interval: float = 6.0
-var failure_chance: float = 0.18
+# ---- pacing: everything here is deliberately slow and relaxed ----
+const REACTOR_DRAIN := 0.8      # reactor fuel burned per second at full load
+const SOLAR_CHARGE := 0.35      # fuel given back per second by each solar panel
+const O2_LOSS := 0.7
+const O2_GAIN := 2.0
+const TEMP_LOSS := 0.5
+const TEMP_GAIN := 1.5
+
+var failure_roll_interval: float = 18.0
+var failure_chance: float = 0.12
 var _failure_timer: float = 0.0
+var _blackout := false
 
 func _process(delta: float) -> void:
 	if get_node_or_null("/root/GameManager") != null:
@@ -45,11 +54,26 @@ func calculate_power() -> void:
 	if get_node_or_null("/root/EventBus") != null:
 		EventBus.power_changed.emit(current_power_draw, total_power)
 
+func _solar_inputs() -> int:
+	var n := 0
+	for mod in active_modules:
+		if is_instance_valid(mod) and mod.module_name == "Reactor" and not mod.is_broken and mod.has_method("solar_count"):
+			n += mod.solar_count()
+	return n
+
 func _tick_power_and_systems(delta: float) -> void:
 	if current_power_draw > 0.0 and reactor_energy > 0.0:
-		var drain_rate: float = (current_power_draw / 100.0) * 1.2
+		var drain_rate: float = (current_power_draw / 100.0) * REACTOR_DRAIN
 		reactor_energy = maxf(0.0, reactor_energy - drain_rate * delta)
 		if reactor_energy <= 0.0:
+			_blackout = true
+			calculate_power()
+
+	var solar := _solar_inputs()
+	if solar > 0:
+		reactor_energy = minf(100.0, reactor_energy + solar * SOLAR_CHARGE * delta)
+		if _blackout and reactor_energy >= 5.0:
+			_blackout = false
 			calculate_power()
 
 	var life_support_active: bool = false
@@ -64,19 +88,19 @@ func _tick_power_and_systems(delta: float) -> void:
 			thermal_active = true
 
 	if life_support_active:
-		oxygen_level = minf(100.0, oxygen_level + 3.5 * delta)
+		oxygen_level = minf(100.0, oxygen_level + O2_GAIN * delta)
 	else:
-		oxygen_level = maxf(0.0, oxygen_level - 2.2 * delta)
+		oxygen_level = maxf(0.0, oxygen_level - O2_LOSS * delta)
 
 	if thermal_active:
-		temp_level = minf(100.0, temp_level + 3.0 * delta)
+		temp_level = minf(100.0, temp_level + TEMP_GAIN * delta)
 	else:
-		temp_level = maxf(0.0, temp_level - 1.8 * delta)
+		temp_level = maxf(0.0, temp_level - TEMP_LOSS * delta)
 
 	if oxygen_level <= 0.0 and get_node_or_null("/root/EventBus") != null:
-		EventBus.game_over.emit("OXYGEN DEPLETED")
+		EventBus.game_over.emit("We ran out of air!")
 	elif temp_level <= 0.0 and get_node_or_null("/root/EventBus") != null:
-		EventBus.game_over.emit("HYPOTHERMIA - THERMAL FAILURE")
+		EventBus.game_over.emit("It got too cold!")
 
 func _tick_failure_dice(delta: float) -> void:
 	_failure_timer += delta

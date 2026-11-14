@@ -1,51 +1,53 @@
 extends BaseModule
 
-var active_wires: Array = []
+## The reactor only takes plugs from Solar Panels.
+const ONLY_SOURCE := "Solar Panel"
 
 func _ready() -> void:
 	module_name = "Reactor"
-	can_accept_wires = false
+	can_accept_wires = true
 	is_powered = true
 	super._ready()
-func request_new_wire(player_pos: Vector2) -> Dictionary:
-	var center = global_position + Vector2(64, 64)
-	var dir = (player_pos - center).normalized()
-	if dir == Vector2.ZERO: dir = Vector2.RIGHT
-	var socket_pos = center + dir * 64.0
+	for c in get_children():
+		if c is WireReceiver:
+			var r := c as WireReceiver
+			r.accepted_sources = PackedStringArray([ONLY_SOURCE])
+			r.capacity = 4
 
-	var wire = Line2D.new()
-	wire.top_level = true
-	wire.width = 12.0
-	wire.default_color = Color(0.8, 0.1, 0.1)
-	wire.joint_mode = Line2D.LINE_JOINT_ROUND
-	wire.begin_cap_mode = Line2D.LINE_CAP_ROUND
-	wire.end_cap_mode = Line2D.LINE_CAP_ROUND
-	wire.antialiased = true
-	wire.z_index = 1
-	get_parent().add_child(wire)
+## How many working solar panels are plugged into me.
+func solar_count() -> int:
+	var n := 0
+	for w in connected_wires:
+		if is_instance_valid(w) and "source_module" in w and is_instance_valid(w.source_module):
+			var s: BaseModule = w.source_module
+			if s.module_name == ONLY_SOURCE and not s.is_broken and not s.is_constructing:
+				n += 1
+	return n
 
-	var shadow = Line2D.new()
-	shadow.top_level = true
-	shadow.width = 16.0
-	shadow.default_color = Color(0, 0, 0, 0.45)
-	shadow.joint_mode = Line2D.LINE_JOINT_ROUND
-	shadow.begin_cap_mode = Line2D.LINE_CAP_ROUND
-	shadow.end_cap_mode = Line2D.LINE_CAP_ROUND
-	shadow.antialiased = true
-	shadow.position = Vector2(4, 6)
-	shadow.z_index = -1
-	get_parent().add_child(shadow)
+func accept_wire(wire_node: Node2D) -> void:
+	var before := connected_wires.size()
+	super.accept_wire(wire_node)
+	if connected_wires.size() > before:
+		_plug_fx()
 
-	var wire_data = {
-		"wire": wire,
-		"shadow": shadow,
-		"socket_pos": socket_pos,
-		"is_active": true
-	}
-	active_wires.append(wire_data)
-	return wire_data
-
-func release_wire(wire_data: Dictionary) -> void:
-	active_wires.erase(wire_data)
-	if is_instance_valid(wire_data["wire"]): wire_data["wire"].queue_free()
-	if is_instance_valid(wire_data["shadow"]): wire_data["shadow"].queue_free()
+func _plug_fx() -> void:
+	var host := get_parent()
+	if host == null:
+		return
+	modulate = Color(1.8, 2.1, 2.3, 1.0)
+	create_tween().tween_property(self, "modulate", Color.WHITE, 0.6)
+	var lbl := Label.new()
+	lbl.text = "+ Sun power!"
+	lbl.add_theme_font_size_override("font_size", 24)
+	lbl.add_theme_color_override("font_color", Color(1.0, 0.92, 0.45))
+	lbl.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.85))
+	lbl.add_theme_constant_override("outline_size", 7)
+	lbl.top_level = true
+	lbl.z_index = 400
+	lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	host.add_child(lbl)
+	lbl.global_position = get_center() + Vector2(-70, -110)
+	var tw := lbl.create_tween().set_parallel(true)
+	tw.tween_property(lbl, "position:y", lbl.position.y - 80.0, 1.4).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+	tw.tween_property(lbl, "modulate:a", 0.0, 0.7).set_delay(0.8)
+	tw.chain().tween_callback(lbl.queue_free)

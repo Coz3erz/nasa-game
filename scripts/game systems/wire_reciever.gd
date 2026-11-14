@@ -1,5 +1,5 @@
 @tool
-extends StaticBody2D
+extends WirePort
 class_name WireReceiver
 
 @export var standby_color: Color = Color(0.25, 0.75, 1.0):
@@ -10,13 +10,17 @@ class_name WireReceiver
 var receiver_point: Marker2D = null
 var target_module: BaseModule = null
 var connected_wire: Node2D = null
-var pulse_time: float = 0.0
+var wires: Array = []
+## Empty = accepts any wire. Otherwise only wires coming from a module with one of these names.
+var accepted_sources: PackedStringArray = PackedStringArray()
+var capacity: int = 1
 
 var housing_style: StyleBoxFlat
 var well_style: StyleBoxFlat
 var flange_style: StyleBoxFlat
 
 func _ready() -> void:
+	super._ready()
 	var old_sprite: Sprite2D = get_node_or_null("Sprite2D") as Sprite2D
 	if old_sprite != null:
 		old_sprite.visible = false
@@ -52,35 +56,52 @@ func _init_styles() -> void:
 	flange_style.set_border_width_all(1)
 	flange_style.set_corner_radius_all(2)
 
-func _process(delta: float) -> void:
-	pulse_time += delta
-	queue_redraw()
-
 func get_receiver_position() -> Vector2:
 	if receiver_point != null:
 		return receiver_point.global_position
 	return global_position
 
-func can_accept_wire() -> bool:
-	if connected_wire != null and is_instance_valid(connected_wire):
+func _prune() -> void:
+	for i in range(wires.size() - 1, -1, -1):
+		if not is_instance_valid(wires[i]):
+			wires.remove_at(i)
+	if connected_wire != null and not is_instance_valid(connected_wire):
+		connected_wire = wires.back() if not wires.is_empty() else null
+
+func accepts_wire(wire_node: Node2D) -> bool:
+	if accepted_sources.is_empty():
+		return true
+	if wire_node == null or not ("source_module" in wire_node):
+		return false
+	var s = wire_node.source_module
+	return is_instance_valid(s) and accepted_sources.has(s.module_name)
+
+func can_accept_wire(wire_node: Node2D = null) -> bool:
+	_prune()
+	if wires.size() >= capacity:
 		return false
 	if target_module == null and get_parent() is BaseModule:
 		target_module = get_parent() as BaseModule
 	if target_module == null:
 		return false
-	return target_module.can_accept_wires and not target_module.is_broken
+	if not (target_module.can_accept_wires and not target_module.is_broken):
+		return false
+	return wire_node == null or accepts_wire(wire_node)
 
 func accept_wire(wire_node: Node2D) -> void:
 	if target_module == null and get_parent() is BaseModule:
 		target_module = get_parent() as BaseModule
 	connected_wire = wire_node
+	if not wires.has(wire_node):
+		wires.append(wire_node)
 	if target_module != null:
 		target_module.accept_wire(wire_node)
 	queue_redraw()
 
 func remove_wire(wire_node: Node2D) -> void:
+	wires.erase(wire_node)
 	if connected_wire == wire_node:
-		connected_wire = null
+		connected_wire = wires.back() if not wires.is_empty() else null
 	if target_module != null:
 		target_module.remove_wire(wire_node)
 	queue_redraw()
@@ -136,3 +157,5 @@ func _draw() -> void:
 	var led_top_col: Color = active_col.lightened(0.25) if is_plugged_in else Color(0.18, 0.20, 0.24)
 	draw_circle(Vector2(0, -15), 2.2, led_top_col)
 	draw_circle(Vector2(0, 15), 2.2, led_top_col)
+
+	_draw_port_fx(40.0)

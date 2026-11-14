@@ -1,6 +1,6 @@
 ﻿PROJECT COMPILATION FOR AI
-Generated on: 11/14/2026 23:49:49
-Total Files: 29
+Generated on: 11/15/2026 02:00:08
+Total Files: 35
 
 
 ================================================================================
@@ -381,6 +381,8 @@ _data = {
 [node name="Player" type="CharacterBody2D" unique_id=1215049810]
 z_index = 2
 script = ExtResource("1_ucweq")
+plug_range = 30.0
+pickup_range = 26.0
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="." unique_id=1996678152]
 shape = SubResource("CircleShape2D_08t41")
@@ -444,6 +446,9 @@ glow_enabled = true
 glow_intensity = 1.0
 glow_bloom = 1.0
 
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_nhvkb"]
+size = Vector2(1795, 969)
+
 [node name="Game" type="Node2D" unique_id=1192000315]
 script = ExtResource("1_nhvkb")
 
@@ -482,6 +487,49 @@ scale = Vector2(4, 4)
 texture = ExtResource("4_nhvkb")
 hframes = 6
 vframes = 24
+
+[node name="Area2D" type="Area2D" parent="." unique_id=958323245]
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Area2D" unique_id=681433923]
+position = Vector2(405.5, 379.5)
+shape = SubResource("RectangleShape2D_nhvkb")
+
+================================================================================
+FILE: scenes\modules\comms.tscn
+================================================================================
+
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://scripts/inheritance/BaseModule.gd" id="1_base"]
+[ext_resource type="PackedScene" path="res://scenes/modules/wire_reciever.tscn" id="2_wire"]
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_body"]
+size = Vector2(192, 128)
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_area"]
+size = Vector2(168, 104)
+
+[node name="Comms" type="StaticBody2D"]
+script = ExtResource("1_base")
+module_name = "Comms"
+mass_cost = 500.0
+power_draw = 15.0
+can_accept_wires = true
+build_time = 10.0
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+position = Vector2(96.0, 64.0)
+shape = SubResource("RectangleShape2D_body")
+
+[node name="InteractArea" type="Area2D" parent="."]
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="InteractArea"]
+position = Vector2(96.0, 64.0)
+shape = SubResource("RectangleShape2D_area")
+
+[node name="WireReciever" parent="." instance=ExtResource("2_wire")]
+position = Vector2(192, 64.0)
+scale = Vector2(1.5, 1.5)
 
 ================================================================================
 FILE: scenes\modules\life_support.tscn
@@ -533,6 +581,7 @@ FILE: scenes\modules\reactor.tscn
 [ext_resource type="PackedScene" uid="uid://cnpheotxx6vuw" path="res://scenes/modules/wire_module.tscn" id="2_tll7k"]
 [ext_resource type="Texture2D" uid="uid://dnjwutdxdwufc" path="res://sprites/modules/wire_module_sprite_blue.png" id="3_0noln"]
 [ext_resource type="Texture2D" uid="uid://dl8mx1lopes1y" path="res://sprites/modules/wire_module_sprite_red.png" id="4_5wc5p"]
+[ext_resource type="PackedScene" uid="uid://byhs3dvmk7nry" path="res://scenes/modules/wire_reciever.tscn" id="6_0qorl"]
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_tll7k"]
 size = Vector2(256, 112)
@@ -543,7 +592,6 @@ size = Vector2(256, 256)
 [node name="Reactor" type="StaticBody2D" unique_id=1376995217]
 z_index = 1
 script = ExtResource("1_4exvv")
-module_name = "Reactor"
 
 [node name="Sprite2D" type="Sprite2D" parent="." unique_id=338502177]
 texture_filter = 1
@@ -564,10 +612,14 @@ shape = SubResource("RectangleShape2D_e1aqq")
 
 [node name="WireSource" parent="." unique_id=1441731912 instance=ExtResource("2_tll7k")]
 z_index = 100
-position = Vector2(192, 64)
+position = Vector2(180, -5.9999924)
 scale = Vector2(5, 5)
 wire_color = Color(1.732707e-06, 0.5217645, 0.64275795, 1)
 module_texture = ExtResource("3_0noln")
+rotatable = null
+click_radius = null
+reach = null
+edge_margin = null
 
 [node name="WireSource2" parent="." unique_id=1203439808 instance=ExtResource("2_tll7k")]
 z_index = 100
@@ -575,6 +627,10 @@ position = Vector2(64, 190)
 rotation = 1.5707964
 scale = Vector2(5, 5)
 wire_color = Color(0.49411765, 1, 0.15686275, 1)
+rotatable = null
+click_radius = null
+reach = null
+edge_margin = null
 
 [node name="WireSource3" parent="." unique_id=1569734716 instance=ExtResource("2_tll7k")]
 z_index = 100
@@ -582,6 +638,93 @@ position = Vector2(64, -64)
 rotation = -1.5707964
 scale = Vector2(5, 5)
 module_texture = ExtResource("4_5wc5p")
+rotatable = null
+click_radius = null
+reach = null
+edge_margin = null
+
+[node name="WireReciever" parent="." unique_id=1806018912 instance=ExtResource("6_0qorl")]
+position = Vector2(181, 129)
+scale = Vector2(-1.5, -1.5)
+rotatable = null
+click_radius = null
+reach = null
+edge_margin = null
+
+================================================================================
+FILE: scenes\modules\shield.tscn
+================================================================================
+
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://scripts/inheritance/BaseModule.gd" id="1_base"]
+[ext_resource type="PackedScene" path="res://scenes/modules/wire_reciever.tscn" id="2_wire"]
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_body"]
+size = Vector2(192, 192)
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_area"]
+size = Vector2(168, 168)
+
+[node name="Shield" type="StaticBody2D"]
+script = ExtResource("1_base")
+module_name = "Shield"
+mass_cost = 600.0
+power_draw = 25.0
+can_accept_wires = true
+build_time = 10.0
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+position = Vector2(96.0, 96.0)
+shape = SubResource("RectangleShape2D_body")
+
+[node name="InteractArea" type="Area2D" parent="."]
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="InteractArea"]
+position = Vector2(96.0, 96.0)
+shape = SubResource("RectangleShape2D_area")
+
+[node name="WireReciever" parent="." instance=ExtResource("2_wire")]
+position = Vector2(192, 96.0)
+scale = Vector2(1.5, 1.5)
+
+================================================================================
+FILE: scenes\modules\solar_panel.tscn
+================================================================================
+
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://scripts/inheritance/BaseModule.gd" id="1_base"]
+[ext_resource type="PackedScene" path="res://scenes/modules/wire_module.tscn" id="2_wire"]
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_body"]
+size = Vector2(256, 192)
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_area"]
+size = Vector2(232, 168)
+
+[node name="SolarPanel" type="StaticBody2D"]
+script = ExtResource("1_base")
+module_name = "Solar Panel"
+mass_cost = 400.0
+power_draw = 0.0
+can_accept_wires = false
+build_time = 6.0
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+position = Vector2(128.0, 96.0)
+shape = SubResource("RectangleShape2D_body")
+
+[node name="InteractArea" type="Area2D" parent="."]
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="InteractArea"]
+position = Vector2(128.0, 96.0)
+shape = SubResource("RectangleShape2D_area")
+
+[node name="WireSource" parent="." instance=ExtResource("2_wire")]
+position = Vector2(256, 96.0)
+scale = Vector2(4, 4)
+wire_color = Color(1, 0.8, 0.2, 1)
 
 ================================================================================
 FILE: scenes\modules\thermal.tscn
@@ -833,18 +976,39 @@ var inventory: Dictionary = {
 
 var catalog: Array[Dictionary] = [
 	{
+		"id": "Solar Panel",
+		"mass": 400.0,
+		"power": 0.0,
+		"scene_path": "res://scenes/modules/solar_panel.tscn",
+		"desc": "Free power from the sun. One wire output."
+	},
+	{
 		"id": "Life Support",
 		"mass": 1000.0,
 		"power": 30.0,
 		"scene_path": "res://scenes/modules/life_support.tscn",
-		"desc": "Generates breathable O2 for the habitat.\nNASA Spec: Crew requires 0.84 kg of O2 per day.\nWithout power, O2 reserves critical in 30s."
+		"desc": "Generates breathable O2 for the habitat."
 	},
 	{
 		"id": "Thermal Control",
 		"mass": 800.0,
 		"power": 20.0,
 		"scene_path": "res://scenes/modules/thermal.tscn",
-		"desc": "Maintains internal cabin temperature against Martian -60Â°C lows.\nPrevents hypothermia and coolant line freeze."
+		"desc": "Keeps the cabin warm against Martian lows."
+	},
+	{
+		"id": "Shield",
+		"mass": 600.0,
+		"power": 25.0,
+		"scene_path": "res://scenes/modules/shield.tscn",
+		"desc": "Projects a barrier against solar flares."
+	},
+	{
+		"id": "Comms",
+		"mass": 500.0,
+		"power": 15.0,
+		"scene_path": "res://scenes/modules/comms.tscn",
+		"desc": "Long-range dish to call Earth."
 	}
 ]
 
@@ -906,39 +1070,124 @@ FILE: scripts\entities\Player.gd
 ================================================================================
 
 extends CharacterBody2D
+## PLAYER
+##   SPACE            toggle build mode (you can still walk around in it)
+##   E (interact)     in build mode: place + start building  |  outside: wires
+##   SCROLL / TAB     swap which module you're about to place
+## The build ghost is ALWAYS placed directly ahead of the way you're facing.
 
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ tuning â”€â”€
+@export_group("Movement")
 @export var speed: float = 300.0
-@export var build_zone: Area2D = null
+@export var acceleration: float = 2600.0
+@export var friction: float = 3400.0
+
+@export_group("Animation")
+## true  = you have idle_up / idle_down / idle_left / idle_right
+## false = you only have idle_up / idle_down (left/right idle falls back to the last up/down idle)
+@export var all_idles: bool = false
+
+@export_group("Wires")
 @export var grab_range: float = 150.0
 @export var plug_range: float = 90.0
 @export var pickup_range: float = 80.0
-@export var build_distance: float = 80.0
+
+@export_group("Build")
+@export var build_gap: float = 24.0        ## empty space between you and the ghost
+@export var build_grid: float = 32.0       ## placement grid
+@export var player_radius: float = 18.0
+@export var ghost_glide: float = 22.0
+@export var build_radius: float = 300.0    ## higher = ghost snaps faster
+
+@export_group("Juice")
+@export var camera_lookahead: float = 46.0
+
+const BUILD_ACTION := &"build_mode"
+const DIR_ACTIONS: Dictionary = {"up": "ui_up", "down": "ui_down", "left": "ui_left", "right": "ui_right"}
+const DIR_VECS: Dictionary = {"up": Vector2.UP, "down": Vector2.DOWN, "left": Vector2.LEFT, "right": Vector2.RIGHT}
+const C_CYAN := Color(0.3, 0.85, 1.0)
+const C_GREEN := Color(0.4, 1.0, 0.55)
+const C_RED := Color(1.0, 0.3, 0.25)
+const C_AMBER := Color(1.0, 0.85, 0.3)
 
 @onready var anim_player: AnimationPlayer = get_node_or_null("AnimationPlayer")
 @onready var player_camera: Camera2D = get_node_or_null("PlayerCamera")
+@onready var sprite: Sprite2D = get_node_or_null("Sprite2D")
 
+# state (names kept so other scripts keep working)
 var is_active: bool = false
 var current_wire: Node2D = null
 var facing_dir: String = "down"
+var facing_vec: Vector2 = Vector2.DOWN
 var held_dirs: Array[String] = []
-
 var is_build_mode: bool = false
 var build_options: Array[Dictionary] = []
 var selected_module_index: int = 0
 var ghost_module: Node2D = null
 var can_place: bool = false
 
-const DIR_ACTIONS: Dictionary = {
-	"up": "ui_up",
-	"down": "ui_down",
-	"left": "ui_left",
-	"right": "ui_right"
-}
+var _last_vertical := "down"
+var _move_vel := Vector2.ZERO
+var _t := 0.0
+var _font: SystemFont
 
+# juice state
+var _sq := Vector2.ONE
+var _sq_vel := Vector2.ZERO
+var _walk_t := 0.0
+var _trauma := 0.0
+var _sprite_base_scale := Vector2.ONE
+var _sprite_base_pos := Vector2.ZERO
+var _sprite_half_h := 24.0
+var _cam_base := Vector2.ZERO
+var _dust: CPUParticles2D
+
+# ghost state
+var _ghost_origin := Vector2.ZERO
+var _ghost_half := Vector2(64, 64)
+var _ghost_center_off := Vector2.ZERO
+var _ghost_test_shape: Shape2D = null
+var _ghost_flash := 0.0
+var _hud: CanvasLayer
+var _build_panel: PanelContainer
+var _build_title: Label
+var _build_hint: Label
+var _toast: Label
+var _hud_key := ""
+var _panel_ok: StyleBoxFlat
+var _panel_bad: StyleBoxFlat
+
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ setup â”€â”€
 func _ready() -> void:
 	add_to_group("player")
 	visible = false
 	set_physics_process(false)
+	_font = SystemFont.new()
+	_font.font_names = PackedStringArray(["Courier New", "monospace"])
+	_ensure_build_action()
+	if sprite != null:
+		_sprite_base_scale = sprite.scale
+		_sprite_base_pos = sprite.position
+		if sprite.texture != null:
+			_sprite_half_h = float(sprite.texture.get_height()) / maxf(1.0, float(sprite.vframes)) * 0.5 * absf(sprite.scale.y)
+	if player_camera != null:
+		_cam_base = player_camera.position
+	_make_dust()
+	_make_build_hud()
+
+func _exit_tree() -> void:
+	if is_instance_valid(ghost_module):
+		ghost_module.queue_free()
+	if is_instance_valid(_hud):
+		_hud.queue_free()
+
+func _ensure_build_action() -> void:
+	if InputMap.has_action(BUILD_ACTION):
+		return
+	InputMap.add_action(BUILD_ACTION)
+	var ev := InputEventKey.new()
+	ev.physical_keycode = KEY_SPACE
+	InputMap.action_add_event(BUILD_ACTION, ev)
 
 func enable_player() -> void:
 	is_active = true
@@ -946,195 +1195,507 @@ func enable_player() -> void:
 	set_physics_process(true)
 	position = Vector2(320, 600)
 	velocity = Vector2.ZERO
-	
+	_move_vel = Vector2.ZERO
 	if player_camera != null:
 		player_camera.enabled = true
+	# materialise effect
+	_pop(-0.3)
+	Fx.burst(get_parent(), global_position, Color(0.5, 1.4, 1.8, 0.9), 26, 60.0, 180.0, 0.7, 0.04, 0.1, true)
+	Ring.spawn(get_parent(), global_position, Color(0.4, 1.3, 1.6), 90.0, 0.55)
 
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ per-frame â”€â”€
 func _physics_process(delta: float) -> void:
-	if not is_active: return
-	
-	if is_build_mode:
-		_update_build_ghost()
+	if not is_active:
 		return
-		
+
 	var input_dir: Vector2 = Input.get_vector("ui_left", "ui_right", "ui_up", "ui_down")
-	velocity = input_dir * speed
+	_update_facing()
+
+	# smooth acceleration / friction (stored separately so wire tension keeps working as before)
+	var rate := acceleration if input_dir != Vector2.ZERO else friction
+	_move_vel = _move_vel.move_toward(input_dir * speed, rate * delta)
+	velocity = _move_vel
 
 	if current_wire != null and is_instance_valid(current_wire) and current_wire.has_method("apply_tension_to_player"):
-		var snapped: bool = current_wire.apply_tension_to_player(self, delta)
-		if snapped:
+		var did_snap: bool = current_wire.apply_tension_to_player(self, delta)
+		if did_snap:
 			current_wire.drop(global_position)
 			current_wire = null
+			_pop(-0.18)
+			shake(0.25)
 
 	move_and_slide()
 	_update_animation(input_dir)
 
-func _update_build_ghost() -> void:
-	if ghost_module == null: return
-	
-	var offset = Vector2.ZERO
-	match facing_dir:
-		"up": offset = Vector2(0, -build_distance)
-		"down": offset = Vector2(0, build_distance)
-		"left": offset = Vector2(-build_distance, 0)
-		"right": offset = Vector2(build_distance, 0)
-		
-	var target_pos = global_position + offset
-	var snapped_pos = Vector2(round(target_pos.x / 32.0) * 32.0, round(target_pos.y / 32.0) * 32.0)
-	ghost_module.global_position = snapped_pos
-	
-	var space_state = get_world_2d().direct_space_state
-	var query = PhysicsShapeQueryParameters2D.new()
-	var col = ghost_module.get_node("CollisionShape2D")
-	query.shape = col.shape
-	query.transform = Transform2D(0.0, ghost_module.global_position + col.position)
-	query.collide_with_bodies = true
-	query.collide_with_areas = false
-	
-	var result = space_state.intersect_shape(query)
-	can_place = result.is_empty()
-	
-	if build_zone != null:
-		if not build_zone.overlaps_body(ghost_module):
-			can_place = false
-			
-	if can_place:
-		ghost_module.modulate = Color(0.0, 0.5, 1.0, 0.5) 
-	else:
-		ghost_module.modulate = Color(1.0, 0.0, 0.0, 0.5)
+	if is_build_mode:
+		_update_build_ghost(delta)
+
+func _process(delta: float) -> void:
+	_t += delta
+	var d := minf(delta, 0.05)
+	_update_squash(d)
+	_update_camera(d)
+	if is_build_mode:
+		_update_hud_text()
+		queue_redraw()
+
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ facing â”€â”€
+func _update_facing() -> void:
+	for i in range(held_dirs.size() - 1, -1, -1):
+		if not Input.is_action_pressed(DIR_ACTIONS[held_dirs[i]]):
+			held_dirs.remove_at(i)
+	for dname: String in DIR_ACTIONS.keys():
+		var action: String = DIR_ACTIONS[dname]
+		if Input.is_action_just_pressed(action):
+			held_dirs.erase(dname)
+			held_dirs.append(dname)
+		elif Input.is_action_pressed(action) and not held_dirs.has(dname):
+			held_dirs.append(dname)
+	if not held_dirs.is_empty():
+		var nd: String = held_dirs.back()
+		if nd != facing_dir:
+			_pop(0.07)
+			Fx.burst(get_parent(), global_position + Vector2(0, _sprite_half_h * 0.8), Color(0.7, 0.75, 0.85, 0.35), 4, 10.0, 40.0, 0.35, 0.1, 0.22)
+		facing_dir = nd
+	facing_vec = DIR_VECS[facing_dir]
+	if facing_dir == "up" or facing_dir == "down":
+		_last_vertical = facing_dir
 
 func _update_animation(input_dir: Vector2) -> void:
-	if anim_player == null: return
-	for i in range(held_dirs.size() - 1, -1, -1):
-		var d: String = held_dirs[i]
-		if not Input.is_action_pressed(DIR_ACTIONS[d]):
-			held_dirs.remove_at(i)
-	for d in DIR_ACTIONS.keys():
-		var action: String = DIR_ACTIONS[d]
-		if Input.is_action_just_pressed(action):
-			held_dirs.erase(d)
-			held_dirs.append(d)
-		elif Input.is_action_pressed(action) and not held_dirs.has(d):
-			held_dirs.append(d)
-	if not held_dirs.is_empty():
-		facing_dir = held_dirs.back()
-		
-	var is_moving: bool = input_dir != Vector2.ZERO
-	var anim_name: String = ("walk_" if is_moving else "idle_") + facing_dir
-	if anim_player.has_animation(anim_name):
-		if anim_player.current_animation != anim_name:
-			anim_player.play(anim_name)
+	if anim_player == null:
+		return
+	var moving := input_dir != Vector2.ZERO
+	var anim_name := ""
+	if moving:
+		anim_name = "walk_" + facing_dir
+		anim_player.speed_scale = clampf(_move_vel.length() / speed * 1.1, 0.6, 1.2)
+	else:
+		var d := facing_dir
+		if not all_idles and (d == "left" or d == "right"):
+			d = _last_vertical
+		anim_name = "idle_" + d
+		anim_player.speed_scale = 1.0
+		if not anim_player.has_animation(anim_name):
+			anim_name = "idle_down"
+	if anim_player.has_animation(anim_name) and anim_player.current_animation != anim_name:
+		anim_player.play(anim_name)
 
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ juice â”€â”€
+func _pop(amount: float) -> void:
+	# amount > 0 = squash (wide + short), amount < 0 = stretch (tall + thin)
+	_sq_vel += Vector2(amount, -amount) * 15.0
+
+func shake(amount: float) -> void:
+	_trauma = minf(1.0, _trauma + amount)
+
+func _update_squash(d: float) -> void:
+	_sq_vel += (Vector2.ONE - _sq) * 220.0 * d
+	_sq_vel *= maxf(0.0, 1.0 - 14.0 * d)
+	_sq += _sq_vel * d
+	var spd := _move_vel.length() / speed
+	var moving := spd > 0.1
+	if moving:
+		_walk_t += d * 14.0 * spd
+	var bob := sin(_walk_t) * 0.035 * spd if moving else 0.0
+	var sc := Vector2(_sq.x - bob, _sq.y + bob)
+	if sprite != null:
+		sprite.scale = _sprite_base_scale * sc
+		sprite.position = _sprite_base_pos + Vector2(0.0, (1.0 - sc.y) * _sprite_half_h)
+		sprite.rotation = lerp_angle(sprite.rotation, clampf(_move_vel.x / speed, -1.0, 1.0) * 0.07, 1.0 - exp(-12.0 * d))
+	if _dust != null:
+		_dust.emitting = is_active and spd > 0.5
+		_dust.position = Vector2(0.0, _sprite_half_h * 0.85)
+		if moving:
+			_dust.direction = -_move_vel.normalized()
+
+func _update_camera(d: float) -> void:
+	if player_camera == null:
+		return
+	var look := facing_vec * camera_lookahead * clampf(_move_vel.length() / speed + 0.25, 0.0, 1.0)
+	player_camera.position = player_camera.position.lerp(_cam_base + look, 1.0 - exp(-4.0 * d))
+	if _trauma > 0.0:
+		_trauma = maxf(0.0, _trauma - 1.8 * d)
+		var s := _trauma * _trauma * 14.0
+		player_camera.offset = Vector2(randf_range(-1.0, 1.0), randf_range(-1.0, 1.0)) * s
+	elif player_camera.offset != Vector2.ZERO and _trauma <= 0.0:
+		player_camera.offset = player_camera.offset.lerp(Vector2.ZERO, 0.5)
+
+func _make_dust() -> void:
+	_dust = CPUParticles2D.new()
+	_dust.texture = Fx.tex()
+	_dust.amount = 14
+	_dust.lifetime = 0.45
+	_dust.local_coords = false
+	_dust.show_behind_parent = true
+	_dust.emitting = false
+	_dust.spread = 35.0
+	_dust.initial_velocity_min = 12.0
+	_dust.initial_velocity_max = 42.0
+	_dust.scale_amount_min = 0.08
+	_dust.scale_amount_max = 0.2
+	_dust.color = Color(0.75, 0.8, 0.9, 0.4)
+	var g := Gradient.new()
+	g.set_color(0, Color(1, 1, 1, 1))
+	g.set_color(1, Color(1, 1, 1, 0))
+	_dust.color_ramp = g
+	add_child(_dust)
+
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ input â”€â”€
 func _unhandled_input(event: InputEvent) -> void:
-	if not is_active: return
-	
-	if event is InputEventKey and event.pressed and not event.echo:
-		if event.keycode == KEY_SPACE:
-			if is_build_mode:
+	if not is_active:
+		return
+	if event.is_action_pressed(BUILD_ACTION):
+		_toggle_build_mode()
+		get_viewport().set_input_as_handled()
+		return
+	if event.is_action_pressed("interact"):
+		if is_build_mode:
+			_attempt_place()
+		else:
+			_try_interact()
+		return
+	if is_build_mode:
+		if event is InputEventMouseButton and event.pressed:
+			if event.button_index == MOUSE_BUTTON_WHEEL_UP:
+				_cycle_ghost(-1)
+			elif event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
+				_cycle_ghost(1)
+			elif event.button_index == MOUSE_BUTTON_LEFT:
 				_attempt_place()
-			else:
-				_try_interact()
-		elif event.keycode == KEY_B:
-			_toggle_build_mode()
-			
-	if event is InputEventMouseButton and event.pressed and is_build_mode:
-		if event.button_index == MOUSE_BUTTON_WHEEL_UP:
-			_cycle_ghost(-1)
-		elif event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
+		elif event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_TAB:
 			_cycle_ghost(1)
 
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ build mode â”€â”€
 func _toggle_build_mode() -> void:
-	is_build_mode = not is_build_mode
-	velocity = Vector2.ZERO
-	
 	if is_build_mode:
-		_refresh_build_options()
-		if build_options.is_empty():
-			print("Inventory empty! Buy something first.")
-			is_build_mode = false
-			return
-		_spawn_ghost()
-	else:
-		if ghost_module:
-			ghost_module.queue_free()
-			ghost_module = null
+		_exit_build_mode()
+		return
+	_refresh_build_options()
+	if build_options.is_empty():
+		_flash_hint("NOTHING TO BUILD - buy modules in the manifest first", C_AMBER)
+		_pop(0.08)
+		return
+	is_build_mode = true
+	_spawn_ghost()
+	_set_build_hud(true)
+	_pop(-0.12)
+
+func _exit_build_mode() -> void:
+	is_build_mode = false
+	_clear_ghost()
+	_set_build_hud(false)
+	_pop(0.06)
+	queue_redraw()
 
 func _refresh_build_options() -> void:
+	var prev_id := ""
+	if selected_module_index < build_options.size():
+		prev_id = build_options[selected_module_index]["id"]
 	build_options.clear()
 	selected_module_index = 0
-	
 	for item_data in GameManager.catalog:
 		var item_id = item_data["id"]
 		if GameManager.get_item_count(item_id) > 0:
 			var scene = load(item_data["scene_path"])
 			if scene != null:
-				build_options.append({
-					"id": item_id,
-					"scene": scene
-				})
+				build_options.append({"id": item_id, "scene": scene})
+				if item_id == prev_id:
+					selected_module_index = build_options.size() - 1
 
 func _cycle_ghost(dir: int) -> void:
-	if build_options.is_empty(): return
-	
-	selected_module_index = (selected_module_index + dir) % build_options.size()
-	
-	if GameManager.get_item_count(build_options[selected_module_index]["id"]) <= 0:
-		_cycle_ghost(dir) 
+	if build_options.size() < 2:
 		return
-		
+	selected_module_index = posmod(selected_module_index + dir, build_options.size())
 	_spawn_ghost()
+	_pop(0.06)
+
+func _clear_ghost() -> void:
+	if is_instance_valid(ghost_module):
+		ghost_module.queue_free()
+	ghost_module = null
+	_ghost_test_shape = null
 
 func _spawn_ghost() -> void:
-	if ghost_module:
-		ghost_module.queue_free()
-		
-	if build_options.is_empty(): return
-	
-	var current_option = build_options[selected_module_index]
-	ghost_module = current_option["scene"].instantiate()
-	ghost_module.set_physics_process(false)
-	ghost_module.set_process(false)
-	add_child(ghost_module)
-	
-	_update_build_ghost()
+	_clear_ghost()
+	if build_options.is_empty():
+		return
+	var option: Dictionary = build_options[selected_module_index]
+	var g = option["scene"].instantiate()
+	g.set_meta("is_ghost", true)
+	g.set("is_constructing", true)            # stops BaseModule._ready from registering the preview
+	g.process_mode = Node.PROCESS_MODE_DISABLED
+	g.z_index = 20
+	get_parent().add_child(g)
+	_neutralize_ghost(g)
+	ghost_module = g
+	# measure the module's footprint from its collision shape
+	_ghost_half = Vector2(64, 64)
+	_ghost_center_off = Vector2.ZERO
+	_ghost_test_shape = null
+	var col := g.get_node_or_null("CollisionShape2D") as CollisionShape2D
+	if col != null and col.shape != null:
+		_ghost_center_off = col.position
+		if col.shape is RectangleShape2D:
+			var sz: Vector2 = (col.shape as RectangleShape2D).size
+			_ghost_half = sz * 0.5
+			var ts := RectangleShape2D.new()
+			ts.size = sz - Vector2(6, 6)       # tiny shrink so flush neighbours don't count as overlap
+			_ghost_test_shape = ts
+		else:
+			_ghost_test_shape = col.shape
+			_ghost_half = Vector2(48, 48)
+	_update_build_ghost(0.0, true)
+	g.modulate.a = 0.0
+	_hud_key = ""
+
+## The preview must not collide, be interactable, or be treated as a wire target.
+func _neutralize_ghost(n: Node) -> void:
+	if n is CollisionObject2D:
+		(n as CollisionObject2D).collision_layer = 0
+		(n as CollisionObject2D).collision_mask = 0
+	if n is Area2D:
+		(n as Area2D).monitoring = false
+		(n as Area2D).monitorable = false
+	for grp in n.get_groups():
+		if not str(grp).begins_with("_"):
+			n.remove_from_group(grp)
+	for c in n.get_children():
+		_neutralize_ghost(c)
+
+static func _snap_out(v: float, dir: float, grid: float) -> float:
+	if dir > 0.0:
+		return ceilf(v / grid) * grid
+	if dir < 0.0:
+		return floorf(v / grid) * grid
+	return roundf(v / grid) * grid
+
+func _update_build_ghost(delta: float, snap_now: bool = false) -> void:
+	if not is_instance_valid(ghost_module):
+		return
+	var to_mouse := get_global_mouse_position() - global_position
+	if to_mouse.length() > build_radius:
+		to_mouse = to_mouse.normalized() * build_radius
+	var center := global_position + to_mouse
+	var origin := center - _ghost_center_off
+	_ghost_origin = origin
+ 
+	if snap_now or ghost_module.global_position.distance_to(origin) > 700.0:
+		ghost_module.global_position = origin
+	else:
+		ghost_module.global_position = ghost_module.global_position.lerp(origin, 1.0 - exp(-ghost_glide * delta))
+ 
+	can_place = true
+	if _ghost_test_shape != null:
+		var q := PhysicsShapeQueryParameters2D.new()
+		q.shape = _ghost_test_shape
+		q.transform = Transform2D(0.0, origin + _ghost_center_off)
+		q.collide_with_bodies = true
+		q.collide_with_areas = false
+		q.exclude = [get_rid()]
+		can_place = get_world_2d().direct_space_state.intersect_shape(q, 1).is_empty()
+	if can_place:
+		var rc := Rect2(center - _ghost_half, _ghost_half * 2.0)
+		var cp := Vector2(clampf(global_position.x, rc.position.x, rc.end.x), clampf(global_position.y, rc.position.y, rc.end.y))
+		if cp.distance_to(global_position) < player_radius + 6.0:
+			can_place = false
+ 
+	var pulse := 0.5 + 0.5 * sin(_t * 6.0)
+	var a := lerpf(ghost_module.modulate.a, 0.5 + 0.2 * pulse, 0.25)
+	_ghost_flash = maxf(0.0, _ghost_flash - delta)
+	if _ghost_flash > 0.0:
+		ghost_module.modulate = Color(2.2, 0.35, 0.35, 0.85)
+	elif can_place:
+		ghost_module.modulate = Color(0.55, 1.0, 1.3, a)
+	else:
+		ghost_module.modulate = Color(1.4, 0.3, 0.3, a)
+func _draw() -> void:
+	if not is_build_mode:
+		return
+	var pulse := 0.5 + 0.5 * sin(_t * 3.0)
+	draw_arc(Vector2.ZERO, build_radius, 0.0, TAU, 96, Color(0.3, 0.85, 1.0, 0.16 + 0.1 * pulse), 2.0, true)
+	var n := 48
+	for i in n:
+		if i % 2 == 0:
+			var a := TAU * i / n + _t * 0.15
+			draw_arc(Vector2.ZERO, build_radius - 6.0, a, a + TAU / n * 0.9, 4, Color(0.4, 1.2, 1.5, 0.35), 3.0, true)
+ 
+func _deny() -> void:
+	_ghost_flash = 0.25
+	_sq_vel.x += 3.5 * (1.0 if randf() > 0.5 else -1.0)
+	shake(0.18)
+	_flash_hint("BLOCKED - something is in the way", C_RED)
 
 func _attempt_place() -> void:
-	if can_place and ghost_module:
-		var current_option = build_options[selected_module_index]
-		var item_name = current_option["id"]
-		
-		if GameManager.remove_from_inventory(item_name):
-			var new_module = current_option["scene"].instantiate()
-			new_module.global_position = ghost_module.global_position
-			get_parent().add_child(new_module)
-			new_module.start_construction()
-			print("Started building: ", item_name)
-			
-			_refresh_build_options()
-			if build_options.is_empty():
-				_toggle_build_mode()
-			else:
-				selected_module_index = 0
-				_spawn_ghost()
+	if not is_instance_valid(ghost_module) or build_options.is_empty():
+		return
+	if not can_place:
+		_deny()
+		return
+	var option: Dictionary = build_options[selected_module_index]
+	var item_name: String = option["id"]
+	if not GameManager.remove_from_inventory(item_name):
+		_deny()
+		return
+
+	var parent_node := get_parent()
+	var m = option["scene"].instantiate()
+	m.set("is_constructing", true)           # BaseManager registration happens in _finish_build()
+	var p2d := parent_node as Node2D
+	m.position = p2d.to_local(_ghost_origin) if p2d != null else _ghost_origin
+	parent_node.add_child(m)
+	m.start_construction()
+	# BaseModule measures "nearby" from the module's top-left origin; widen it so standing
+	# anywhere around the footprint (incl. where you placed it from) keeps the build going
+	m.proximity_distance = maxf(m.proximity_distance, _ghost_origin.distance_to(global_position) + 140.0)
+
+	var fx := ConstructionFX.new()
+	fx.setup(m, self, _ghost_center_off, _ghost_half, _font)
+	parent_node.add_child(fx)
+
+	# juice
+	var c := _ghost_origin + _ghost_center_off
+	Fx.burst(parent_node, c, Color(0.75, 0.78, 0.85, 0.55), 22, 40.0, 150.0, 0.9, 0.3, 0.7)
+	Fx.burst(parent_node, c, Color(1.6, 1.2, 0.5, 1.0), 16, 80.0, 220.0, 0.5, 0.04, 0.09, true, Vector2(0, 260))
+	Ring.spawn(parent_node, c, Color(0.4, 1.3, 1.6), maxf(_ghost_half.x, _ghost_half.y) * 1.5, 0.5)
+	_pop(0.2)
+	shake(0.35)
+	_flash_hint("BUILDING %s - stay close!" % item_name.to_upper(), C_GREEN)
+
+	_refresh_build_options()
+	if build_options.is_empty():
+		_exit_build_mode()
 	else:
-		print("Cannot place here. Blocked.")
+		_spawn_ghost()
+
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ build HUD â”€â”€
+func _box(border: Color) -> StyleBoxFlat:
+	var s := StyleBoxFlat.new()
+	s.bg_color = Color(0.05, 0.08, 0.12, 0.92)
+	s.border_color = border
+	s.set_border_width_all(2)
+	s.set_corner_radius_all(6)
+	s.shadow_color = Color(border.r, border.g, border.b, 0.3)
+	s.shadow_size = 14
+	s.content_margin_left = 18
+	s.content_margin_right = 18
+	s.content_margin_top = 10
+	s.content_margin_bottom = 10
+	return s
+
+func _lbl(size: int, col: Color) -> Label:
+	var l := Label.new()
+	var ls := LabelSettings.new()
+	ls.font = _font
+	ls.font_size = size
+	ls.font_color = col
+	ls.outline_size = 3
+	ls.outline_color = Color(0, 0, 0, 0.8)
+	l.label_settings = ls
+	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	l.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	return l
+
+func _make_build_hud() -> void:
+	_hud = CanvasLayer.new()
+	_hud.layer = 15
+	_panel_ok = _box(Color(0.3, 0.85, 1.0, 0.85))
+	_panel_bad = _box(Color(1.0, 0.3, 0.25, 0.9))
+	_build_panel = PanelContainer.new()
+	_build_panel.add_theme_stylebox_override("panel", _panel_ok)
+	_build_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_build_panel.set_anchors_and_offsets_preset(Control.PRESET_CENTER_BOTTOM)
+	_build_panel.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	_build_panel.grow_vertical = Control.GROW_DIRECTION_BEGIN
+	_build_panel.offset_top = -40
+	_build_panel.offset_bottom = -40
+	_build_panel.visible = false
+	var vb := VBoxContainer.new()
+	vb.add_theme_constant_override("separation", 4)
+	_build_title = _lbl(20, C_CYAN)
+	_build_hint = _lbl(14, Color(0.75, 0.82, 0.88))
+	_build_hint.text = "[E] BUILD     [SPACE] EXIT     [SCROLL / TAB] SWAP"
+	vb.add_child(_build_title)
+	vb.add_child(_build_hint)
+	_build_panel.add_child(vb)
+	_hud.add_child(_build_panel)
+	_toast = _lbl(18, C_AMBER)
+	_toast.set_anchors_and_offsets_preset(Control.PRESET_CENTER_BOTTOM)
+	_toast.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	_toast.grow_vertical = Control.GROW_DIRECTION_BEGIN
+	_toast.offset_top = -130
+	_toast.offset_bottom = -130
+	_toast.modulate.a = 0.0
+	_hud.add_child(_toast)
+	add_child.call_deferred(_hud)
+
+func _set_build_hud(on: bool) -> void:
+	if _build_panel == null:
+		return
+	_build_panel.visible = on
+	if on:
+		_build_panel.modulate.a = 0.0
+		create_tween().tween_property(_build_panel, "modulate:a", 1.0, 0.15)
+	_hud_key = ""
+
+func _update_hud_text() -> void:
+	if _build_title == null or build_options.is_empty() or selected_module_index >= build_options.size():
+		return
+	var id: String = build_options[selected_module_index]["id"]
+	var key := "%s|%d|%s" % [id, GameManager.get_item_count(id), str(can_place)]
+	if key == _hud_key:
+		return
+	_hud_key = key
+	var txt := "BUILD MODE  -  %s  x%d" % [id.to_upper(), GameManager.get_item_count(id)]
+	if not can_place:
+		txt += "  -  BLOCKED"
+	_build_title.text = txt
+	(_build_title.label_settings as LabelSettings).font_color = C_CYAN if can_place else C_RED
+	_build_panel.add_theme_stylebox_override("panel", _panel_ok if can_place else _panel_bad)
+
+func _flash_hint(text: String, col: Color) -> void:
+	if _toast == null:
+		return
+	_toast.text = text
+	(_toast.label_settings as LabelSettings).font_color = col
+	_toast.modulate.a = 1.0
+	var tw := create_tween()
+	tw.tween_interval(1.4)
+	tw.tween_property(_toast, "modulate:a", 0.0, 0.5)
+
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ wires â”€â”€
+func _broken_module_in_reach() -> bool:
+	for m in BaseManager.active_modules:
+		if is_instance_valid(m) and m.is_broken and m.global_position.distance_to(global_position) <= m.proximity_distance:
+			return true
+	return false
 
 func _try_interact() -> void:
+	# E also repairs broken modules (hold). Don't grab wires while you're trying to fix something.
+	if current_wire == null and _broken_module_in_reach():
+		return
+
 	if current_wire != null:
 		var receiver: Node2D = _find_nearby_receiver()
 		if receiver != null:
 			receiver.accept_wire(current_wire)
 			current_wire.plug_in(receiver)
 			current_wire = null
+			var rp: Vector2 = receiver.get_receiver_position() if receiver.has_method("get_receiver_position") else receiver.global_position
+			Fx.burst(get_parent(), rp, Color(1.2, 3.0, 3.6, 1.0), 14, 40.0, 140.0, 0.45, 0.04, 0.09, true)
+			Ring.spawn(get_parent(), rp, Color(0.4, 1.3, 1.6), 44.0, 0.35)
+			_pop(0.14)
+			shake(0.12)
 		else:
 			current_wire.drop(global_position)
 			current_wire = null
+			_pop(0.08)
 		return
 
 	var dropped_wire: Node2D = _find_closest_dropped_wire()
 	if dropped_wire != null:
 		current_wire = dropped_wire
 		current_wire.pick_up(global_position)
+		_grab_fx()
 		return
 
 	var plugged_wire: Node2D = _find_closest_plugged_wire()
@@ -1143,6 +1704,7 @@ func _try_interact() -> void:
 			plugged_wire.plugged_receiver.remove_wire(plugged_wire)
 		current_wire = plugged_wire
 		current_wire.pick_up(global_position)
+		_grab_fx()
 		return
 
 	var source: Node2D = _find_closest_wire_source()
@@ -1151,6 +1713,11 @@ func _try_interact() -> void:
 		if new_wire != null:
 			current_wire = new_wire
 			current_wire.pick_up(global_position)
+			_grab_fx()
+
+func _grab_fx() -> void:
+	_pop(-0.14)
+	Fx.burst(get_parent(), global_position + facing_vec * 20.0, Color(1.4, 1.4, 1.6, 0.9), 8, 30.0, 90.0, 0.3, 0.03, 0.06, true)
 
 func _get_all_wires() -> Array[Node]:
 	return get_tree().get_nodes_in_group("wires")
@@ -1202,7 +1769,7 @@ func _find_nearby_receiver() -> Node2D:
 				closest_receiver = node
 	if closest_receiver != null:
 		return closest_receiver
-		
+
 	var shape: CircleShape2D = CircleShape2D.new()
 	shape.radius = plug_range
 	var query: PhysicsShapeQueryParameters2D = PhysicsShapeQueryParameters2D.new()
@@ -1226,6 +1793,218 @@ func _find_nearby_receiver() -> Node2D:
 							closest_receiver = child
 	return closest_receiver
 
+# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• effect helpers â•â•
+class Fx:
+	static var _soft: GradientTexture2D = null
+	static func tex() -> GradientTexture2D:
+		if _soft == null:
+			var g := Gradient.new()
+			g.set_color(0, Color(1, 1, 1, 1))
+			g.set_color(1, Color(1, 1, 1, 0))
+			g.add_point(0.35, Color(1, 1, 1, 0.55))
+			_soft = GradientTexture2D.new()
+			_soft.gradient = g
+			_soft.fill = GradientTexture2D.FILL_RADIAL
+			_soft.fill_from = Vector2(0.5, 0.5)
+			_soft.fill_to = Vector2(1.0, 0.5)
+			_soft.width = 64
+			_soft.height = 64
+		return _soft
+
+	## fire-and-forget one-shot particle burst (frees itself)
+	static func burst(parent: Node, pos: Vector2, col: Color, amount: int, v_min: float, v_max: float, life: float, s_min: float, s_max: float, additive: bool = false, grav: Vector2 = Vector2.ZERO) -> void:
+		if parent == null or not parent.is_inside_tree():
+			return
+		var p := CPUParticles2D.new()
+		p.texture = tex()
+		p.one_shot = true
+		p.explosiveness = 0.95
+		p.amount = amount
+		p.lifetime = life
+		p.spread = 180.0
+		p.initial_velocity_min = v_min
+		p.initial_velocity_max = v_max
+		p.gravity = grav
+		p.scale_amount_min = s_min
+		p.scale_amount_max = s_max
+		p.color = col
+		p.local_coords = false
+		p.z_index = 70
+		var g := Gradient.new()
+		g.set_color(0, Color(1, 1, 1, 1))
+		g.set_color(1, Color(1, 1, 1, 0))
+		p.color_ramp = g
+		if additive:
+			var m := CanvasItemMaterial.new()
+			m.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
+			p.material = m
+		parent.add_child(p)
+		p.global_position = pos
+		p.emitting = true
+		parent.get_tree().create_timer(life + 0.4).timeout.connect(p.queue_free)
+
+class Ring extends Node2D:
+	var r := 4.0
+	var a := 1.0
+	var w := 4.0
+	var col := Color(0.4, 1.3, 1.6)
+	func _process(_d: float) -> void:
+		queue_redraw()
+	func _draw() -> void:
+		draw_arc(Vector2.ZERO, r, 0.0, TAU, 56, Color(col.r, col.g, col.b, a), w, true)
+	static func spawn(parent: Node, pos: Vector2, color: Color, max_r: float, dur: float) -> void:
+		if parent == null or not parent.is_inside_tree():
+			return
+		var ring := Ring.new()
+		ring.col = color
+		ring.z_index = 80
+		var m := CanvasItemMaterial.new()
+		m.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
+		ring.material = m
+		parent.add_child(ring)
+		ring.global_position = pos
+		var tw := ring.create_tween().set_parallel(true)
+		tw.tween_property(ring, "r", max_r, dur).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+		tw.tween_property(ring, "a", 0.0, dur)
+		tw.tween_property(ring, "w", 1.0, dur)
+		tw.chain().tween_callback(ring.queue_free)
+
+## Lives next to a module while it's being built: smoke + sparks while you're in range,
+## a nice drawn progress bar, and a pop + flash when it finishes.
+class ConstructionFX extends Node2D:
+	var target: BaseModule
+	var player: Node2D
+	var half := Vector2(64, 64)
+	var center := Vector2.ZERO
+	var font: SystemFont
+	var smoke: CPUParticles2D
+	var sparks: CPUParticles2D
+	var shown := 0.0
+	var near := true
+	var t := 0.0
+	var bg_style: StyleBoxFlat
+	var fill_style: StyleBoxFlat
+
+	func setup(m: Node, p: Node2D, center_off: Vector2, half_size: Vector2, f: SystemFont) -> void:
+		target = m
+		player = p
+		center = center_off
+		half = half_size
+		font = f
+		z_index = 90
+		global_position = m.global_position + center
+
+		bg_style = StyleBoxFlat.new()
+		bg_style.bg_color = Color(0.04, 0.06, 0.09, 0.92)
+		bg_style.border_color = Color(0.3, 0.85, 1.0, 0.8)
+		bg_style.set_border_width_all(1)
+		bg_style.set_corner_radius_all(4)
+		bg_style.shadow_color = Color(0.3, 0.85, 1.0, 0.25)
+		bg_style.shadow_size = 8
+		fill_style = StyleBoxFlat.new()
+		fill_style.set_corner_radius_all(3)
+
+		smoke = CPUParticles2D.new()
+		smoke.texture = Fx.tex()
+		smoke.amount = 26
+		smoke.lifetime = 2.2
+		smoke.local_coords = false
+		smoke.emission_shape = CPUParticles2D.EMISSION_SHAPE_RECTANGLE
+		smoke.emission_rect_extents = Vector2(half.x * 0.8, half.y * 0.5)
+		smoke.direction = Vector2(0, -1)
+		smoke.spread = 25.0
+		smoke.initial_velocity_min = 14.0
+		smoke.initial_velocity_max = 34.0
+		smoke.gravity = Vector2(0, -6)
+		smoke.scale_amount_min = 0.5
+		smoke.scale_amount_max = 0.9
+		var cv := Curve.new()
+		cv.add_point(Vector2(0, 0.4))
+		cv.add_point(Vector2(1, 1.7))
+		smoke.scale_amount_curve = cv
+		smoke.color = Color(0.72, 0.75, 0.82, 0.5)
+		var g := Gradient.new()
+		g.set_color(0, Color(1, 1, 1, 0))
+		g.set_color(1, Color(1, 1, 1, 0))
+		g.add_point(0.2, Color(1, 1, 1, 1))
+		smoke.color_ramp = g
+		smoke.emitting = false
+		add_child(smoke)
+
+		sparks = CPUParticles2D.new()
+		sparks.texture = Fx.tex()
+		sparks.amount = 14
+		sparks.lifetime = 0.55
+		sparks.local_coords = false
+		sparks.emission_shape = CPUParticles2D.EMISSION_SHAPE_RECTANGLE
+		sparks.emission_rect_extents = half * 0.9
+		sparks.direction = Vector2(0, -1)
+		sparks.spread = 180.0
+		sparks.initial_velocity_min = 40.0
+		sparks.initial_velocity_max = 120.0
+		sparks.gravity = Vector2(0, 220)
+		sparks.scale_amount_min = 0.03
+		sparks.scale_amount_max = 0.07
+		sparks.color = Color(1.8, 1.2, 0.5, 1.0)
+		var g2 := Gradient.new()
+		g2.set_color(0, Color(1, 1, 1, 1))
+		g2.set_color(1, Color(1, 1, 1, 0))
+		sparks.color_ramp = g2
+		var mat := CanvasItemMaterial.new()
+		mat.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
+		sparks.material = mat
+		sparks.emitting = false
+		add_child(sparks)
+
+	func _process(delta: float) -> void:
+		if not is_instance_valid(target):
+			queue_free()
+			return
+		t += delta
+		global_position = target.global_position + center
+		if not target.is_constructing:
+			_finish()
+			return
+		near = is_instance_valid(player) and target.global_position.distance_to(player.global_position) <= target.proximity_distance
+		smoke.emitting = near
+		sparks.emitting = near
+		shown = lerpf(shown, clampf(target.build_progress / 100.0, 0.0, 1.0), 1.0 - exp(-10.0 * delta))
+		# our own bar replaces the default one; the module "materialises" as it builds
+		if target.progress_bar != null:
+			target.progress_bar.visible = false
+		var shimmer := 0.5 + 0.5 * sin(t * 8.0)
+		target.modulate = Color(1.0 + 0.12 * shimmer, 1.0 + 0.12 * shimmer, 1.0 + 0.12 * shimmer, 0.35 + 0.5 * shown)
+		queue_redraw()
+
+	func _finish() -> void:
+		var par := get_parent()
+		if is_instance_valid(target):
+			target.modulate = Color(2.2, 2.2, 2.4, 1.0)
+			target.create_tween().tween_property(target, "modulate", Color.WHITE, 0.45)
+		Fx.burst(par, global_position, Color(0.8, 0.85, 0.95, 0.6), 26, 60.0, 200.0, 0.9, 0.3, 0.8)
+		Fx.burst(par, global_position, Color(0.5, 1.6, 2.0, 1.0), 30, 100.0, 280.0, 0.7, 0.04, 0.1, true)
+		Ring.spawn(par, global_position, Color(0.4, 1.4, 1.8), maxf(half.x, half.y) * 1.8, 0.6)
+		if is_instance_valid(player):
+			player.call("shake", 0.45)
+			player.call("_pop", 0.16)
+		queue_free()
+
+	func _draw() -> void:
+		var w := clampf(half.x * 1.6, 110.0, 220.0)
+		var h := 14.0
+		var pos := Vector2(-w * 0.5, -half.y - 36.0)
+		draw_style_box(bg_style, Rect2(pos - Vector2(3, 3), Vector2(w + 6, h + 6)))
+		var col := Color(0.4, 1.15, 0.55) if near else Color(1.1, 0.3, 0.25)
+		fill_style.bg_color = col
+		var fw := w * shown
+		if fw > 1.0:
+			draw_style_box(fill_style, Rect2(pos, Vector2(maxf(fw, 6.0), h)))
+			var bx := pos.x + fposmod(t * 120.0, maxf(fw, 1.0))
+			draw_rect(Rect2(bx, pos.y, minf(14.0, pos.x + fw - bx), h), Color(1, 1, 1, 0.3))
+			draw_rect(Rect2(pos.x + fw - 2.0, pos.y, 2.0, h), Color(1, 1, 1, 0.9))
+		var label := "BUILDING  %d%%" % int(shown * 100.0) if near else "RETURN TO CONTINUE BUILDING"
+		draw_string(font, pos + Vector2(0, -8), label, HORIZONTAL_ALIGNMENT_CENTER, w, 13, Color(col.r, col.g, col.b, 1.0))
+
 ================================================================================
 FILE: scripts\game systems\reactor.gd
 ================================================================================
@@ -1236,7 +2015,7 @@ var active_wires: Array = []
 
 func _ready() -> void:
 	module_name = "Reactor"
-	can_accept_wires = false
+	can_accept_wires = true
 	is_powered = true
 	super._ready()
 func request_new_wire(player_pos: Vector2) -> Dictionary:
@@ -1616,7 +2395,7 @@ FILE: scripts\game systems\wire_module.gd
 ================================================================================
 
 @tool
-extends StaticBody2D
+extends WirePort
 
 @export var wire_scene: PackedScene
 @export var wire_color: Color = Color(0.85, 0.15, 0.15):
@@ -1627,13 +2406,13 @@ extends StaticBody2D
 
 var spawned_wire: Node2D = null
 var parent_module: BaseModule = null
-var pulse_time: float = 0.0
 
 var base_plate_style: StyleBoxFlat
 var inner_recess_style: StyleBoxFlat
 var collar_style: StyleBoxFlat
 
 func _ready() -> void:
+	super._ready()
 	var old_sprite: Sprite2D = get_node_or_null("Sprite2D") as Sprite2D
 	if old_sprite != null:
 		old_sprite.visible = false
@@ -1662,10 +2441,6 @@ func _init_styles() -> void:
 	collar_style.border_color = Color(0.12, 0.13, 0.16)
 	collar_style.set_border_width_all(1)
 	collar_style.set_corner_radius_all(1)
-
-func _process(delta: float) -> void:
-	pulse_time += delta
-	queue_redraw()
 
 func can_spawn_wire() -> bool:
 	return spawned_wire == null or not is_instance_valid(spawned_wire)
@@ -1712,12 +2487,152 @@ func _draw() -> void:
 	var led_col: Color = wire_color.lightened(0.35) if not has_wire_active else Color(0.2, 1.0, 0.4)
 	draw_circle(Vector2(-2.2, 0.0), 1.1, led_col)
 
+	_draw_port_fx(16.0)
+
+================================================================================
+FILE: scripts\game systems\wire_port.gd
+================================================================================
+
+@tool
+extends StaticBody2D
+class_name WirePort
+
+signal rotated(new_side: int)
+
+@export var rotatable: bool = true
+@export var click_radius: float = 14.0
+@export var reach: float = 300.0
+@export var edge_margin: float = 0.0
+
+const DIRS := [Vector2.RIGHT, Vector2.DOWN, Vector2.LEFT, Vector2.UP]
+
+static var _hover_count: int = 0
+
+var side: int = 0
+var hovered: bool = false
+var flash: float = 0.0
+var pulse_time: float = 0.0
+
+var _center := Vector2.ZERO
+var _half := Vector2(64, 64)
+var _rot_target: float = 0.0
+var _tween: Tween
+
+func _ready() -> void:
+	_rot_target = rotation
+	side = posmod(roundi(rotation / (PI * 0.5)), 4)
+	_measure()
+	if Engine.is_editor_hint():
+		return
+	var p := get_parent()
+	if p != null and p.has_meta("is_ghost"):
+		material = ModuleArt.make_ghost_material()
+		rotatable = false
+
+func _exit_tree() -> void:
+	if hovered:
+		hovered = false
+		_hover_count = maxi(0, _hover_count - 1)
+		if _hover_count == 0:
+			Input.set_default_cursor_shape(Input.CURSOR_ARROW)
+
+func _measure() -> void:
+	var p := get_parent()
+	if p == null:
+		return
+	for n in p.get_children():
+		if n is CollisionShape2D and (n as CollisionShape2D).shape is RectangleShape2D:
+			var cs := n as CollisionShape2D
+			_half = (cs.shape as RectangleShape2D).size * 0.5
+			_center = cs.position
+			return
+
+func _interactive() -> bool:
+	if not rotatable:
+		return false
+	var p := get_parent()
+	if p == null:
+		return false
+	if p is BaseModule and (p as BaseModule).is_constructing:
+		return false
+	var pl := get_tree().get_first_node_in_group("player") as Node2D
+	if pl == null or not pl.visible:
+		return false
+	if pl.get("is_build_mode") == true:
+		return false
+	return pl.global_position.distance_to(global_position) <= reach
+
+func _mouse_hit() -> bool:
+	var rad := maxf(click_radius * absf(global_scale.x), 24.0)
+	return get_global_mouse_position().distance_to(global_position) <= rad
+
+func _process(delta: float) -> void:
+	pulse_time += delta
+	flash = maxf(0.0, flash - delta * 2.2)
+	if not Engine.is_editor_hint():
+		var h := _interactive() and _mouse_hit()
+		if h != hovered:
+			hovered = h
+			if hovered:
+				_hover_count += 1
+			else:
+				_hover_count = maxi(0, _hover_count - 1)
+			Input.set_default_cursor_shape(Input.CURSOR_POINTING_HAND if _hover_count > 0 else Input.CURSOR_ARROW)
+	queue_redraw()
+
+func _unhandled_input(event: InputEvent) -> void:
+	if Engine.is_editor_hint() or not hovered:
+		return
+	if event is InputEventMouseButton and event.pressed:
+		if event.button_index == MOUSE_BUTTON_LEFT:
+			rotate_side(1)
+			get_viewport().set_input_as_handled()
+		elif event.button_index == MOUSE_BUTTON_RIGHT:
+			rotate_side(-1)
+			get_viewport().set_input_as_handled()
+
+func rotate_side(step: int) -> void:
+	side = posmod(side + step, 4)
+	var d: Vector2 = DIRS[side]
+	var edge := _half.x if d.x != 0.0 else _half.y
+	var target := _center + d * (edge + edge_margin)
+	_rot_target += float(step) * PI * 0.5
+	if _tween != null and _tween.is_valid():
+		_tween.kill()
+	_tween = create_tween().set_parallel(true)
+	_tween.tween_property(self, "position", target, 0.3).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	_tween.tween_property(self, "rotation", _rot_target, 0.3).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	flash = 1.0
+	rotated.emit(side)
+
+func _arrow_arc(rad: float, a0: float, col: Color, w: float) -> void:
+	var a1 := a0 + 1.1
+	draw_arc(Vector2.ZERO, rad, a0, a1, 14, col, w, true)
+	var tip := Vector2.from_angle(a1) * rad
+	var tg := Vector2.from_angle(a1 + PI * 0.5)
+	var rv := Vector2.from_angle(a1)
+	var hs := rad * 0.3
+	draw_colored_polygon(PackedVector2Array([tip + tg * hs * 1.2, tip + rv * hs * 0.7 - tg * hs * 0.2, tip - rv * hs * 0.7 - tg * hs * 0.2]), col)
+
+func _draw_port_fx(rad: float) -> void:
+	if not hovered and flash <= 0.01:
+		return
+	var a := 1.0 if hovered else flash
+	var pulse := 0.65 + 0.35 * sin(pulse_time * 9.0)
+	var w := rad * 0.07
+	var col := Color(0.4, 1.3, 1.6, a * pulse)
+	draw_arc(Vector2.ZERO, rad, 0.0, TAU, 40, Color(col.r, col.g, col.b, a * 0.35), w, true)
+	_arrow_arc(rad * 1.3, pulse_time * 2.5, col, w * 1.5)
+	_arrow_arc(rad * 1.3, pulse_time * 2.5 + PI, col, w * 1.5)
+	if flash > 0.01:
+		draw_arc(Vector2.ZERO, rad * (1.0 + (1.0 - flash) * 1.4), 0.0, TAU, 40, Color(1.2, 1.6, 1.8, flash * 0.8), w * 2.0, true)
+
 ================================================================================
 FILE: scripts\game systems\wire_reciever.gd
 ================================================================================
 
 @tool
-extends StaticBody2D
+extends WirePort
 class_name WireReceiver
 
 @export var standby_color: Color = Color(0.25, 0.75, 1.0):
@@ -1728,13 +2643,13 @@ class_name WireReceiver
 var receiver_point: Marker2D = null
 var target_module: BaseModule = null
 var connected_wire: Node2D = null
-var pulse_time: float = 0.0
 
 var housing_style: StyleBoxFlat
 var well_style: StyleBoxFlat
 var flange_style: StyleBoxFlat
 
 func _ready() -> void:
+	super._ready()
 	var old_sprite: Sprite2D = get_node_or_null("Sprite2D") as Sprite2D
 	if old_sprite != null:
 		old_sprite.visible = false
@@ -1769,10 +2684,6 @@ func _init_styles() -> void:
 	flange_style.border_color = Color(0.09, 0.10, 0.12)
 	flange_style.set_border_width_all(1)
 	flange_style.set_corner_radius_all(2)
-
-func _process(delta: float) -> void:
-	pulse_time += delta
-	queue_redraw()
 
 func get_receiver_position() -> Vector2:
 	if receiver_point != null:
@@ -1855,6 +2766,8 @@ func _draw() -> void:
 	draw_circle(Vector2(0, -15), 2.2, led_top_col)
 	draw_circle(Vector2(0, 15), 2.2, led_top_col)
 
+	_draw_port_fx(40.0)
+
 ================================================================================
 FILE: scripts\inheritance\BaseModule.gd
 ================================================================================
@@ -1886,7 +2799,15 @@ func _ready() -> void:
 	visual_rect = get_node_or_null("Visual")
 	if visual_rect != null:
 		base_visual_color = visual_rect.color
-		
+		visual_rect.visible = false
+	var old_sprite := get_node_or_null("Sprite2D") as CanvasItem
+	if old_sprite != null:
+		old_sprite.visible = false
+	var art := ModuleArt.new()
+	art.name = "ModuleArt"
+	add_child(art)
+	move_child(art, 0)
+ 
 	if not is_constructing:
 		if get_node_or_null("/root/BaseManager") != null:
 			if not BaseManager.active_modules.has(self):
@@ -3411,6 +4332,1380 @@ func _start_rover_transition() -> void:
 		tw_out.tween_property(rover, "position", Vector2(1200, 560), 2.0)
 		await tw_out.finished
 		rover.visible = false
+
+================================================================================
+FILE: scripts\polish\module_art.gd
+================================================================================
+
+extends Node2D
+class_name ModuleArt
+
+const GHOST_CODE := """shader_type canvas_item;
+uniform vec4 tint : source_color = vec4(0.35, 0.85, 1.3, 1.0);
+varying vec2 wpos;
+void vertex() {
+	wpos = (MODEL_MATRIX * vec4(VERTEX, 0.0, 1.0)).xy;
+}
+void fragment() {
+	float l = dot(COLOR.rgb, vec3(0.299, 0.587, 0.114));
+	float lines = 0.7 + 0.3 * step(0.5, fract(wpos.y * 0.3));
+	float sweep = pow(max(0.0, sin(wpos.y * 0.045 - TIME * 2.6)), 20.0);
+	vec3 c = tint.rgb * (0.25 + l * 1.15) * lines + tint.rgb * sweep * 0.7;
+	COLOR = vec4(c, COLOR.a * 0.92);
+}
+"""
+
+static var _ghost_shader: Shader
+
+var host: BaseModule
+var kind: String = ""
+var rect := Rect2(0, 0, 256, 256)
+var ghost := false
+var t := 0.0
+var spin := 0.0
+var flow := 0.0
+var slow := 0.0
+var power_k := 0.0
+var broken_k := 0.0
+var build_k := 1.0
+var box := StyleBoxFlat.new()
+var rng := RandomNumberGenerator.new()
+var _blocked := false
+var _synced := false
+var _phase := 0.0
+
+static func make_ghost_material() -> ShaderMaterial:
+	if _ghost_shader == null:
+		_ghost_shader = Shader.new()
+		_ghost_shader.code = GHOST_CODE
+	var m := ShaderMaterial.new()
+	m.shader = _ghost_shader
+	return m
+
+func _ready() -> void:
+	host = get_parent() as BaseModule
+	if host == null:
+		set_process(false)
+		return
+	kind = host.module_name
+	ghost = host.has_meta("is_ghost")
+	_phase = randf() * 10.0
+	t = _phase
+	box.anti_aliasing = true
+	var col := host.get_node_or_null("CollisionShape2D") as CollisionShape2D
+	if col != null and col.shape is RectangleShape2D:
+		var sz: Vector2 = (col.shape as RectangleShape2D).size
+		rect = Rect2(col.position - sz * 0.5, sz)
+	if ghost:
+		process_mode = Node.PROCESS_MODE_ALWAYS
+		power_k = 1.0
+		material = make_ghost_material()
+		_sync_ghost()
+
+func _is_active() -> bool:
+	if ghost:
+		return true
+	if host.is_broken or host.is_constructing:
+		return false
+	if kind == "Solar Panel":
+		return true
+	if kind == "Reactor":
+		return BaseManager.reactor_energy > 0.0
+	return host.is_powered
+
+func _process(delta: float) -> void:
+	if host == null:
+		return
+	t += delta
+	var target := 1.0 if _is_active() else 0.0
+	power_k = lerpf(power_k, target, 1.0 - exp(-5.0 * delta))
+	broken_k = lerpf(broken_k, 1.0 if host.is_broken else 0.0, 1.0 - exp(-8.0 * delta))
+	build_k = clampf(host.build_progress / 100.0, 0.0, 1.0) if host.is_constructing else 1.0
+	spin += delta * 9.0 * power_k
+	flow += delta * 70.0 * power_k
+	slow += delta * (0.35 + 0.9 * power_k)
+	if ghost:
+		_sync_ghost()
+	queue_redraw()
+
+func _sync_ghost() -> void:
+	var m := host.modulate
+	var blocked := m.r > m.b * 1.4
+	if _synced and blocked == _blocked:
+		return
+	_synced = true
+	_blocked = blocked
+	var tint := Color(1.8, 0.35, 0.3) if blocked else Color(0.35, 0.85, 1.3)
+	(material as ShaderMaterial).set_shader_parameter("tint", tint)
+	for ch in host.get_children():
+		if ch is CanvasItem and (ch as CanvasItem).material is ShaderMaterial:
+			((ch as CanvasItem).material as ShaderMaterial).set_shader_parameter("tint", tint)
+
+func _col(c: Color, k: float, a: float = 1.0) -> Color:
+	return Color(c.r * k, c.g * k, c.b * k, a)
+
+func _rbox(r: Rect2, fill: Color, border: Color = Color(0, 0, 0, 0), radius: int = 6, bw: int = 0) -> void:
+	box.bg_color = fill
+	box.border_color = border
+	box.set_border_width_all(bw)
+	box.set_corner_radius_all(radius)
+	draw_style_box(box, r)
+
+func _glow(p: Vector2, rad: float, col: Color, a: float) -> void:
+	for i in 5:
+		var k := float(i) / 4.0
+		draw_circle(p, rad * (1.0 + k * 1.3), Color(col.r, col.g, col.b, a * (1.0 - k) * 0.28))
+
+func _disc(p: Vector2, rad: float, fill: Color, rim: Color, w: float) -> void:
+	draw_circle(p, rad, fill)
+	draw_arc(p, rad, 0.0, TAU, 48, rim, w, true)
+
+func _led(p: Vector2, col: Color, on: float) -> void:
+	var lit := on * (0.65 + 0.35 * sin(t * 5.0 + p.x))
+	draw_circle(p, 3.6, Color(0.04, 0.05, 0.07))
+	draw_circle(p, 2.5, col.darkened(0.75).lerp(_col(col, 1.3), lit))
+	if lit > 0.3:
+		_glow(p, 3.0, col, lit)
+
+func _bolts(r: Rect2, inset: float) -> void:
+	for i in 4:
+		var p := Vector2(r.position.x + inset if i % 2 == 0 else r.end.x - inset, r.position.y + inset if i < 2 else r.end.y - inset)
+		draw_circle(p, 3.4, Color(0.3, 0.34, 0.4))
+		draw_circle(p, 1.6, Color(0.1, 0.11, 0.14))
+
+func _brackets(r: Rect2, col: Color, ln: float, w: float) -> void:
+	var corners: Array[Vector2] = [r.position, Vector2(r.end.x, r.position.y), r.end, Vector2(r.position.x, r.end.y)]
+	var sx: Array[float] = [1.0, -1.0, -1.0, 1.0]
+	var sy: Array[float] = [1.0, 1.0, -1.0, -1.0]
+	for i in 4:
+		var p: Vector2 = corners[i]
+		draw_line(p, p + Vector2(ln * sx[i], 0.0), col, w)
+		draw_line(p, p + Vector2(0.0, ln * sy[i]), col, w)
+
+func _hex(c: Vector2, rad: float, rot: float = 0.0) -> PackedVector2Array:
+	var pts := PackedVector2Array()
+	for i in 6:
+		pts.append(c + Vector2.from_angle(rot + i * PI / 3.0) * rad)
+	return pts
+
+func _loop(pts: PackedVector2Array) -> PackedVector2Array:
+	var out := pts.duplicate()
+	out.append(pts[0])
+	return out
+
+func _path_len(pts: PackedVector2Array) -> float:
+	var total := 0.0
+	for i in pts.size() - 1:
+		total += pts[i].distance_to(pts[i + 1])
+	return total
+
+func _path_point(pts: PackedVector2Array, s: float) -> Vector2:
+	var rem := s
+	for i in pts.size() - 1:
+		var seg := pts[i].distance_to(pts[i + 1])
+		if rem <= seg:
+			return pts[i].lerp(pts[i + 1], rem / maxf(seg, 0.001))
+		rem -= seg
+	return pts[pts.size() - 1]
+
+func _draw() -> void:
+	if host == null:
+		return
+	if not ghost:
+		_rbox(Rect2(rect.position + Vector2(6, 10), rect.size), Color(0, 0, 0, 0.35), Color(0, 0, 0, 0), 12, 0)
+	match kind:
+		"Solar Panel":
+			_draw_solar()
+		"Reactor":
+			_draw_reactor()
+		"Life Support":
+			_draw_life()
+		"Thermal Control":
+			_draw_thermal()
+		"Shield":
+			_draw_shield()
+		"Comms":
+			_draw_comms()
+		_:
+			_rbox(rect, Color(0.2, 0.22, 0.28), Color(0.6, 0.65, 0.75), 8, 3)
+	if ghost:
+		_draw_blueprint()
+	elif host.is_constructing:
+		_draw_scaffold()
+	else:
+		_draw_state()
+
+func _draw_solar() -> void:
+	var r := rect
+	var c := r.get_center()
+	var on := power_k
+	var gold := Color(1.0, 0.8, 0.25)
+	_rbox(r, Color(0.17, 0.19, 0.24), Color(0.62, 0.68, 0.78), 8, 3)
+	var inner := Rect2(r.position + Vector2(12, 12), Vector2(r.size.x - 50.0, r.size.y - 24.0))
+	_rbox(inner, Color(0.04, 0.06, 0.1), Color(0.02, 0.03, 0.05), 4, 2)
+	var cols := 4
+	var rows := 3
+	var gap := 4.0
+	var cw := (inner.size.x - gap * (cols + 1)) / cols
+	var ch := (inner.size.y - gap * (rows + 1)) / rows
+	for j in rows:
+		for i in cols:
+			var cr := Rect2(inner.position + Vector2(gap + i * (cw + gap), gap + j * (ch + gap)), Vector2(cw, ch))
+			var wave := 0.5 + 0.5 * sin(t * 2.4 - float(i + j) * 0.8)
+			var glow := on * wave
+			_rbox(cr, Color(0.05, 0.1, 0.24).lerp(Color(0.1, 0.32, 0.66), glow), Color(0.5, 0.68, 0.95, 0.55), 2, 1)
+			for k in range(1, 4):
+				var x := cr.position.x + cw * k / 4.0
+				draw_line(Vector2(x, cr.position.y + 1.0), Vector2(x, cr.end.y - 1.0), Color(0.45, 0.65, 1.0, 0.28), 1.0)
+			for k in range(1, 3):
+				var y := cr.position.y + ch * k / 3.0
+				draw_line(Vector2(cr.position.x + 1.0, y), Vector2(cr.end.x - 1.0, y), Color(0.45, 0.65, 1.0, 0.28), 1.0)
+			draw_rect(cr, Color(1.0, 0.92, 0.6, glow * 0.16))
+			draw_line(cr.position + Vector2(cw * 0.2, ch * 0.9), cr.position + Vector2(cw * 0.8, ch * 0.1), Color(1, 1, 1, glow * 0.4), 1.5, true)
+	var jb := Rect2(r.end.x - 34.0, c.y - 36.0, 34.0, 72.0)
+	_rbox(jb, Color(0.22, 0.24, 0.3), Color(0.7, 0.74, 0.82), 4, 2)
+	_rbox(jb.grow(-6.0), Color(0.07, 0.08, 0.11), Color(0, 0, 0, 0), 3, 0)
+	for k in 3:
+		_led(Vector2(jb.position.x + 17.0, jb.position.y + 18.0 + k * 18.0), gold if k != 1 else Color(0.3, 1.0, 0.5), on)
+	draw_line(Vector2(jb.end.x - 6.0, c.y), Vector2(r.end.x + 4.0, c.y), _col(gold, 0.4 + 1.2 * on, 0.4 + 0.6 * on), 4.0, true)
+	_bolts(r, 6.0)
+
+func _draw_reactor() -> void:
+	var r := rect
+	var c := r.get_center()
+	var energy := clampf(BaseManager.reactor_energy / 100.0, 0.0, 1.0)
+	var on := power_k
+	var cyan := Color(0.2, 0.95, 1.0)
+	var core_col := cyan.lerp(Color(1.0, 0.3, 0.15), 1.0 - energy)
+	_rbox(r, Color(0.1, 0.13, 0.17), Color(0.2, 0.75, 0.9), 14, 3)
+	_rbox(r.grow(-8.0), Color(0.05, 0.07, 0.1), Color(0.14, 0.26, 0.32), 10, 1)
+	for si in 2:
+		var s := -1.0 if si == 0 else 1.0
+		for i in 3:
+			var x := c.x + s * (70.0 + i * 16.0)
+			var h := 64.0
+			_rbox(Rect2(x - 5.0, c.y - h * 0.5, 10.0, h), Color(0.08, 0.12, 0.16), Color(0.2, 0.3, 0.36), 3, 1)
+			var fill := clampf(energy * on * (0.65 + 0.35 * sin(t * 3.0 - i * 0.8 + s)), 0.0, 1.0)
+			var fh := maxf((h - 6.0) * fill, 1.0)
+			_rbox(Rect2(x - 3.0, c.y + h * 0.5 - 3.0 - fh, 6.0, fh), _col(core_col, 0.5 + 0.8 * on), Color(0, 0, 0, 0), 2, 0)
+		_rbox(Rect2(c.x + s * 120.0 - 6.0, c.y - 26.0, 12.0, 52.0), Color(0.03, 0.04, 0.06), Color(0.25, 0.4, 0.48), 3, 1)
+	_disc(c, 47.0, Color(0.05, 0.07, 0.1), Color(0.35, 0.42, 0.5), 3.0)
+	_disc(c, 39.0, Color(0.08, 0.11, 0.15), Color(0.2, 0.25, 0.3), 2.0)
+	if on > 0.01:
+		_glow(c, 26.0, core_col, on)
+	for i in 3:
+		var a := slow * (1.6 + 0.3 * i) + i * TAU / 3.0
+		draw_arc(c, 33.0 - i * 5.0, a, a + 1.7, 18, Color(core_col.r, core_col.g, core_col.b, 0.25 + 0.65 * on), 3.0, true)
+	var pulse := 1.0 + 0.12 * sin(t * 6.0)
+	draw_circle(c, 16.0 * pulse * (0.45 + 0.55 * on), _col(core_col, 0.35 + 1.3 * on))
+	draw_circle(c, 7.0, Color(1, 1, 1, 0.35 + 0.65 * on))
+	draw_arc(c, 52.0, 0.0, TAU, 64, Color(1, 1, 1, 0.08), 4.0, true)
+	if energy > 0.01:
+		draw_arc(c, 52.0, -PI * 0.5, -PI * 0.5 + TAU * energy, 64, _col(core_col, 1.2), 4.0, true)
+
+func _draw_life() -> void:
+	var r := rect
+	var c := r.get_center()
+	var on := power_k
+	var teal := Color(0.2, 0.95, 0.8)
+	_rbox(r, Color(0.09, 0.15, 0.17), Color(0.25, 0.8, 0.75), 12, 3)
+	_rbox(r.grow(-10.0), Color(0.06, 0.1, 0.12), Color(0.12, 0.3, 0.32), 8, 1)
+	_bolts(r, 10.0)
+	var tpos: Array[Vector2] = [Vector2(c.x - 58.0, c.y - 62.0), Vector2(c.x + 58.0, c.y - 62.0)]
+	var pipe_y := c.y + 8.0
+	draw_line(Vector2(tpos[0].x, tpos[0].y + 30.0), Vector2(tpos[0].x, pipe_y), Color(0.3, 0.38, 0.42), 11.0)
+	draw_line(Vector2(tpos[1].x, tpos[1].y + 30.0), Vector2(tpos[1].x, pipe_y), Color(0.3, 0.38, 0.42), 11.0)
+	draw_line(Vector2(tpos[0].x, pipe_y), Vector2(tpos[1].x, pipe_y), Color(0.3, 0.38, 0.42), 11.0)
+	draw_line(Vector2(c.x, pipe_y), Vector2(c.x, c.y + 24.0), Color(0.3, 0.38, 0.42), 11.0)
+	draw_line(Vector2(tpos[0].x + 2.0, pipe_y - 2.0), Vector2(tpos[1].x - 2.0, pipe_y - 2.0), _col(teal, 0.3 + 0.7 * on, 0.6), 2.0)
+	for ti in 2:
+		var tp: Vector2 = tpos[ti]
+		_disc(tp, 44.0, Color(0.1, 0.18, 0.2), Color(0.35, 0.55, 0.6), 3.0)
+		_disc(tp, 36.0, Color(0.06, 0.14, 0.16), Color(0.15, 0.4, 0.42), 2.0)
+		var lvl := 0.3 + 0.7 * on
+		draw_circle(tp, 29.0, Color(0.05 + 0.1 * lvl, 0.2 + 0.5 * lvl, 0.2 + 0.45 * lvl, 0.95))
+		if on > 0.05:
+			_glow(tp, 20.0, teal, on * 0.7)
+			for b in 5:
+				var ph := fposmod(t * 0.45 + b * 0.2 + ti * 0.37, 1.0)
+				var bp := tp + Vector2(sin(ph * 9.0 + b) * 10.0, 22.0 - ph * 46.0)
+				draw_circle(bp, 2.0 + float(b % 3) * 0.7, Color(0.8, 1.0, 1.0, (1.0 - ph) * 0.7 * on))
+		draw_arc(tp, 22.0, PI * 1.1, PI * 1.7, 12, Color(1, 1, 1, 0.35), 3.0, true)
+		for k in 12:
+			var a := k * TAU / 12.0
+			draw_line(tp + Vector2.from_angle(a) * 38.0, tp + Vector2.from_angle(a) * 42.0, Color(0.5, 0.75, 0.8, 0.7), 2.0)
+	var fc := Vector2(c.x, c.y + 72.0)
+	_disc(fc, 50.0, Color(0.08, 0.12, 0.14), Color(0.4, 0.6, 0.65), 3.0)
+	draw_circle(fc, 45.0, Color(teal.r, teal.g, teal.b, 0.1 * on))
+	for b in 5:
+		var a := spin + b * TAU / 5.0
+		var blade := PackedVector2Array([
+			fc + Vector2.from_angle(a) * 8.0,
+			fc + Vector2.from_angle(a - 0.18) * 43.0,
+			fc + Vector2.from_angle(a + 0.5) * 41.0,
+			fc + Vector2.from_angle(a + 0.55) * 10.0])
+		draw_colored_polygon(blade, Color(0.35, 0.6, 0.62).lerp(teal, on * 0.5))
+	_disc(fc, 9.0, Color(0.15, 0.2, 0.22), _col(teal, 0.5 + 0.8 * on), 2.0)
+	for si in 2:
+		var s := -1.0 if si == 0 else 1.0
+		for k in 5:
+			var vx := c.x + s * (72.0 + k * 8.0)
+			draw_line(Vector2(vx, c.y + 56.0), Vector2(vx, c.y + 100.0), Color(0.03, 0.06, 0.07), 3.0)
+
+func _draw_thermal() -> void:
+	var r := rect
+	var on := power_k
+	var hot := Color(1.0, 0.45, 0.12)
+	_rbox(r, Color(0.16, 0.1, 0.08), Color(0.9, 0.4, 0.15), 10, 3)
+	_rbox(r.grow(-8.0), Color(0.1, 0.07, 0.06), Color(0.3, 0.15, 0.1), 6, 1)
+	for si in 2:
+		var fx := r.position.x + 14.0 if si == 0 else r.end.x - 36.0
+		for i in 8:
+			var fy := r.position.y + 16.0 + i * 20.5
+			var heat := on * (0.5 + 0.5 * sin(t * 3.0 - i * 0.6 + si * PI))
+			_rbox(Rect2(fx, fy, 22.0, 12.0), Color(0.28, 0.22, 0.2).lerp(hot, heat * 0.85), Color(0.08, 0.06, 0.05), 2, 1)
+	var br := Rect2(r.position + Vector2(44, 16), Vector2(r.size.x - 88.0, r.size.y - 32.0))
+	_rbox(br, Color(0.07, 0.05, 0.05), Color(0.5, 0.25, 0.12), 6, 2)
+	var pts := PackedVector2Array()
+	var rows := 6
+	for i in rows:
+		var y := br.position.y + 18.0 + i * ((br.size.y - 36.0) / (rows - 1))
+		var lx := br.position.x + 14.0
+		var rx := br.end.x - 14.0
+		if i % 2 == 0:
+			pts.append(Vector2(lx, y))
+			pts.append(Vector2(rx, y))
+		else:
+			pts.append(Vector2(rx, y))
+			pts.append(Vector2(lx, y))
+	draw_polyline(pts, Color(0.22, 0.13, 0.1), 9.0, true)
+	draw_polyline(pts, _col(hot, 0.3 + 1.1 * on), 5.0, true)
+	if on > 0.05:
+		var total := _path_len(pts)
+		for k in 6:
+			var p := _path_point(pts, fposmod(flow + k * total / 6.0, total))
+			_glow(p, 3.5, Color(1.0, 0.8, 0.4), on * 0.8)
+			draw_circle(p, 3.0, Color(1.6, 1.3, 0.8, on))
+	var gauge := clampf(BaseManager.temp_level / 100.0, 0.0, 1.0)
+	var gc := Vector2(br.get_center().x, br.position.y - 1.0)
+	draw_arc(gc, 9.0, 0.0, PI, 12, Color(0.2, 0.2, 0.25), 3.0, true)
+	draw_arc(gc, 9.0, PI, PI + PI * gauge, 12, Color(0.4, 0.9, 1.0).lerp(hot, 1.0 - gauge), 3.0, true)
+
+func _draw_shield() -> void:
+	var r := rect
+	var c := r.get_center()
+	var on := power_k
+	var vio := Color(0.65, 0.4, 1.0)
+	_rbox(r, Color(0.1, 0.08, 0.16), Color(0.55, 0.35, 0.95), 12, 3)
+	_rbox(r.grow(-8.0), Color(0.07, 0.05, 0.11), Color(0.25, 0.15, 0.4), 8, 1)
+	_bolts(r, 11.0)
+	var hr := 70.0
+	var hp := _hex(c, hr)
+	draw_colored_polygon(hp, Color(0.05, 0.04, 0.09))
+	draw_polyline(_loop(hp), _col(vio, 0.5 + 0.8 * on), 3.0, true)
+	for i in 7:
+		var off := Vector2.ZERO if i == 0 else Vector2.from_angle(PI / 6.0 + (i - 1) * PI / 3.0) * 31.2
+		var hc := c + off
+		var pulse := 0.5 + 0.5 * sin(t * 3.0 - i * 0.9)
+		var hx := _hex(hc, 17.0)
+		draw_colored_polygon(hx, Color(vio.r, vio.g, vio.b, 0.08 + 0.4 * on * pulse))
+		draw_polyline(_loop(hx), _col(vio, 0.45 + 0.9 * on * pulse), 2.0, true)
+	for k in 6:
+		var v := c + Vector2.from_angle(k * PI / 3.0) * hr
+		if on > 0.05:
+			_glow(v, 6.0, vio, on)
+		_disc(v, 6.5, Color(0.12, 0.09, 0.2), _col(vio, 0.6 + 0.8 * on), 2.0)
+		draw_circle(v, 2.5, _col(vio, 0.4 + 1.4 * on))
+	for k in 12:
+		var a := slow * 0.9 + k * TAU / 12.0
+		draw_arc(c, 84.0, a, a + 0.32, 6, Color(vio.r, vio.g, vio.b, 0.3 + 0.6 * on), 3.0, true)
+	var d := 11.0 + 2.0 * sin(t * 4.0) * on
+	var diamond := PackedVector2Array([c + Vector2(0, -d * 1.4), c + Vector2(d, 0), c + Vector2(0, d * 1.4), c + Vector2(-d, 0)])
+	draw_colored_polygon(diamond, _col(vio, 0.4 + 1.5 * on))
+	draw_polyline(_loop(diamond), Color(1, 1, 1, 0.3 + 0.6 * on), 1.5, true)
+	if on > 0.02:
+		var br := 122.0 + 5.0 * sin(t * 2.0)
+		draw_circle(c, br, Color(vio.r, vio.g, vio.b, 0.05 * on))
+		draw_arc(c, br, 0.0, TAU, 72, Color(vio.r, vio.g, vio.b, 0.35 * on), 3.0, true)
+		draw_arc(c, br - 8.0, 0.0, TAU, 72, Color(1.0, 0.8, 1.0, 0.12 * on), 1.5, true)
+
+func _draw_comms() -> void:
+	var r := rect
+	var c := r.get_center()
+	var on := power_k
+	var pink := Color(1.0, 0.35, 0.7)
+	_rbox(r, Color(0.14, 0.09, 0.13), Color(0.9, 0.3, 0.6), 10, 3)
+	_rbox(r.grow(-8.0), Color(0.09, 0.06, 0.09), Color(0.3, 0.13, 0.25), 6, 1)
+	var rack := Rect2(r.position + Vector2(14, 14), Vector2(52.0, r.size.y - 28.0))
+	_rbox(rack, Color(0.06, 0.04, 0.07), Color(0.4, 0.2, 0.35), 4, 2)
+	for i in 6:
+		var ry := rack.position.y + 7.0 + i * ((rack.size.y - 14.0) / 6.0)
+		_rbox(Rect2(rack.position.x + 5.0, ry, rack.size.x - 10.0, 10.0), Color(0.14, 0.1, 0.15), Color(0.3, 0.2, 0.3), 2, 1)
+		_led(Vector2(rack.position.x + 13.0, ry + 5.0), pink if i % 2 == 0 else Color(0.4, 1.0, 0.6), on)
+		var bar := (0.3 + 0.7 * absf(sin(t * 2.0 + i * 1.3))) * on
+		draw_rect(Rect2(rack.position.x + 22.0, ry + 3.0, (rack.size.x - 32.0) * bar, 4.0), _col(pink, 0.8 + 0.6 * on))
+	var dc := Vector2(r.end.x - 62.0, c.y)
+	_disc(dc, 52.0, Color(0.13, 0.11, 0.14), Color(0.8, 0.8, 0.9), 3.0)
+	for k in 4:
+		draw_arc(dc, 44.0 - k * 10.0, 0.0, TAU, 40, Color(0.75, 0.75, 0.85, 0.2 + 0.08 * k), 2.0, true)
+	for k in 10:
+		var a := k * TAU / 10.0
+		draw_line(dc + Vector2.from_angle(a) * 8.0, dc + Vector2.from_angle(a) * 50.0, Color(0.55, 0.55, 0.65, 0.55), 1.5)
+	var aim := sin(slow * 1.1 + _phase) * 0.5
+	var feed := dc + Vector2.from_angle(aim) * 34.0
+	draw_line(dc, feed, Color(0.7, 0.7, 0.8), 4.0, true)
+	_disc(dc, 8.0, Color(0.2, 0.2, 0.25), Color(0.8, 0.8, 0.9), 2.0)
+	if on > 0.05:
+		_glow(feed, 6.0, pink, on)
+	_disc(feed, 6.0, Color(0.2, 0.1, 0.16), _col(pink, 0.6 + 0.9 * on), 2.0)
+	if on > 0.05:
+		for i in 3:
+			var rr := fposmod(t * 34.0 + i * 14.0, 42.0)
+			draw_arc(feed, rr + 8.0, aim - 0.7, aim + 0.7, 12, Color(pink.r, pink.g, pink.b, (1.0 - rr / 42.0) * 0.9 * on), 2.5, true)
+	var blink := 1.0 if fmod(t, 1.2) < 0.2 else 0.15
+	_led(Vector2(rack.end.x + 12.0, r.position.y + 18.0), Color(1.0, 0.25, 0.2), on * blink)
+
+func _draw_state() -> void:
+	var c := rect.get_center()
+	var idle := 1.0 - power_k
+	if idle > 0.02 and not host.is_broken:
+		_rbox(rect, Color(0.01, 0.02, 0.04, 0.5 * idle), Color(0, 0, 0, 0), 8, 0)
+		var blink := 0.55 + 0.45 * sin(t * 4.0)
+		_bolt_icon(c, Color(1.0, 0.8, 0.2, idle * blink))
+	if broken_k > 0.02:
+		var fl := 0.5 + 0.5 * sin(t * 14.0)
+		_rbox(rect, Color(1.0, 0.08, 0.05, 0.22 * broken_k * (0.4 + 0.6 * fl)), Color(1.0, 0.2, 0.15, broken_k * fl), 8, 3)
+		_warn_icon(c, broken_k, fl)
+		_sparks(broken_k)
+
+func _bolt_icon(p: Vector2, col: Color) -> void:
+	var pts := PackedVector2Array([Vector2(3, -22), Vector2(-9, 2), Vector2(-1, 2), Vector2(-4, 22), Vector2(10, -4), Vector2(2, -4)])
+	for i in pts.size():
+		pts[i] += p
+	draw_colored_polygon(pts, col)
+	draw_line(p + Vector2(-16, -20), p + Vector2(16, 20), Color(1.0, 0.2, 0.15, col.a), 3.5, true)
+
+func _warn_icon(p: Vector2, k: float, fl: float) -> void:
+	var s := 1.0 + 0.1 * fl
+	var pts := PackedVector2Array([Vector2(0, -26) * s + p, Vector2(24, 18) * s + p, Vector2(-24, 18) * s + p])
+	draw_colored_polygon(pts, Color(1.0, 0.15, 0.1, 0.85 * k))
+	draw_polyline(_loop(pts), Color(1.0, 0.8, 0.7, k), 2.5, true)
+	draw_line(p + Vector2(0, -9) * s, p + Vector2(0, 5) * s, Color(1, 1, 1, k), 4.0, true)
+	draw_circle(p + Vector2(0, 12) * s, 2.8, Color(1, 1, 1, k))
+
+func _sparks(k: float) -> void:
+	rng.seed = int(t * 9.0) * 7919 + 13
+	for i in 5:
+		var p := rect.position + Vector2(rng.randf() * rect.size.x, rng.randf() * rect.size.y)
+		var d := Vector2.from_angle(rng.randf() * TAU) * (6.0 + rng.randf() * 14.0)
+		draw_line(p, p + d, Color(1.8, 1.4, 0.5, k), 2.0, true)
+		draw_circle(p, 2.0, Color(2.0, 1.8, 1.0, k))
+
+func _draw_scaffold() -> void:
+	var r := rect
+	var cut := r.size.y * (1.0 - build_k)
+	if cut > 1.0:
+		_rbox(Rect2(r.position, Vector2(r.size.x, cut)), Color(0.04, 0.16, 0.28, 0.82), Color(0.3, 0.8, 1.0, 0.8), 6, 1)
+		var gx := r.position.x + 16.0
+		while gx < r.end.x:
+			draw_line(Vector2(gx, r.position.y), Vector2(gx, r.position.y + cut), Color(0.4, 0.9, 1.0, 0.18), 1.0)
+			gx += 16.0
+		var gy := r.position.y + 16.0
+		while gy < r.position.y + cut:
+			draw_line(Vector2(r.position.x, gy), Vector2(r.end.x, gy), Color(0.4, 0.9, 1.0, 0.18), 1.0)
+			gy += 16.0
+	var sy := r.position.y + cut
+	draw_line(Vector2(r.position.x, sy), Vector2(r.end.x, sy), Color(0.5, 1.6, 2.0, 0.95), 3.0, true)
+	_brackets(r.grow(6.0), Color(0.5, 1.4, 1.8, 0.6 + 0.4 * sin(t * 8.0)), 22.0, 3.0)
+
+func _draw_blueprint() -> void:
+	var r := rect
+	var gx := r.position.x + 32.0
+	while gx < r.end.x - 1.0:
+		draw_line(Vector2(gx, r.position.y), Vector2(gx, r.end.y), Color(1, 1, 1, 0.14), 1.0)
+		gx += 32.0
+	var gy := r.position.y + 32.0
+	while gy < r.end.y - 1.0:
+		draw_line(Vector2(r.position.x, gy), Vector2(r.end.x, gy), Color(1, 1, 1, 0.14), 1.0)
+		gy += 32.0
+	draw_line(r.position, r.end, Color(1, 1, 1, 0.1), 1.0)
+	draw_line(Vector2(r.end.x, r.position.y), Vector2(r.position.x, r.end.y), Color(1, 1, 1, 0.1), 1.0)
+	draw_rect(r, Color(1, 1, 1, 0.55), false, 2.0)
+	_brackets(r.grow(8.0), Color(1, 1, 1, 0.9), 26.0, 3.0)
+
+================================================================================
+FILE: scripts\polish\polish.gd
+================================================================================
+
+extends Node
+## POLISH â€” drop-in visual layer for the Game scene (autoload).
+## Adds: bloom, ambient lighting + shadows, module glow, dust/spark particles,
+## CRT/vignette post FX, themed shop UI (cutscene font), survival HUD, alerts.
+## It only READS existing game state. It never edits game scripts or the cutscene.
+
+const GAME_SCENE := "game.tscn"
+## Name of the Game-node property that holds your shop CanvasLayer. If it's missing/renamed,
+## Polish falls back to auto-detecting any other CanvasLayer under the Game node.
+const SHOP_PROPERTY := "shop_layer"
+## Buttons whose text contains one of these words get the "primary" pulse.
+## (Or tag any node yourself:  node.set_meta("polish_primary", true) )
+## To exclude any node + its children from Polish:  node.set_meta("no_polish", true)
+const PRIMARY_WORDS := ["CONFIRM", "DEPLOY", "LAUNCH", "START", "BEGIN", "PLAY"]
+const GLOW := 1.12   # HDR multiplier for glowing things (1.0 = no bloom from them)
+const FONT_NAMES := ["Courier New", "monospace"]   # same font as cutscene.gd
+
+const C_BG      := Color(0.04, 0.06, 0.09, 0.96)
+const C_PANEL   := Color(0.06, 0.09, 0.13, 0.92)
+const C_EDGE    := Color(0.20, 0.75, 0.95, 0.85)
+const C_GREEN   := Color(0.40, 1.00, 0.55)
+const C_CYAN    := Color(0.30, 0.85, 1.00)
+const C_AMBER   := Color(1.00, 0.85, 0.30)
+const C_RED     := Color(1.00, 0.25, 0.20)
+
+var font: SystemFont
+var ui_theme: Theme
+var soft_tex: GradientTexture2D
+var ring_tex: GradientTexture2D
+
+var _scene: Node = null
+var _installed := false
+var _game: Node2D
+var _t := 0.0
+
+# lighting
+var _modulate: CanvasModulate
+var _player_light: PointLight2D
+var _reactor_light: PointLight2D
+var _module_lights: Dictionary = {}   # module -> PointLight2D
+var _dust: CPUParticles2D
+var _sparks: CPUParticles2D
+
+# shop
+var _shop_seen: CanvasLayer = null
+var _shop_labels: Dictionary = {}   # Label -> [last_text, base_modulate]
+var _card_idx := 0
+var _fx_layer: CanvasLayer
+var _fx_dust: CPUParticles2D
+var _fx_bokeh: CPUParticles2D
+var _fx_embers: CPUParticles2D
+var _fx_size := Vector2.ZERO
+
+# hud
+var _hud: CanvasLayer
+var _bars: Dictionary = {}
+var _alert_box: VBoxContainer
+var _crit_label: Label
+var _crit_flash: ColorRect
+var _crit_time := 0.0
+
+func _ready() -> void:
+	process_mode = Node.PROCESS_MODE_ALWAYS
+	font = SystemFont.new()
+	font.font_names = PackedStringArray(FONT_NAMES)
+	soft_tex = _radial_tex(256, 0.0)
+	ring_tex = _radial_tex(64, 0.0)
+	ui_theme = _build_theme()
+	get_tree().node_added.connect(_on_node_added)
+
+func _process(delta: float) -> void:
+	_t += delta
+	var cs := get_tree().current_scene
+	if cs != _scene:
+		_scene = cs
+		_installed = false
+		_teardown()
+		if cs != null and cs.scene_file_path.get_file() == GAME_SCENE:
+			_install(cs)
+	if not _installed:
+		return
+	_update_lighting(delta)
+	_update_particles()
+	_update_shop(delta)
+	_update_hud(delta)
+
+func _teardown() -> void:
+	_module_lights.clear()
+	_shop_labels.clear()
+	_shop_seen = null
+	_bars.clear()
+	_crit_time = 0.0
+
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ install â”€â”€
+func _install(game: Node) -> void:
+	_game = game as Node2D
+	_installed = true
+	_setup_environment()
+	_setup_lighting()
+	_setup_particles()
+	_setup_post_fx()
+	_setup_hud()
+	# connect signals once per install
+	if not EventBus.module_broken.is_connected(_on_module_broken):
+		EventBus.module_broken.connect(_on_module_broken)
+	if not EventBus.game_over.is_connected(_on_game_over):
+		EventBus.game_over.connect(_on_game_over)
+	for n in _game.get_children():
+		_style_existing(n)
+
+func _style_existing(n: Node) -> void:
+	if n is Line2D:
+		_bloom_wire(n)
+
+func _on_node_added(n: Node) -> void:
+	if not _installed or not is_instance_valid(_game) or not _game.is_ancestor_of(n):
+		return
+	if n is Control and is_instance_valid(_shop_seen) and _shop_seen.is_ancestor_of(n):
+		_decorate_control.call_deferred(n)
+		return
+	if n is ProgressBar:
+		if not (n.get_parent() is Container):   # module repair/build bars only (HUD bars are themed already)
+			(n as ProgressBar).theme = ui_theme
+	elif n is Line2D:
+		_bloom_wire.call_deferred(n)
+
+func _bloom_wire(l: Line2D) -> void:
+	if not is_instance_valid(l):
+		return
+	# real wire (opaque colour) gets an HDR boost so bloom picks it up; shadow line is left alone
+	if l.default_color.a > 0.9 and l.width >= 8.0:
+		l.modulate = Color(GLOW, GLOW, GLOW, 1.0)
+
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ environment/bloom â”€â”€
+func _setup_environment() -> void:
+	get_viewport().use_hdr_2d = true
+	var we := _game.get_node_or_null("WorldEnvironment") as WorldEnvironment
+	if we == null:
+		we = WorldEnvironment.new()
+		we.name = "WorldEnvironment"
+		_game.add_child(we)
+	var env := we.environment
+	if env == null:
+		env = Environment.new()
+		we.environment = env
+	env.background_mode = Environment.BG_CANVAS      # required for 2D glow
+	env.tonemap_mode = Environment.TONE_MAPPER_LINEAR   # keep your original colours
+	env.glow_enabled = true
+	env.glow_intensity = 0.45
+	env.glow_strength = 0.9
+	env.glow_bloom = 0.02
+	env.glow_hdr_threshold = 1.15
+	env.glow_hdr_scale = 0.9
+	env.glow_blend_mode = Environment.GLOW_BLEND_MODE_SCREEN
+	for i in range(7):
+		env.set_glow_level(i, 1.0 if i in [1, 2, 4] else 0.55)
+	env.adjustment_enabled = true
+	env.adjustment_contrast = 1.08
+	env.adjustment_saturation = 1.12
+
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ lighting â”€â”€
+func _setup_lighting() -> void:
+	_modulate = CanvasModulate.new()
+	_modulate.name = "AmbientDark"
+	_modulate.color = Color(0.36, 0.40, 0.52)
+	_game.add_child(_modulate)
+
+	# soft blob shadow under the player (fake contact shadow)
+	var player := _game.get_node_or_null("Player") as Node2D
+	if player != null:
+		var blob := Sprite2D.new()
+		blob.name = "BlobShadow"
+		blob.texture = soft_tex
+		blob.modulate = Color(0, 0, 0, 0.55)
+		blob.scale = Vector2(0.28, 0.12)
+		blob.position = Vector2(0, 30)
+		blob.show_behind_parent = true
+		player.add_child(blob)
+
+		_player_light = _make_light(Color(0.75, 0.92, 1.0), 1.25, 3.2, true)
+		_player_light.name = "PlayerTorch"
+		_player_light.position = Vector2(0, -6)
+		player.add_child(_player_light)
+
+	var reactor := _game.get_node_or_null("Reactor") as Node2D
+	if reactor != null:
+		_reactor_light = _make_light(Color(0.2, 0.85, 1.0), 1.3, 4.2, false)
+		_reactor_light.name = "ReactorGlow"
+		_reactor_light.position = Vector2(64, 64)
+		reactor.add_child(_reactor_light)
+		_add_occluder_from_body(reactor)
+
+	_build_wall_occluders_and_lamps()
+
+func _make_light(col: Color, energy: float, scl: float, shadows: bool) -> PointLight2D:
+	var l := PointLight2D.new()
+	l.texture = soft_tex
+	l.texture_scale = scl
+	l.color = col
+	l.energy = energy
+	l.shadow_enabled = shadows
+	if shadows:
+		l.shadow_filter = Light2D.SHADOW_FILTER_PCF5
+		l.shadow_filter_smooth = 2.0
+		l.shadow_color = Color(0, 0, 0, 0.75)
+	return l
+
+func _add_occluder_from_body(body: Node2D) -> void:
+	var cs := body.get_node_or_null("CollisionShape2D") as CollisionShape2D
+	if cs == null or not (cs.shape is RectangleShape2D):
+		return
+	var sz := (cs.shape as RectangleShape2D).size
+	var h := sz * 0.5
+	var occ := LightOccluder2D.new()
+	var poly := OccluderPolygon2D.new()
+	poly.polygon = PackedVector2Array([
+		cs.position + Vector2(-h.x, -h.y), cs.position + Vector2(h.x, -h.y),
+		cs.position + Vector2(h.x, h.y), cs.position + Vector2(-h.x, h.y)])
+	occ.occluder = poly
+	body.add_child(occ)
+
+func _build_wall_occluders_and_lamps() -> void:
+	var tm := _game.get_node_or_null("spacestation") as TileMapLayer
+	if tm == null or tm.tile_set == null:
+		return
+	var cells := tm.get_used_cells()
+	var solid := {}
+	var floor_cells: Array[Vector2i] = []
+	for c in cells:
+		var td := tm.get_cell_tile_data(c)
+		if td != null and td.get_collision_polygons_count(0) > 0:
+			solid[c] = true
+		else:
+			floor_cells.append(c)
+	var half := Vector2(tm.tile_set.tile_size) * 0.5
+	var made := 0
+	for c in solid.keys():
+		var edge := false
+		for d in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
+			if not solid.has(c + d):
+				edge = true
+				break
+		if not edge or made > 700:
+			continue
+		var occ := LightOccluder2D.new()
+		var poly := OccluderPolygon2D.new()
+		var p := tm.map_to_local(c)
+		poly.polygon = PackedVector2Array([
+			p + Vector2(-half.x, -half.y), p + Vector2(half.x, -half.y),
+			p + Vector2(half.x, half.y), p + Vector2(-half.x, half.y)])
+		occ.occluder = poly
+		tm.add_child(occ)
+		made += 1
+	# ceiling lamps on a sparse grid over walkable floor
+	var lamps := 0
+	for c in floor_cells:
+		if lamps >= 9:
+			break
+		if c.x % 7 == 0 and c.y % 6 == 0:
+			var lamp := _make_light(Color(0.62, 0.80, 1.0), 0.85, 3.6, lamps < 5)
+			lamp.position = tm.map_to_local(c)
+			tm.add_child(lamp)
+			lamps += 1
+
+func _update_lighting(delta: float) -> void:
+	# keep every module glowing in its own colour, reacting to power / broken state
+	for m in BaseManager.active_modules:
+		if not is_instance_valid(m):
+			continue
+		if not _module_lights.has(m):
+			var vis := m.get_node_or_null("Visual") as ColorRect
+			if vis == null:
+				continue
+			var l := _make_light(vis.color, 1.0, 2.2, false)
+			l.position = vis.position + vis.size * 0.5
+			m.add_child(l)
+			_module_lights[m] = l
+			_add_occluder_from_body(m)   # modules now cast shadows from lamps / torch
+		var light: PointLight2D = _module_lights[m]
+		var vis2 := m.get_node_or_null("Visual") as ColorRect
+		if vis2 == null:
+			continue
+		if m.is_broken:
+			var pulse := 0.5 + 0.5 * sin(_t * 10.0)
+			light.color = Color(1.0, 0.15, 0.1)
+			light.energy = 0.5 + 1.0 * pulse
+			vis2.modulate = Color(1.0 + 0.3 * pulse, 1.0, 1.0)
+		elif m.is_powered or m.module_name == "Reactor":
+			light.color = m.base_visual_color
+			light.energy = lerpf(light.energy, 1.3 + 0.12 * sin(_t * 3.0), delta * 6.0)
+			vis2.modulate = Color(GLOW, GLOW, GLOW)
+		else:
+			light.energy = lerpf(light.energy, 0.12, delta * 4.0)
+			vis2.modulate = Color(1, 1, 1)
+	if _reactor_light != null and is_instance_valid(_reactor_light):
+		var e := clampf(BaseManager.reactor_energy / 100.0, 0.0, 1.0)
+		_reactor_light.energy = (0.4 + 1.1 * e) * (0.94 + 0.06 * sin(_t * 5.0))
+	if _player_light != null:
+		_player_light.energy = 1.15 + 0.06 * sin(_t * 2.3)
+	# critical ambient: tint the whole base red when a system is nearly dead
+	var danger := _danger_level()
+	var target := Color(0.36, 0.40, 0.52).lerp(Color(0.46, 0.22, 0.24), danger)
+	_modulate.color = _modulate.color.lerp(target, delta * 3.0)
+
+func _danger_level() -> float:
+	var worst := minf(BaseManager.oxygen_level, BaseManager.temp_level)
+	return clampf(1.0 - worst / 30.0, 0.0, 1.0) if GameManager.current_phase == GameManager.Phase.SURVIVE else 0.0
+
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ particles â”€â”€
+## Ambient particles live on their own CanvasLayer (screen space), so the dark
+## ambient tint can't swallow them and they always read clearly.
+func _emitter(amount: int, life: float, add_mat: Material) -> CPUParticles2D:
+	var p := CPUParticles2D.new()
+	p.texture = ring_tex
+	p.material = add_mat
+	p.amount = amount
+	p.lifetime = life
+	p.preprocess = life
+	p.emission_shape = CPUParticles2D.EMISSION_SHAPE_RECTANGLE
+	p.emission_rect_extents = Vector2(960, 540)
+	p.gravity = Vector2.ZERO
+	var g := Gradient.new()
+	g.set_color(0, Color(1, 1, 1, 0))
+	g.set_color(1, Color(1, 1, 1, 0))
+	g.add_point(0.25, Color(1, 1, 1, 1))
+	g.add_point(0.75, Color(1, 1, 1, 1))
+	p.color_ramp = g
+	return p
+
+func _setup_particles() -> void:
+	var add_mat := CanvasItemMaterial.new()
+	add_mat.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
+	_fx_layer = CanvasLayer.new()
+	_fx_layer.name = "AmbientFX"
+	_fx_layer.layer = 11          # above the shop, below HUD (20) and post-fx (50)
+	_game.add_child(_fx_layer)
+
+	# 1) dust motes: lots of small bright specks drifting across the screen
+	_fx_dust = _emitter(160, 11.0, add_mat)
+	_fx_dust.direction = Vector2(1, -0.3)
+	_fx_dust.spread = 70.0
+	_fx_dust.initial_velocity_min = 8.0
+	_fx_dust.initial_velocity_max = 30.0
+	_fx_dust.scale_amount_min = 0.05
+	_fx_dust.scale_amount_max = 0.16
+	_fx_dust.color = Color(0.65, 0.9, 1.0, 0.75)
+	_fx_layer.add_child(_fx_dust)
+
+	# 2) bokeh: a few huge, very faint soft orbs for depth
+	_fx_bokeh = _emitter(14, 16.0, add_mat)
+	_fx_bokeh.direction = Vector2(-1, 0.15)
+	_fx_bokeh.spread = 40.0
+	_fx_bokeh.initial_velocity_min = 5.0
+	_fx_bokeh.initial_velocity_max = 14.0
+	_fx_bokeh.scale_amount_min = 0.9
+	_fx_bokeh.scale_amount_max = 2.0
+	_fx_bokeh.color = Color(0.35, 0.7, 1.0, 0.09)
+	_fx_layer.add_child(_fx_bokeh)
+
+	# 3) warm embers floating upward
+	_fx_embers = _emitter(36, 7.0, add_mat)
+	_fx_embers.direction = Vector2(0, -1)
+	_fx_embers.spread = 25.0
+	_fx_embers.initial_velocity_min = 18.0
+	_fx_embers.initial_velocity_max = 55.0
+	_fx_embers.gravity = Vector2(6, -6)
+	_fx_embers.scale_amount_min = 0.05
+	_fx_embers.scale_amount_max = 0.12
+	_fx_embers.color = Color(1.0, 0.7, 0.35, 0.85)
+	_fx_layer.add_child(_fx_embers)
+
+	# 4) reactor sparks live in the world (they should stay on the reactor)
+	var reactor := _game.get_node_or_null("Reactor") as Node2D
+	if reactor != null:
+		_sparks = _emitter(40, 2.4, add_mat)
+		_sparks.name = "ReactorSparks"
+		_sparks.local_coords = false
+		_sparks.position = Vector2(64, 64)
+		_sparks.emission_shape = CPUParticles2D.EMISSION_SHAPE_SPHERE
+		_sparks.emission_sphere_radius = 60.0
+		_sparks.direction = Vector2(0, -1)
+		_sparks.spread = 180.0
+		_sparks.initial_velocity_min = 16.0
+		_sparks.initial_velocity_max = 60.0
+		_sparks.scale_amount_min = 0.05
+		_sparks.scale_amount_max = 0.12
+		_sparks.color = Color(1.2, 3.0, 3.6, 1.0)   # bright enough to survive the ambient tint
+		_sparks.z_index = 60
+		reactor.add_child(_sparks)
+
+func _update_particles() -> void:
+	if _fx_dust != null:
+		var vs := get_viewport().get_visible_rect().size
+		if vs != _fx_size:
+			_fx_size = vs
+			for p in [_fx_dust, _fx_bokeh, _fx_embers]:
+				p.position = vs * 0.5
+				p.emission_rect_extents = vs * 0.5 + Vector2(40, 40)
+	if _sparks != null and is_instance_valid(_sparks):
+		_sparks.emitting = BaseManager.reactor_energy > 0.0
+
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ post-process â”€â”€
+const POST_SHADER := """
+shader_type canvas_item;
+uniform sampler2D screen_tex : hint_screen_texture, filter_linear_mipmap;
+uniform float vignette = 0.55;
+uniform float aberration = 1.4;
+uniform float scan = 0.035;
+uniform float grain = 0.035;
+uniform float danger = 0.0;
+float hash(vec2 p){ return fract(sin(dot(p, vec2(12.9898,78.233))) * 43758.5453); }
+void fragment(){
+	vec2 uv = SCREEN_UV;
+	vec2 c = uv - 0.5;
+	float d = dot(c, c);
+	vec2 off = c * d * aberration * 0.012;
+	vec3 col;
+	col.r = texture(screen_tex, uv + off).r;
+	col.g = texture(screen_tex, uv).g;
+	col.b = texture(screen_tex, uv - off).b;
+	float line = sin(uv.y * 900.0) * 0.5 + 0.5;
+	col *= 1.0 - scan * line;
+	col += (hash(uv * 900.0 + fract(TIME)) - 0.5) * grain;
+	float v = smoothstep(0.15, 0.85, d * 2.2);
+	col *= 1.0 - v * vignette;
+	col = mix(col, col * vec3(1.4, 0.55, 0.55), danger * v * 1.5);
+	COLOR = vec4(col, 1.0);
+}
+"""
+var _post_mat: ShaderMaterial
+
+func _setup_post_fx() -> void:
+	var layer := CanvasLayer.new()
+	layer.name = "PostFX"
+	layer.layer = 50
+	_game.add_child(layer)
+	var rect := ColorRect.new()
+	rect.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var sh := Shader.new()
+	sh.code = POST_SHADER
+	_post_mat = ShaderMaterial.new()
+	_post_mat.shader = sh
+	rect.material = _post_mat
+	layer.add_child(rect)
+
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ theme â”€â”€
+func _build_theme() -> Theme:
+	var t := Theme.new()
+	t.default_font = font
+	t.default_font_size = 18
+
+	t.set_color("font_color", "Label", Color(0.85, 0.92, 0.95))
+	t.set_color("font_shadow_color", "Label", Color(0, 0, 0, 0.6))
+	t.set_constant("shadow_offset_x", "Label", 1)
+	t.set_constant("shadow_offset_y", "Label", 2)
+
+	t.set_stylebox("panel", "PanelContainer", _box(C_PANEL, C_EDGE * Color(1, 1, 1, 0.45), 1, 6, 14))
+	t.set_stylebox("normal", "Button", _box(Color(0.07, 0.15, 0.2, 0.95), C_EDGE * Color(1, 1, 1, 0.6), 1, 4, 6))
+	t.set_stylebox("hover", "Button", _box(Color(0.10, 0.26, 0.34, 1.0), C_CYAN, 2, 4, 12))
+	t.set_stylebox("pressed", "Button", _box(Color(0.30, 0.80, 0.95, 1.0), Color.WHITE, 2, 4, 4))
+	t.set_stylebox("disabled", "Button", _box(Color(0.08, 0.1, 0.12, 0.7), Color(0.3, 0.3, 0.35, 0.4), 1, 4, 0))
+	t.set_stylebox("focus", "Button", _box(Color(0, 0, 0, 0), C_GREEN, 2, 4, 0))
+	t.set_color("font_color", "Button", Color(0.75, 0.95, 1.0))
+	t.set_color("font_hover_color", "Button", Color(1.0, 1.0, 1.0))
+	t.set_color("font_pressed_color", "Button", Color(0.02, 0.1, 0.14))
+	t.set_color("font_disabled_color", "Button", Color(0.4, 0.45, 0.5))
+
+	t.set_stylebox("background", "ProgressBar", _box(Color(0.02, 0.03, 0.04, 0.85), Color(1, 1, 1, 0.25), 1, 3, 0))
+	t.set_stylebox("fill", "ProgressBar", _box(Color(1, 1, 1, 0.95), Color(0, 0, 0, 0), 0, 3, 0))
+
+	var sep := StyleBoxLine.new()
+	sep.color = C_EDGE * Color(1, 1, 1, 0.5)
+	sep.thickness = 1
+	t.set_stylebox("separator", "HSeparator", sep)
+	return t
+
+func _box(bg: Color, border: Color, bw: int, radius: int, glow: int) -> StyleBoxFlat:
+	var s := StyleBoxFlat.new()
+	s.bg_color = bg
+	s.border_color = border
+	s.set_border_width_all(bw)
+	s.set_corner_radius_all(radius)
+	s.shadow_color = Color(border.r, border.g, border.b, 0.28 if glow > 0 else 0.0)
+	s.shadow_size = glow
+	s.content_margin_left = 10
+	s.content_margin_right = 10
+	s.content_margin_top = 6
+	s.content_margin_bottom = 6
+	return s
+
+func _radial_tex(sz: int, _unused: float) -> GradientTexture2D:
+	var g := Gradient.new()
+	g.set_color(0, Color(1, 1, 1, 1))
+	g.set_color(1, Color(1, 1, 1, 0))
+	g.add_point(0.35, Color(1, 1, 1, 0.55))
+	var tex := GradientTexture2D.new()
+	tex.gradient = g
+	tex.fill = GradientTexture2D.FILL_RADIAL
+	tex.fill_from = Vector2(0.5, 0.5)
+	tex.fill_to = Vector2(1.0, 0.5)
+	tex.width = sz
+	tex.height = sz
+	return tex
+
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ shop UI â”€â”€
+class Brackets extends Control:
+	var col := Color(0.3, 0.85, 1.0, 0.9)
+	var arm := 16.0
+	var phase := 0.0
+	func _ready() -> void:
+		mouse_filter = Control.MOUSE_FILTER_IGNORE
+		set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	func _process(delta: float) -> void:
+		phase += delta
+		queue_redraw()
+	func _draw() -> void:
+		var a := arm + 2.0 * sin(phase * 2.0)
+		var c := col
+		var s := size
+		var w := 2.0
+		draw_line(Vector2(0, 0), Vector2(a, 0), c, w)
+		draw_line(Vector2(0, 0), Vector2(0, a), c, w)
+		draw_line(Vector2(s.x, 0), Vector2(s.x - a, 0), c, w)
+		draw_line(Vector2(s.x, 0), Vector2(s.x, a), c, w)
+		draw_line(Vector2(0, s.y), Vector2(a, s.y), c, w)
+		draw_line(Vector2(0, s.y), Vector2(0, s.y - a), c, w)
+		draw_line(Vector2(s.x, s.y), Vector2(s.x - a, s.y), c, w)
+		draw_line(Vector2(s.x, s.y), Vector2(s.x, s.y - a), c, w)
+
+const GRID_SHADER := """
+shader_type canvas_item;
+uniform vec4 base : source_color = vec4(0.04, 0.06, 0.09, 0.96);
+void fragment(){
+	vec2 p = FRAGCOORD.xy;
+	float g1 = step(0.97, fract(p.x / 48.0)) + step(0.97, fract(p.y / 48.0));
+	float g2 = step(0.995, fract(p.x / 192.0)) + step(0.995, fract(p.y / 192.0));
+	float sweep = smoothstep(0.0, 1.0, 1.0 - abs(fract(TIME * 0.08 - UV.y) - 0.5) * 12.0);
+	vec3 col = base.rgb + vec3(0.0, 0.10, 0.14) * (g1 * 0.25 + g2 * 0.5);
+	col += vec3(0.0, 0.25, 0.3) * max(sweep, 0.0) * 0.06;
+	float v = distance(UV, vec2(0.5));
+	col *= 1.0 - v * 0.7;
+	COLOR = vec4(col, base.a);
+}
+"""
+
+func _find_shop() -> CanvasLayer:
+	var v = _game.get(SHOP_PROPERTY)
+	if v is CanvasLayer and is_instance_valid(v) and not v.is_queued_for_deletion():
+		return v
+	if v != null:
+		return null
+	# fallback: any CanvasLayer under Game that isn't one of ours
+	for ch in _game.get_children():
+		if ch is CanvasLayer and ch != _hud and ch != _fx_layer and ch.name != "PostFX" \
+				and not ch.has_meta("no_polish") and not ch.is_queued_for_deletion() and ch.get_child_count() > 0:
+			return ch
+	return null
+
+func _update_shop(_delta: float) -> void:
+	var shop := _find_shop()
+	if shop != _shop_seen:
+		_shop_seen = shop
+		_shop_labels.clear()
+		if shop != null:
+			_decorate_shop(shop)
+	if shop == null:
+		return
+	# generic "value changed" juice for EVERY label in the shop
+	for l in _shop_labels.keys():
+		if not is_instance_valid(l):
+			_shop_labels.erase(l)
+			continue
+		var info: Array = _shop_labels[l]
+		if l.text != info[0]:
+			info[0] = l.text
+			_label_pop(l, info[1])
+
+func _label_pop(l: Label, base: Color) -> void:
+	if l.size.x < 500.0:
+		l.pivot_offset = l.size * 0.5
+		l.scale = Vector2(1.18, 1.18)
+		create_tween().set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT).tween_property(l, "scale", Vector2.ONE, 0.25)
+	l.modulate = Color(1.5, 1.5, 1.3)
+	create_tween().tween_property(l, "modulate", base, 0.4)
+
+func _is_skipped(n: Node) -> bool:
+	var p := n
+	while p != null and p != _shop_seen:
+		if p.has_meta("no_polish"):
+			return true
+		p = p.get_parent()
+	return false
+
+func _decorate_shop(shop: CanvasLayer) -> void:
+	_card_idx = 0
+	var bg_done := false
+	for k in shop.get_children():
+		if not (k is Control) or k.has_meta("no_polish"):
+			continue
+		var c := k as Control
+		var full := c.anchor_right >= 0.99 and c.anchor_bottom >= 0.99
+		if c is ColorRect and full and not bg_done and c.material == null:
+			bg_done = true
+			var sh := Shader.new()
+			sh.code = GRID_SHADER
+			var sm := ShaderMaterial.new()
+			sm.shader = sh
+			c.material = sm
+			continue
+		if c.theme == null:
+			c.theme = ui_theme
+		c.modulate.a = 0.0
+		create_tween().tween_property(c, "modulate:a", 1.0, 0.5)
+	_walk_decorate(shop)
+	# title = biggest label in the shop: soft glow + type-on
+	var title: Label = null
+	var best := 0
+	for l in _shop_labels.keys():
+		var fs: int = (l as Label).get_theme_font_size("font_size")
+		if fs > best:
+			best = fs
+			title = l
+	if title != null and best >= 26:
+		title.modulate = Color(GLOW, GLOW, GLOW)
+		_shop_labels[title][1] = title.modulate
+		title.add_theme_color_override("font_shadow_color", Color(0.2, 1.0, 0.4, 0.35))
+		title.add_theme_constant_override("shadow_offset_x", 0)
+		title.add_theme_constant_override("shadow_offset_y", 0)
+		title.visible_ratio = 0.0
+		create_tween().tween_property(title, "visible_ratio", 1.0, 1.0)
+	# status light in the corner (independent of layout)
+	var status := Label.new()
+	status.text = "â— LINK ESTABLISHED"
+	status.theme = ui_theme
+	status.set_meta("polished", true)
+	status.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT)
+	status.grow_horizontal = Control.GROW_DIRECTION_BEGIN
+	status.position += Vector2(-24, 12)
+	status.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	status.add_theme_font_size_override("font_size", 13)
+	status.add_theme_color_override("font_color", C_GREEN)
+	shop.add_child(status)
+	var blink := status.create_tween().set_loops()
+	blink.tween_property(status, "modulate:a", 0.25, 0.7)
+	blink.tween_property(status, "modulate:a", 1.0, 0.7)
+
+func _walk_decorate(n: Node) -> void:
+	for c in n.get_children():
+		if c is Control:
+			_decorate_control(c)
+		_walk_decorate(c)
+
+## Decorates ONE control purely by its type â€” no assumptions about layout.
+func _decorate_control(c: Node) -> void:
+	if not is_instance_valid(c) or not (c is Control) or c.has_meta("polished") or _is_skipped(c):
+		return
+	c.set_meta("polished", true)
+	if c is Brackets:
+		return
+	if c is Button:
+		_juice_button(c)
+	elif c is PanelContainer:
+		_decorate_card(c)
+	elif c is Label:
+		_shop_labels[c] = [(c as Label).text, (c as Label).modulate]
+
+func _decorate_card(card: PanelContainer) -> void:
+	var br := Brackets.new()
+	br.set_meta("polished", true)
+	card.add_child(br)
+	if not card.has_theme_stylebox_override("panel"):   # respect your own panel style if you set one
+		var normal := _box(C_PANEL, C_EDGE * Color(1, 1, 1, 0.45), 1, 6, 14)
+		var hot := _box(Color(0.07, 0.12, 0.18, 0.97), C_CYAN, 2, 6, 26)
+		card.add_theme_stylebox_override("panel", normal)
+		card.mouse_entered.connect(func():
+			card.add_theme_stylebox_override("panel", hot)
+			br.arm = 26.0)
+		card.mouse_exited.connect(func():
+			card.add_theme_stylebox_override("panel", normal)
+			br.arm = 16.0)
+	var delay := minf(0.2 + _card_idx * 0.12, 1.0)
+	_card_idx += 1
+	card.modulate.a = 0.0
+	create_tween().tween_property(card, "modulate:a", 1.0, 0.5).set_delay(delay)
+
+func _juice_button(b: Button) -> void:
+	b.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	b.resized.connect(func(): b.pivot_offset = b.size * 0.5)
+	b.mouse_entered.connect(func():
+		b.pivot_offset = b.size * 0.5
+		create_tween().set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT).tween_property(b, "scale", Vector2(1.06, 1.06), 0.15)
+		b.modulate = Color(GLOW, GLOW, GLOW))
+	b.mouse_exited.connect(func():
+		create_tween().tween_property(b, "scale", Vector2.ONE, 0.12)
+		b.modulate = Color.WHITE)
+	b.button_down.connect(func():
+		b.pivot_offset = b.size * 0.5
+		b.scale = Vector2(0.94, 0.94))
+	b.button_up.connect(func():
+		create_tween().set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT).tween_property(b, "scale", Vector2(1.06, 1.06), 0.18))
+	var up := b.text.to_upper()
+	var primary := b.has_meta("polish_primary")
+	for w in PRIMARY_WORDS:
+		if up.contains(w):
+			primary = true
+	if primary:
+		var tw := b.create_tween().set_loops()
+		tw.tween_property(b, "self_modulate", Color(GLOW, GLOW, GLOW), 0.9)
+		tw.tween_property(b, "self_modulate", Color.WHITE, 0.9)
+
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ HUD â”€â”€
+func _setup_hud() -> void:
+	_hud = CanvasLayer.new()
+	_hud.name = "SurvivalHUD"
+	_hud.layer = 20
+	_game.add_child(_hud)
+
+	_crit_flash = ColorRect.new()
+	_crit_flash.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_crit_flash.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_crit_flash.color = Color(1, 0.05, 0.05, 0.0)
+	_hud.add_child(_crit_flash)
+
+	var root := MarginContainer.new()
+	root.theme = ui_theme
+	root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	for s in ["left", "top", "right", "bottom"]:
+		root.add_theme_constant_override("margin_" + s, 24)
+	_hud.add_child(root)
+
+	var panel := PanelContainer.new()
+	panel.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	panel.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
+	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	root.add_child(panel)
+	panel.add_child(Brackets.new())
+	var vb := VBoxContainer.new()
+	vb.add_theme_constant_override("separation", 8)
+	panel.add_child(vb)
+	var head := Label.new()
+	head.text = "// HABITAT STATUS"
+	head.add_theme_font_size_override("font_size", 14)
+	head.add_theme_color_override("font_color", C_GREEN)
+	head.modulate = Color(GLOW, GLOW, GLOW)
+	vb.add_child(head)
+	vb.add_child(HSeparator.new())
+	_add_bar(vb, "O2   ", "o2", C_CYAN)
+	_add_bar(vb, "TEMP ", "temp", Color(1.0, 0.55, 0.25))
+	_add_bar(vb, "CORE ", "core", C_GREEN)
+	_add_bar(vb, "LOAD ", "load", C_AMBER)
+	_hud_panel = panel
+
+	_alert_box = VBoxContainer.new()
+	_alert_box.theme = ui_theme
+	_alert_box.set_anchors_and_offsets_preset(Control.PRESET_CENTER_TOP)
+	_alert_box.position.y = 28
+	_alert_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_alert_box.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	_alert_box.alignment = BoxContainer.ALIGNMENT_BEGIN
+	_hud.add_child(_alert_box)
+
+	_crit_label = Label.new()
+	_crit_label.theme = ui_theme
+	_crit_label.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
+	_crit_label.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	_crit_label.grow_vertical = Control.GROW_DIRECTION_BOTH
+	_crit_label.add_theme_font_size_override("font_size", 40)
+	_crit_label.add_theme_color_override("font_color", C_RED)
+	_crit_label.modulate = Color(1.3, 0.7, 0.6, 0.0)
+	_crit_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_hud.add_child(_crit_label)
+	_hud_panel.modulate.a = 0.0
+
+var _hud_panel: PanelContainer
+
+func _add_bar(parent: Node, text: String, key: String, col: Color) -> void:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 10)
+	parent.add_child(row)
+	var l := Label.new()
+	l.text = text
+	l.add_theme_font_size_override("font_size", 16)
+	l.add_theme_color_override("font_color", col)
+	row.add_child(l)
+	var pb := ProgressBar.new()
+	pb.custom_minimum_size = Vector2(190, 16)
+	pb.max_value = 100.0
+	pb.show_percentage = false
+	pb.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	pb.modulate = col * Color(GLOW, GLOW, GLOW, 1.0)
+	row.add_child(pb)
+	var v := Label.new()
+	v.custom_minimum_size = Vector2(52, 0)
+	v.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	v.add_theme_font_size_override("font_size", 16)
+	row.add_child(v)
+	_bars[key] = {"bar": pb, "val": v, "col": col}
+
+func _update_hud(delta: float) -> void:
+	if _hud == null or not is_instance_valid(_hud):
+		return
+	var live := GameManager.current_phase == GameManager.Phase.SURVIVE
+	_hud_panel.modulate.a = lerpf(_hud_panel.modulate.a, 1.0 if live else 0.0, delta * 4.0)
+	if not live:
+		return
+	var vals := {
+		"o2": BaseManager.oxygen_level,
+		"temp": BaseManager.temp_level,
+		"core": BaseManager.reactor_energy,
+		"load": clampf(BaseManager.current_power_draw / maxf(BaseManager.total_power, 1.0) * 100.0, 0.0, 100.0)}
+	for k in vals.keys():
+		var d: Dictionary = _bars[k]
+		var pb: ProgressBar = d["bar"]
+		pb.value = lerpf(pb.value, vals[k], delta * 8.0)
+		(d["val"] as Label).text = "%d%%" % int(vals[k])
+		var low: bool = vals[k] < 25.0 and k != "load"
+		var base: Color = d["col"]
+		if low:
+			var p := 0.5 + 0.5 * sin(_t * 9.0)
+			pb.modulate = base.lerp(C_RED, 0.7) * Color(1.0 + 0.3 * p, 1.0 + 0.3 * p, 1.0 + 0.3 * p, 1.0)
+			(d["val"] as Label).add_theme_color_override("font_color", C_RED)
+		else:
+			pb.modulate = base * Color(GLOW, GLOW, GLOW, 1.0)
+			(d["val"] as Label).add_theme_color_override("font_color", Color(0.85, 0.92, 0.95))
+	# danger overlay + post-fx
+	var danger := _danger_level()
+	if _post_mat != null:
+		_post_mat.set_shader_parameter("danger", danger * (0.7 + 0.3 * sin(_t * 6.0)))
+	_crit_flash.color.a = danger * 0.10 * (0.5 + 0.5 * sin(_t * 6.0))
+	_crit_time = maxf(0.0, _crit_time - delta)
+	_crit_label.modulate.a = clampf(_crit_time, 0.0, 1.0) * (0.6 + 0.4 * sin(_t * 12.0))
+
+func _on_module_broken(module_name: String) -> void:
+	if not _installed or _alert_box == null:
+		return
+	_toast("âš   %s OFFLINE â€” HOLD [E] NEARBY TO REPAIR" % module_name.to_upper(), C_AMBER)
+	var cam := get_viewport().get_camera_2d()
+	if cam != null:
+		var tw := create_tween()
+		for i in 8:
+			tw.tween_property(cam, "offset", Vector2(randf_range(-8, 8), randf_range(-8, 8)) * (1.0 - i / 8.0), 0.04)
+		tw.tween_property(cam, "offset", Vector2.ZERO, 0.05)
+
+func _on_game_over(reason: String) -> void:
+	if not _installed or _crit_label == null:
+		return
+	_crit_label.text = "CRITICAL â€” " + reason
+	_crit_time = 2.0   # re-armed every frame the condition persists
+
+func _toast(msg: String, col: Color) -> void:
+	var p := PanelContainer.new()
+	p.theme = ui_theme
+	p.add_theme_stylebox_override("panel", _box(Color(0.12, 0.08, 0.04, 0.92), col, 2, 5, 22))
+	p.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var l := Label.new()
+	l.text = msg
+	l.add_theme_font_size_override("font_size", 18)
+	l.add_theme_color_override("font_color", col)
+	l.modulate = Color(GLOW, GLOW, GLOW)
+	p.add_child(l)
+	_alert_box.add_child(p)
+	p.modulate.a = 0.0
+	var tw := p.create_tween()
+	tw.tween_property(p, "modulate:a", 1.0, 0.18)
+	tw.tween_interval(3.2)
+	tw.tween_property(p, "modulate:a", 0.0, 0.5)
+	tw.tween_callback(p.queue_free)
 
 ================================================================================
 FILE: sprites\space station tileset\godot\spriteframes\captain.tres
@@ -7924,6 +10219,7 @@ Transition="*uid://biwie4aohk6df"
 EventBus="*uid://bl05nu4e54tqs"
 GameManager="*uid://ecq8du2oji08"
 BaseManager="*uid://ckvgjnnhg08wv"
+Polish="*uid://bn3mme6x63rk3"
 
 [display]
 

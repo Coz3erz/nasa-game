@@ -1,0 +1,33 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://scripts/inheritance/BaseModule.gd" id="1_base"]
+[ext_resource type="PackedScene" path="res://scenes/modules/wire_module.tscn" id="2_wire"]
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_body"]
+size = Vector2(256, 192)
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_area"]
+size = Vector2(232, 168)
+
+[node name="SolarPanel" type="StaticBody2D"]
+script = ExtResource("1_base")
+module_name = "Solar Panel"
+mass_cost = 400.0
+power_draw = 0.0
+can_accept_wires = false
+build_time = 6.0
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+position = Vector2(128.0, 96.0)
+shape = SubResource("RectangleShape2D_body")
+
+[node name="InteractArea" type="Area2D" parent="."]
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="InteractArea"]
+position = Vector2(128.0, 96.0)
+shape = SubResource("RectangleShape2D_area")
+
+[node name="WireSource" parent="." instance=ExtResource("2_wire")]
+position = Vector2(256, 96.0)
+scale = Vector2(4, 4)
+wire_color = Color(1, 0.8, 0.2, 1)

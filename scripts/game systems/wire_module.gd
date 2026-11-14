@@ -1,5 +1,5 @@
 @tool
-extends StaticBody2D
+extends WirePort
 
 @export var wire_scene: PackedScene
 @export var wire_color: Color = Color(0.85, 0.15, 0.15):
@@ -10,13 +10,13 @@ extends StaticBody2D
 
 var spawned_wire: Node2D = null
 var parent_module: BaseModule = null
-var pulse_time: float = 0.0
 
 var base_plate_style: StyleBoxFlat
 var inner_recess_style: StyleBoxFlat
 var collar_style: StyleBoxFlat
 
 func _ready() -> void:
+	super._ready()
 	var old_sprite: Sprite2D = get_node_or_null("Sprite2D") as Sprite2D
 	if old_sprite != null:
 		old_sprite.visible = false
@@ -45,10 +45,6 @@ func _init_styles() -> void:
 	collar_style.border_color = Color(0.12, 0.13, 0.16)
 	collar_style.set_border_width_all(1)
 	collar_style.set_corner_radius_all(1)
-
-func _process(delta: float) -> void:
-	pulse_time += delta
-	queue_redraw()
 
 func can_spawn_wire() -> bool:
 	return spawned_wire == null or not is_instance_valid(spawned_wire)
@@ -94,3 +90,5 @@ func _draw() -> void:
 
 	var led_col: Color = wire_color.lightened(0.35) if not has_wire_active else Color(0.2, 1.0, 0.4)
 	draw_circle(Vector2(-2.2, 0.0), 1.1, led_col)
+
+	_draw_port_fx(16.0)

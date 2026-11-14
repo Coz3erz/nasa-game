@@ -5,7 +5,7 @@ extends CharacterBody2D
 ##   SCROLL / TAB     swap which module you're about to place
 ## The build ghost is ALWAYS placed directly ahead of the way you're facing.
 
-# ─────────────────────────────────────────────────────────────── tuning ──
+# - tuning -
 @export_group("Movement")
 @export var speed: float = 300.0
 @export var acceleration: float = 2600.0
@@ -25,7 +25,8 @@ extends CharacterBody2D
 @export var build_gap: float = 24.0        ## empty space between you and the ghost
 @export var build_grid: float = 32.0       ## placement grid
 @export var player_radius: float = 18.0
-@export var ghost_glide: float = 32.0      ## higher = ghost snaps faster
+@export var ghost_glide: float = 22.0
+@export var build_radius: float = 300.0    ## higher = ghost snaps faster
 
 @export_group("Juice")
 @export var camera_lookahead: float = 46.0
@@ -69,6 +70,15 @@ var _sprite_base_pos := Vector2.ZERO
 var _sprite_half_h := 24.0
 var _cam_base := Vector2.ZERO
 var _dust: CPUParticles2D
+var _cam_zoom := Vector2.ONE
+var _zoom_kick := 0.0
+var _ghost_zone := 250.0
+var _hint_panel: PanelContainer
+var _hint_box: VBoxContainer
+var _hint_key_cache := ""
+var _hint_kind := ""
+var _hint_marks: Array = []
+var _hints_node: Hints
 
 # ghost state
 var _ghost_origin := Vector2.ZERO
@@ -85,13 +95,13 @@ var _hud_key := ""
 var _panel_ok: StyleBoxFlat
 var _panel_bad: StyleBoxFlat
 
-# ─────────────────────────────────────────────────────────────── setup ──
+# - setup -
 func _ready() -> void:
 	add_to_group("player")
 	visible = false
 	set_physics_process(false)
 	_font = SystemFont.new()
-	_font.font_names = PackedStringArray(["Courier New", "monospace"])
+	_font.font_names = PackedStringArray(["Trebuchet MS", "Verdana", "sans-serif"])
 	_ensure_build_action()
 	if sprite != null:
 		_sprite_base_scale = sprite.scale
@@ -100,8 +110,13 @@ func _ready() -> void:
 			_sprite_half_h = float(sprite.texture.get_height()) / maxf(1.0, float(sprite.vframes)) * 0.5 * absf(sprite.scale.y)
 	if player_camera != null:
 		_cam_base = player_camera.position
+		_cam_zoom = player_camera.zoom
 	_make_dust()
 	_make_build_hud()
+	_make_hint_panel()
+	_hints_node = Hints.new()
+	_hints_node.p = self
+	add_child(_hints_node)
 
 func _exit_tree() -> void:
 	if is_instance_valid(ghost_module):
@@ -120,6 +135,8 @@ func _ensure_build_action() -> void:
 func enable_player() -> void:
 	is_active = true
 	visible = true
+	if _hint_panel != null:
+		_hint_panel.visible = true
 	set_physics_process(true)
 	position = Vector2(320, 600)
 	velocity = Vector2.ZERO
@@ -131,7 +148,7 @@ func enable_player() -> void:
 	Fx.burst(get_parent(), global_position, Color(0.5, 1.4, 1.8, 0.9), 26, 60.0, 180.0, 0.7, 0.04, 0.1, true)
 	Ring.spawn(get_parent(), global_position, Color(0.4, 1.3, 1.6), 90.0, 0.55)
 
-# ───────────────────────────────────────────────────────────── per-frame ──
+# - per-frame -
 func _physics_process(delta: float) -> void:
 	if not is_active:
 		return
@@ -163,10 +180,12 @@ func _process(delta: float) -> void:
 	var d := minf(delta, 0.05)
 	_update_squash(d)
 	_update_camera(d)
+	_update_hints()
 	if is_build_mode:
 		_update_hud_text()
+		queue_redraw()
 
-# ─────────────────────────────────────────────────────────────── facing ──
+# - facing -
 func _update_facing() -> void:
 	for i in range(held_dirs.size() - 1, -1, -1):
 		if not Input.is_action_pressed(DIR_ACTIONS[held_dirs[i]]):
@@ -207,13 +226,14 @@ func _update_animation(input_dir: Vector2) -> void:
 	if anim_player.has_animation(anim_name) and anim_player.current_animation != anim_name:
 		anim_player.play(anim_name)
 
-# ──────────────────────────────────────────────────────────────── juice ──
+# - juice -
 func _pop(amount: float) -> void:
 	# amount > 0 = squash (wide + short), amount < 0 = stretch (tall + thin)
 	_sq_vel += Vector2(amount, -amount) * 15.0
 
 func shake(amount: float) -> void:
 	_trauma = minf(1.0, _trauma + amount)
+	_zoom_kick = minf(0.1, _zoom_kick + amount * 0.1)
 
 func _update_squash(d: float) -> void:
 	_sq_vel += (Vector2.ONE - _sq) * 220.0 * d
@@ -240,6 +260,8 @@ func _update_camera(d: float) -> void:
 		return
 	var look := facing_vec * camera_lookahead * clampf(_move_vel.length() / speed + 0.25, 0.0, 1.0)
 	player_camera.position = player_camera.position.lerp(_cam_base + look, 1.0 - exp(-4.0 * d))
+	_zoom_kick = lerpf(_zoom_kick, 0.0, 1.0 - exp(-8.0 * d))
+	player_camera.zoom = _cam_zoom * (1.0 + _zoom_kick)
 	if _trauma > 0.0:
 		_trauma = maxf(0.0, _trauma - 1.8 * d)
 		var s := _trauma * _trauma * 14.0
@@ -250,24 +272,31 @@ func _update_camera(d: float) -> void:
 func _make_dust() -> void:
 	_dust = CPUParticles2D.new()
 	_dust.texture = Fx.tex()
-	_dust.amount = 14
-	_dust.lifetime = 0.45
+	_dust.amount = 18
+	_dust.lifetime = 0.5
 	_dust.local_coords = false
 	_dust.show_behind_parent = true
 	_dust.emitting = false
-	_dust.spread = 35.0
-	_dust.initial_velocity_min = 12.0
-	_dust.initial_velocity_max = 42.0
-	_dust.scale_amount_min = 0.08
-	_dust.scale_amount_max = 0.2
-	_dust.color = Color(0.75, 0.8, 0.9, 0.4)
+	_dust.gravity = Vector2.ZERO
+	_dust.spread = 22.0
+	_dust.initial_velocity_min = 30.0
+	_dust.initial_velocity_max = 70.0
+	_dust.damping_min = 40.0
+	_dust.damping_max = 70.0
+	_dust.scale_amount_min = 0.1
+	_dust.scale_amount_max = 0.26
+	_dust.color = Color(0.85, 0.82, 0.75, 0.55)
+	var cv := Curve.new()
+	cv.add_point(Vector2(0, 0.6))
+	cv.add_point(Vector2(1, 1.6))
+	_dust.scale_amount_curve = cv
 	var g := Gradient.new()
 	g.set_color(0, Color(1, 1, 1, 1))
 	g.set_color(1, Color(1, 1, 1, 0))
 	_dust.color_ramp = g
 	add_child(_dust)
 
-# ───────────────────────────────────────────────────────────────── input ──
+# - input -
 func _unhandled_input(event: InputEvent) -> void:
 	if not is_active:
 		return
@@ -287,17 +316,19 @@ func _unhandled_input(event: InputEvent) -> void:
 				_cycle_ghost(-1)
 			elif event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
 				_cycle_ghost(1)
+			elif event.button_index == MOUSE_BUTTON_LEFT and WirePort.hover_count == 0:
+				_attempt_place()
 		elif event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_TAB:
 			_cycle_ghost(1)
 
-# ──────────────────────────────────────────────────────────── build mode ──
+# - build mode -
 func _toggle_build_mode() -> void:
 	if is_build_mode:
 		_exit_build_mode()
 		return
 	_refresh_build_options()
 	if build_options.is_empty():
-		_flash_hint("NOTHING TO BUILD - buy modules in the manifest first", C_AMBER)
+		_flash_hint("You have nothing to build yet!", C_AMBER)
 		_pop(0.08)
 		return
 	is_build_mode = true
@@ -310,6 +341,7 @@ func _exit_build_mode() -> void:
 	_clear_ghost()
 	_set_build_hud(false)
 	_pop(0.06)
+	queue_redraw()
 
 func _refresh_build_options() -> void:
 	var prev_id := ""
@@ -345,6 +377,7 @@ func _spawn_ghost() -> void:
 		return
 	var option: Dictionary = build_options[selected_module_index]
 	var g = option["scene"].instantiate()
+	g.set_meta("is_ghost", true)
 	g.set("is_constructing", true)            # stops BaseModule._ready from registering the preview
 	g.process_mode = Node.PROCESS_MODE_DISABLED
 	g.z_index = 20
@@ -367,6 +400,7 @@ func _spawn_ghost() -> void:
 		else:
 			_ghost_test_shape = col.shape
 			_ghost_half = Vector2(48, 48)
+	_ghost_zone = _ghost_half.length() + BaseModule.ZONE_PAD
 	_update_build_ghost(0.0, true)
 	g.modulate.a = 0.0
 	_hud_key = ""
@@ -395,22 +429,19 @@ static func _snap_out(v: float, dir: float, grid: float) -> float:
 func _update_build_ghost(delta: float, snap_now: bool = false) -> void:
 	if not is_instance_valid(ghost_module):
 		return
-	var dir := facing_vec
-	# distance from our centre to the module's centre along the facing axis
-	var reach := player_radius + build_gap + (_ghost_half.x if dir.x != 0.0 else _ghost_half.y)
-	var center := global_position + dir * reach
+	var to_mouse := get_global_mouse_position() - global_position
+	var reach := _ghost_reach()
+	if to_mouse.length() > reach:
+		to_mouse = to_mouse.normalized() * reach
+	var center := global_position + to_mouse
 	var origin := center - _ghost_center_off
-	origin.x = _snap_out(origin.x, dir.x, build_grid)    # snap AWAY from the player so it never overlaps
-	origin.y = _snap_out(origin.y, dir.y, build_grid)
 	_ghost_origin = origin
-
-	# glide visually, validate at the exact target
-	if snap_now or ghost_module.global_position.distance_to(origin) > 400.0:
+ 
+	if snap_now or ghost_module.global_position.distance_to(origin) > 700.0:
 		ghost_module.global_position = origin
 	else:
 		ghost_module.global_position = ghost_module.global_position.lerp(origin, 1.0 - exp(-ghost_glide * delta))
-
-	# valid = not overlapping any other collision shape (walls, modules, wire plugs...)
+ 
 	can_place = true
 	if _ghost_test_shape != null:
 		var q := PhysicsShapeQueryParameters2D.new()
@@ -420,9 +451,20 @@ func _update_build_ghost(delta: float, snap_now: bool = false) -> void:
 		q.collide_with_areas = false
 		q.exclude = [get_rid()]
 		can_place = get_world_2d().direct_space_state.intersect_shape(q, 1).is_empty()
-
+	if can_place:
+		var mine := Rect2(center - _ghost_half, _ghost_half * 2.0).grow(-3.0)
+		for mm in get_tree().get_nodes_in_group("modules"):
+			if is_instance_valid(mm) and mm is BaseModule and mine.intersects((mm as BaseModule).get_footprint()):
+				can_place = false
+				break
+	if can_place:
+		var rc := Rect2(center - _ghost_half, _ghost_half * 2.0)
+		var cp := Vector2(clampf(global_position.x, rc.position.x, rc.end.x), clampf(global_position.y, rc.position.y, rc.end.y))
+		if cp.distance_to(global_position) < player_radius + 6.0:
+			can_place = false
+ 
 	var pulse := 0.5 + 0.5 * sin(_t * 6.0)
-	var a := lerpf(ghost_module.modulate.a, 0.42 + 0.18 * pulse, 0.25)
+	var a := lerpf(ghost_module.modulate.a, 0.5 + 0.2 * pulse, 0.25)
 	_ghost_flash = maxf(0.0, _ghost_flash - delta)
 	if _ghost_flash > 0.0:
 		ghost_module.modulate = Color(2.2, 0.35, 0.35, 0.85)
@@ -430,12 +472,14 @@ func _update_build_ghost(delta: float, snap_now: bool = false) -> void:
 		ghost_module.modulate = Color(0.55, 1.0, 1.3, a)
 	else:
 		ghost_module.modulate = Color(1.4, 0.3, 0.3, a)
-
+func _draw() -> void:
+	pass
+ 
 func _deny() -> void:
 	_ghost_flash = 0.25
 	_sq_vel.x += 3.5 * (1.0 if randf() > 0.5 else -1.0)
 	shake(0.18)
-	_flash_hint("BLOCKED - something is in the way", C_RED)
+	_flash_hint("Can't build there - something's in the way!", C_RED)
 
 func _attempt_place() -> void:
 	if not is_instance_valid(ghost_module) or build_options.is_empty():
@@ -456,9 +500,6 @@ func _attempt_place() -> void:
 	m.position = p2d.to_local(_ghost_origin) if p2d != null else _ghost_origin
 	parent_node.add_child(m)
 	m.start_construction()
-	# BaseModule measures "nearby" from the module's top-left origin; widen it so standing
-	# anywhere around the footprint (incl. where you placed it from) keeps the build going
-	m.proximity_distance = maxf(m.proximity_distance, _ghost_origin.distance_to(global_position) + 140.0)
 
 	var fx := ConstructionFX.new()
 	fx.setup(m, self, _ghost_center_off, _ghost_half, _font)
@@ -471,7 +512,7 @@ func _attempt_place() -> void:
 	Ring.spawn(parent_node, c, Color(0.4, 1.3, 1.6), maxf(_ghost_half.x, _ghost_half.y) * 1.5, 0.5)
 	_pop(0.2)
 	shake(0.35)
-	_flash_hint("BUILDING %s - stay close!" % item_name.to_upper(), C_GREEN)
+	_flash_hint("Building %s - stay inside the circle!" % item_name, C_GREEN)
 
 	_refresh_build_options()
 	if build_options.is_empty():
@@ -479,7 +520,7 @@ func _attempt_place() -> void:
 	else:
 		_spawn_ghost()
 
-# ───────────────────────────────────────────────────────────── build HUD ──
+# - build HUD -
 func _box(border: Color) -> StyleBoxFlat:
 	var s := StyleBoxFlat.new()
 	s.bg_color = Color(0.05, 0.08, 0.12, 0.92)
@@ -525,7 +566,7 @@ func _make_build_hud() -> void:
 	vb.add_theme_constant_override("separation", 4)
 	_build_title = _lbl(20, C_CYAN)
 	_build_hint = _lbl(14, Color(0.75, 0.82, 0.88))
-	_build_hint.text = "[E] BUILD     [SPACE] EXIT     [SCROLL / TAB] SWAP"
+	_build_hint.text = "E place     SPACE stop     TAB swap"
 	vb.add_child(_build_title)
 	vb.add_child(_build_hint)
 	_build_panel.add_child(vb)
@@ -557,9 +598,9 @@ func _update_hud_text() -> void:
 	if key == _hud_key:
 		return
 	_hud_key = key
-	var txt := "BUILD MODE  -  %s  x%d" % [id.to_upper(), GameManager.get_item_count(id)]
+	var txt := "Placing: %s  (x%d left)" % [id, GameManager.get_item_count(id)]
 	if not can_place:
-		txt += "  -  BLOCKED"
+		txt += "  -  can't go here"
 	_build_title.text = txt
 	(_build_title.label_settings as LabelSettings).font_color = C_CYAN if can_place else C_RED
 	_build_panel.add_theme_stylebox_override("panel", _panel_ok if can_place else _panel_bad)
@@ -574,12 +615,20 @@ func _flash_hint(text: String, col: Color) -> void:
 	tw.tween_interval(1.4)
 	tw.tween_property(_toast, "modulate:a", 0.0, 0.5)
 
-# ──────────────────────────────────────────────────────────────── wires ──
-func _broken_module_in_reach() -> bool:
+# - wires -
+func _nearest_broken_module() -> BaseModule:
+	var best: BaseModule = null
+	var bd := INF
 	for m in BaseManager.active_modules:
-		if is_instance_valid(m) and m.is_broken and m.global_position.distance_to(global_position) <= m.proximity_distance:
-			return true
-	return false
+		if is_instance_valid(m) and m.is_broken:
+			var d: float = m.get_center().distance_to(global_position)
+			if d <= m.interact_radius() and d < bd:
+				bd = d
+				best = m
+	return best
+
+func _broken_module_in_reach() -> bool:
+	return _nearest_broken_module() != null
 
 func _try_interact() -> void:
 	# E also repairs broken modules (hold). Don't grab wires while you're trying to fix something.
@@ -587,7 +636,7 @@ func _try_interact() -> void:
 		return
 
 	if current_wire != null:
-		var receiver: Node2D = _find_nearby_receiver()
+		var receiver: Node2D = _find_nearby_receiver(current_wire)
 		if receiver != null:
 			receiver.accept_wire(current_wire)
 			current_wire.plug_in(receiver)
@@ -598,6 +647,10 @@ func _try_interact() -> void:
 			_pop(0.14)
 			shake(0.12)
 		else:
+			var refusing := _wrong_receiver_near(current_wire)
+			if refusing != null:
+				_deny_wire(refusing)
+				return
 			current_wire.drop(global_position)
 			current_wire = null
 			_pop(0.08)
@@ -669,11 +722,11 @@ func _find_closest_wire_source() -> Node2D:
 				closest_source = node
 	return closest_source
 
-func _find_nearby_receiver() -> Node2D:
+func _find_nearby_receiver(w: Node2D = null) -> Node2D:
 	var closest_receiver: Node2D = null
 	var min_dist: float = plug_range
 	for node in get_tree().get_nodes_in_group("wire_receivers"):
-		if node is Node2D and node.has_method("can_accept_wire") and node.can_accept_wire():
+		if node is Node2D and node.has_method("can_accept_wire") and node.can_accept_wire(w):
 			var target_pos: Vector2 = node.get_receiver_position() if node.has_method("get_receiver_position") else node.global_position
 			var dist: float = global_position.distance_to(target_pos)
 			if dist <= min_dist:
@@ -697,7 +750,7 @@ func _find_nearby_receiver() -> Node2D:
 			var module: Node = area.get_parent()
 			if module is BaseModule:
 				for child in module.get_children():
-					if child is Node2D and child.is_in_group("wire_receivers") and child.can_accept_wire():
+					if child is Node2D and child.is_in_group("wire_receivers") and child.can_accept_wire(w):
 						var target_pos: Vector2 = child.get_receiver_position()
 						var dist: float = global_position.distance_to(target_pos)
 						if dist < min_dist:
@@ -705,7 +758,205 @@ func _find_nearby_receiver() -> Node2D:
 							closest_receiver = child
 	return closest_receiver
 
-# ═════════════════════════════════════════════════════════ effect helpers ══
+# - effect helpers -
+func _has_buildables() -> bool:
+	for item in GameManager.catalog:
+		if GameManager.get_item_count(item["id"]) > 0:
+			return true
+	return false
+
+func _ghost_reach() -> float:
+	return minf(build_radius, _ghost_zone - 40.0)
+
+func _wrong_receiver_near(w: Node2D) -> Node2D:
+	for node in get_tree().get_nodes_in_group("wire_receivers"):
+		if node is Node2D and node.has_method("accepts_wire") and not node.accepts_wire(w):
+			var rp: Vector2 = node.get_receiver_position() if node.has_method("get_receiver_position") else node.global_position
+			if global_position.distance_to(rp) <= plug_range:
+				return node
+	return null
+
+func _deny_wire(r: Node2D) -> void:
+	var names := ""
+	if "accepted_sources" in r:
+		names = " or ".join(r.accepted_sources)
+	if names != "":
+		_flash_hint("Only %s wires fit here!" % names, C_AMBER)
+	else:
+		_flash_hint("That wire doesn't fit here!", C_AMBER)
+	_sq_vel.x += 3.0 * (1.0 if randf() > 0.5 else -1.0)
+	shake(0.15)
+
+# ----- corner key hints + glowing "you can do something here" markers -----
+func _make_hint_panel() -> void:
+	_hint_panel = PanelContainer.new()
+	_hint_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.06, 0.08, 0.16, 0.82)
+	sb.set_corner_radius_all(14)
+	sb.content_margin_left = 14
+	sb.content_margin_right = 14
+	sb.content_margin_top = 10
+	sb.content_margin_bottom = 10
+	_hint_panel.add_theme_stylebox_override("panel", sb)
+	_hint_panel.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_LEFT)
+	_hint_panel.grow_vertical = Control.GROW_DIRECTION_BEGIN
+	_hint_panel.offset_left = 20
+	_hint_panel.offset_right = 20
+	_hint_panel.offset_top = -20
+	_hint_panel.offset_bottom = -20
+	_hint_panel.visible = false
+	_hint_box = VBoxContainer.new()
+	_hint_box.add_theme_constant_override("separation", 6)
+	_hint_panel.add_child(_hint_box)
+	_hud.add_child(_hint_panel)
+
+func _set_hint_rows(rows: Array) -> void:
+	if _hint_box == null:
+		return
+	var key := ""
+	for r in rows:
+		key += str(r[0]) + "|" + str(r[1]) + ";"
+	if key == _hint_key_cache:
+		return
+	_hint_key_cache = key
+	for c in _hint_box.get_children():
+		c.queue_free()
+	for r in rows:
+		var row := HBoxContainer.new()
+		row.add_theme_constant_override("separation", 10)
+		var chip := PanelContainer.new()
+		var cs := StyleBoxFlat.new()
+		cs.bg_color = Color(0.98, 0.86, 0.4)
+		cs.set_corner_radius_all(7)
+		cs.content_margin_left = 9
+		cs.content_margin_right = 9
+		cs.content_margin_top = 2
+		cs.content_margin_bottom = 2
+		chip.add_theme_stylebox_override("panel", cs)
+		var kl := _lbl(15, Color(0.18, 0.12, 0.0))
+		(kl.label_settings as LabelSettings).outline_size = 0
+		kl.text = str(r[0])
+		chip.add_child(kl)
+		var tl := _lbl(17, Color(0.94, 0.96, 1.0))
+		tl.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+		tl.text = str(r[1])
+		row.add_child(chip)
+		row.add_child(tl)
+		_hint_box.add_child(row)
+
+func _compute_hint_rows() -> Array:
+	var rows: Array = []
+	if is_build_mode:
+		rows.append(["E or CLICK", "Place it"])
+		if build_options.size() > 1:
+			rows.append(["TAB or SCROLL", "Pick another"])
+		rows.append(["CLICK a plug", "Turn it"])
+		rows.append(["SPACE", "Stop building"])
+		return rows
+	rows.append(["WASD", "Walk"])
+	var e_text := "Grab a wire"
+	match _hint_kind:
+		"plug":
+			e_text = "Plug the wire in"
+		"drop":
+			e_text = "Drop the wire"
+		"fix":
+			e_text = "Hold to fix it"
+		"grab":
+			e_text = "Grab the wire"
+	rows.append(["E", e_text])
+	if _has_buildables():
+		rows.append(["SPACE", "Build stuff"])
+	return rows
+
+func _update_hints() -> void:
+	if not is_active:
+		return
+	_hint_marks.clear()
+	_hint_kind = ""
+	if not is_build_mode:
+		if current_wire != null and is_instance_valid(current_wire):
+			var r: Node2D = _find_nearby_receiver(current_wire)
+			if r != null:
+				_hint_kind = "plug"
+				var rp: Vector2 = r.get_receiver_position() if r.has_method("get_receiver_position") else r.global_position
+				_hint_marks.append({"pos": rp, "col": C_GREEN, "text": "E  plug in"})
+			else:
+				_hint_kind = "drop"
+				var bad := _wrong_receiver_near(current_wire)
+				if bad != null:
+					var bp: Vector2 = bad.get_receiver_position() if bad.has_method("get_receiver_position") else bad.global_position
+					_hint_marks.append({"pos": bp, "col": C_RED, "text": "doesn't fit"})
+		else:
+			var broken := _nearest_broken_module()
+			if broken != null:
+				_hint_kind = "fix"
+				_hint_marks.append({"pos": broken.get_center(), "col": C_AMBER, "text": "hold E  fix"})
+			else:
+				var dw := _find_closest_dropped_wire()
+				if dw != null:
+					_hint_kind = "grab"
+					_hint_marks.append({"pos": dw.hand_pos, "col": C_CYAN, "text": "E  grab"})
+				else:
+					var pw := _find_closest_plugged_wire()
+					if pw != null:
+						_hint_kind = "grab"
+						_hint_marks.append({"pos": pw.hand_pos, "col": C_CYAN, "text": "E  unplug"})
+					else:
+						var src := _find_closest_wire_source()
+						if src != null:
+							_hint_kind = "grab"
+							_hint_marks.append({"pos": src.global_position, "col": C_CYAN, "text": "E  grab wire"})
+	_set_hint_rows(_compute_hint_rows())
+
+## Drawn by the Hints node (world space, always on top): the build circle in build mode.
+func _overlay_draw(c: Node2D) -> void:
+	if not is_build_mode or not is_instance_valid(ghost_module):
+		return
+	var pulse := 0.5 + 0.5 * sin(_t * 3.0)
+	var col := Color(0.45, 1.0, 0.6) if can_place else Color(1.0, 0.4, 0.35)
+	c.draw_arc(global_position, _ghost_reach(), 0.0, TAU, 96, Color(1, 1, 1, 0.12 + 0.06 * pulse), 2.0, true)
+	var ctr := _ghost_origin + _ghost_center_off
+	c.draw_circle(ctr, _ghost_zone, Color(col.r, col.g, col.b, 0.05))
+	var n := 40
+	for i in n:
+		if i % 2 == 0:
+			var a := TAU * i / n + _t * 0.2
+			c.draw_arc(ctr, _ghost_zone, a, a + TAU / n * 0.8, 6, Color(col.r, col.g, col.b, 0.8), 3.0, true)
+	var f := ThemeDB.fallback_font
+	var msg := "Stay inside the circle while it builds"
+	var w := f.get_string_size(msg, HORIZONTAL_ALIGNMENT_LEFT, -1, 18).x
+	c.draw_string(f, ctr + Vector2(-w * 0.5, -_ghost_zone - 14.0), msg, HORIZONTAL_ALIGNMENT_LEFT, -1, 18, Color(col.r, col.g, col.b, 0.95))
+
+class Hints extends Node2D:
+	var p: Node
+	var t := 0.0
+	func _ready() -> void:
+		top_level = true
+		global_position = Vector2.ZERO
+		z_as_relative = false
+		z_index = 300
+	func _process(d: float) -> void:
+		t += d
+		queue_redraw()
+	func _draw() -> void:
+		if p == null or not is_instance_valid(p):
+			return
+		p.call("_overlay_draw", self)
+		var marks: Array = p.get("_hint_marks")
+		var f := ThemeDB.fallback_font
+		for m in marks:
+			var pos: Vector2 = m["pos"]
+			var col: Color = m["col"]
+			var pulse := 0.5 + 0.5 * sin(t * 5.0)
+			draw_arc(pos, 30.0 + 4.0 * pulse, 0.0, TAU, 40, Color(col.r, col.g, col.b, 0.35 + 0.35 * pulse), 3.0, true)
+			var tag := str(m["text"])
+			var w := f.get_string_size(tag, HORIZONTAL_ALIGNMENT_LEFT, -1, 16).x
+			var bp := pos + Vector2(0, -48.0 - 4.0 * pulse)
+			draw_rect(Rect2(bp.x - w * 0.5 - 9.0, bp.y - 18.0, w + 18.0, 26.0), Color(col.r * 0.9 + 0.1, col.g * 0.9 + 0.1, col.b * 0.9 + 0.1, 0.95))
+			draw_string(f, Vector2(bp.x - w * 0.5, bp.y), tag, HORIZONTAL_ALIGNMENT_LEFT, -1, 16, Color(0.08, 0.06, 0.02))
+
 class Fx:
 	static var _soft: GradientTexture2D = null
 	static func tex() -> GradientTexture2D:
@@ -877,10 +1128,10 @@ class ConstructionFX extends Node2D:
 		if not target.is_constructing:
 			_finish()
 			return
-		near = is_instance_valid(player) and target.global_position.distance_to(player.global_position) <= target.proximity_distance
+		near = is_instance_valid(player) and target.get_center().distance_to(player.global_position) <= target.interact_radius()
 		smoke.emitting = near
 		sparks.emitting = near
-		shown = lerpf(shown, clampf(target.build_progress / 100.0, 0.0, 1.0), 1.0 - exp(-10.0 * delta))
+		shown = lerpf(shown, clampf(target.build_progress / 100.0, 0.0, 1.0), 1.0 - exp(-16.0 * delta))
 		# our own bar replaces the default one; the module "materialises" as it builds
 		if target.progress_bar != null:
 			target.progress_bar.visible = false
@@ -902,6 +1153,16 @@ class ConstructionFX extends Node2D:
 		queue_free()
 
 	func _draw() -> void:
+		var zone := target.interact_radius() if is_instance_valid(target) else 250.0
+		zone *= 1.0 - pow(1.0 - clampf(t * 4.0, 0.0, 1.0), 3.0)
+		var pulse := 0.5 + 0.5 * sin(t * 5.0)
+		var ring_col := Color(0.45, 1.0, 0.6, 0.7) if near else Color(1.0, 0.35, 0.3, 0.6 + 0.35 * pulse)
+		draw_circle(Vector2.ZERO, zone, Color(ring_col.r, ring_col.g, ring_col.b, 0.05 if near else 0.10))
+		var n := 40
+		for i in n:
+			if i % 2 == 0:
+				var a := TAU * i / n + t * 0.2
+				draw_arc(Vector2.ZERO, zone, a, a + TAU / n * 0.8, 6, ring_col, 3.0 if near else 5.0, true)
 		var w := clampf(half.x * 1.6, 110.0, 220.0)
 		var h := 14.0
 		var pos := Vector2(-w * 0.5, -half.y - 36.0)
@@ -914,5 +1175,5 @@ class ConstructionFX extends Node2D:
 			var bx := pos.x + fposmod(t * 120.0, maxf(fw, 1.0))
 			draw_rect(Rect2(bx, pos.y, minf(14.0, pos.x + fw - bx), h), Color(1, 1, 1, 0.3))
 			draw_rect(Rect2(pos.x + fw - 2.0, pos.y, 2.0, h), Color(1, 1, 1, 0.9))
-		var label := "BUILDING  %d%%" % int(shown * 100.0) if near else "RETURN TO CONTINUE BUILDING"
-		draw_string(font, pos + Vector2(0, -8), label, HORIZONTAL_ALIGNMENT_CENTER, w, 13, Color(col.r, col.g, col.b, 1.0))
+		var label := "Building...  %d%%" % int(shown * 100.0) if near else "Come back inside the circle!"
+		draw_string(font, pos + Vector2(-60, -10), label, HORIZONTAL_ALIGNMENT_CENTER, w + 120, 17, Color(col.r, col.g, col.b, 1.0))

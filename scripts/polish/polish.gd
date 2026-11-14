@@ -1,5 +1,5 @@
 extends Node
-## POLISH — drop-in visual layer for the Game scene (autoload).
+## POLISH - drop-in visual layer for the Game scene (autoload).
 ## Adds: bloom, ambient lighting + shadows, module glow, dust/spark particles,
 ## CRT/vignette post FX, themed shop UI (cutscene font), survival HUD, alerts.
 ## It only READS existing game state. It never edits game scripts or the cutscene.
@@ -13,7 +13,7 @@ const SHOP_PROPERTY := "shop_layer"
 ## To exclude any node + its children from Polish:  node.set_meta("no_polish", true)
 const PRIMARY_WORDS := ["CONFIRM", "DEPLOY", "LAUNCH", "START", "BEGIN", "PLAY"]
 const GLOW := 1.12   # HDR multiplier for glowing things (1.0 = no bloom from them)
-const FONT_NAMES := ["Courier New", "monospace"]   # same font as cutscene.gd
+const FONT_NAMES := ["Trebuchet MS", "Verdana", "sans-serif"]   # same font as cutscene.gd
 
 const C_BG      := Color(0.04, 0.06, 0.09, 0.96)
 const C_PANEL   := Color(0.06, 0.09, 0.13, 0.92)
@@ -91,7 +91,7 @@ func _teardown() -> void:
 	_bars.clear()
 	_crit_time = 0.0
 
-# ──────────────────────────────────────────────────────────────── install ──
+# - install -
 func _install(game: Node) -> void:
 	_game = game as Node2D
 	_installed = true
@@ -131,7 +131,7 @@ func _bloom_wire(l: Line2D) -> void:
 	if l.default_color.a > 0.9 and l.width >= 8.0:
 		l.modulate = Color(GLOW, GLOW, GLOW, 1.0)
 
-# ───────────────────────────────────────────────────────── environment/bloom ──
+# - environment/bloom -
 func _setup_environment() -> void:
 	get_viewport().use_hdr_2d = true
 	var we := _game.get_node_or_null("WorldEnvironment") as WorldEnvironment
@@ -147,7 +147,7 @@ func _setup_environment() -> void:
 	env.tonemap_mode = Environment.TONE_MAPPER_LINEAR   # keep your original colours
 	env.glow_enabled = true
 	env.glow_intensity = 0.45
-	env.glow_strength = 0.9
+	env.glow_strength = 0.45
 	env.glow_bloom = 0.02
 	env.glow_hdr_threshold = 1.15
 	env.glow_hdr_scale = 0.9
@@ -158,7 +158,7 @@ func _setup_environment() -> void:
 	env.adjustment_contrast = 1.08
 	env.adjustment_saturation = 1.12
 
-# ───────────────────────────────────────────────────────────────── lighting ──
+# - lighting -
 func _setup_lighting() -> void:
 	_modulate = CanvasModulate.new()
 	_modulate.name = "AmbientDark"
@@ -306,7 +306,7 @@ func _danger_level() -> float:
 	var worst := minf(BaseManager.oxygen_level, BaseManager.temp_level)
 	return clampf(1.0 - worst / 30.0, 0.0, 1.0) if GameManager.current_phase == GameManager.Phase.SURVIVE else 0.0
 
-# ─────────────────────────────────────────────────────────────── particles ──
+# - particles -
 ## Ambient particles live on their own CanvasLayer (screen space), so the dark
 ## ambient tint can't swallow them and they always read clearly.
 func _emitter(amount: int, life: float, add_mat: Material) -> CPUParticles2D:
@@ -327,49 +327,58 @@ func _emitter(amount: int, life: float, add_mat: Material) -> CPUParticles2D:
 	p.color_ramp = g
 	return p
 
+func _world_motes(parent: Node, pts: PackedVector2Array, amount: int, life: float, vmin: float, vmax: float, col: Color, smin: float, smax: float, mat: Material) -> CPUParticles2D:
+	var e := CPUParticles2D.new()
+	e.texture = ring_tex
+	e.material = mat
+	e.amount = amount
+	e.lifetime = life
+	e.preprocess = life
+	e.local_coords = true                       # they move WITH the station, not with the screen
+	e.emission_shape = CPUParticles2D.EMISSION_SHAPE_POINTS
+	e.emission_points = pts
+	e.direction = Vector2(0, -1)
+	e.spread = 180.0
+	e.gravity = Vector2.ZERO
+	e.initial_velocity_min = vmin
+	e.initial_velocity_max = vmax
+	e.scale_amount_min = smin
+	e.scale_amount_max = smax
+	e.color = col
+	e.z_index = 6
+	var g := Gradient.new()
+	g.set_color(0, Color(1, 1, 1, 0))
+	g.set_color(1, Color(1, 1, 1, 0))
+	g.add_point(0.25, Color(1, 1, 1, 1))
+	g.add_point(0.75, Color(1, 1, 1, 1))
+	e.color_ramp = g
+	parent.add_child(e)
+	return e
+
 func _setup_particles() -> void:
 	var add_mat := CanvasItemMaterial.new()
 	add_mat.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
-	_fx_layer = CanvasLayer.new()
-	_fx_layer.name = "AmbientFX"
-	_fx_layer.layer = 11          # above the shop, below HUD (20) and post-fx (50)
-	_game.add_child(_fx_layer)
 
-	# 1) dust motes: lots of small bright specks drifting across the screen
-	_fx_dust = _emitter(160, 11.0, add_mat)
-	_fx_dust.direction = Vector2(1, -0.3)
-	_fx_dust.spread = 70.0
-	_fx_dust.initial_velocity_min = 8.0
-	_fx_dust.initial_velocity_max = 30.0
-	_fx_dust.scale_amount_min = 0.05
-	_fx_dust.scale_amount_max = 0.16
-	_fx_dust.color = Color(0.65, 0.9, 1.0, 0.75)
-	_fx_layer.add_child(_fx_dust)
+	# 1) dust motes: only spawn over the station floor and drift a tiny bit,
+	#    so they sit in the rooms like real floating dust
+	var tm := _game.get_node_or_null("spacestation") as TileMapLayer
+	if tm != null and tm.tile_set != null:
+		var rng := RandomNumberGenerator.new()
+		rng.seed = 11
+		var tsz := Vector2(tm.tile_set.tile_size)
+		var floor_pts := PackedVector2Array()
+		for c in tm.get_used_cells():
+			var td := tm.get_cell_tile_data(c)
+			if td != null and td.get_collision_polygons_count(0) == 0:
+				floor_pts.append(tm.map_to_local(c) + Vector2(rng.randf_range(-0.5, 0.5), rng.randf_range(-0.5, 0.5)) * tsz)
+		if floor_pts.size() > 0:
+			var step := maxi(1, floor_pts.size() / 600)
+			var pts := PackedVector2Array()
+			for i in range(0, floor_pts.size(), step):
+				pts.append(floor_pts[i])
+			_fx_dust = _world_motes(tm, pts, 220, 9.0, 3.0, 10.0, Color(2.2, 2.8, 3.4, 0.7), 0.04, 0.11, add_mat)
 
-	# 2) bokeh: a few huge, very faint soft orbs for depth
-	_fx_bokeh = _emitter(14, 16.0, add_mat)
-	_fx_bokeh.direction = Vector2(-1, 0.15)
-	_fx_bokeh.spread = 40.0
-	_fx_bokeh.initial_velocity_min = 5.0
-	_fx_bokeh.initial_velocity_max = 14.0
-	_fx_bokeh.scale_amount_min = 0.9
-	_fx_bokeh.scale_amount_max = 2.0
-	_fx_bokeh.color = Color(0.35, 0.7, 1.0, 0.09)
-	_fx_layer.add_child(_fx_bokeh)
-
-	# 3) warm embers floating upward
-	_fx_embers = _emitter(36, 7.0, add_mat)
-	_fx_embers.direction = Vector2(0, -1)
-	_fx_embers.spread = 25.0
-	_fx_embers.initial_velocity_min = 18.0
-	_fx_embers.initial_velocity_max = 55.0
-	_fx_embers.gravity = Vector2(6, -6)
-	_fx_embers.scale_amount_min = 0.05
-	_fx_embers.scale_amount_max = 0.12
-	_fx_embers.color = Color(1.0, 0.7, 0.35, 0.85)
-	_fx_layer.add_child(_fx_embers)
-
-	# 4) reactor sparks live in the world (they should stay on the reactor)
+	# 2) reactor sparks live in the world and stay on the reactor
 	var reactor := _game.get_node_or_null("Reactor") as Node2D
 	if reactor != null:
 		_sparks = _emitter(40, 2.4, add_mat)
@@ -384,29 +393,22 @@ func _setup_particles() -> void:
 		_sparks.initial_velocity_max = 60.0
 		_sparks.scale_amount_min = 0.05
 		_sparks.scale_amount_max = 0.12
-		_sparks.color = Color(1.2, 3.0, 3.6, 1.0)   # bright enough to survive the ambient tint
+		_sparks.color = Color(1.2, 3.0, 3.6, 1.0)
 		_sparks.z_index = 60
 		reactor.add_child(_sparks)
 
 func _update_particles() -> void:
-	if _fx_dust != null:
-		var vs := get_viewport().get_visible_rect().size
-		if vs != _fx_size:
-			_fx_size = vs
-			for p in [_fx_dust, _fx_bokeh, _fx_embers]:
-				p.position = vs * 0.5
-				p.emission_rect_extents = vs * 0.5 + Vector2(40, 40)
 	if _sparks != null and is_instance_valid(_sparks):
 		_sparks.emitting = BaseManager.reactor_energy > 0.0
 
-# ───────────────────────────────────────────────────────────── post-process ──
+# - post-process -
 const POST_SHADER := """
 shader_type canvas_item;
 uniform sampler2D screen_tex : hint_screen_texture, filter_linear_mipmap;
-uniform float vignette = 0.55;
-uniform float aberration = 1.4;
-uniform float scan = 0.035;
-uniform float grain = 0.035;
+uniform float vignette = 0.30;
+uniform float aberration = 0.0;
+uniform float scan = 0.0;
+uniform float grain = 0.0;
 uniform float danger = 0.0;
 float hash(vec2 p){ return fract(sin(dot(p, vec2(12.9898,78.233))) * 43758.5453); }
 void fragment(){
@@ -444,7 +446,7 @@ func _setup_post_fx() -> void:
 	rect.material = _post_mat
 	layer.add_child(rect)
 
-# ────────────────────────────────────────────────────────────────── theme ──
+# - theme -
 func _build_theme() -> Theme:
 	var t := Theme.new()
 	t.default_font = font
@@ -455,15 +457,15 @@ func _build_theme() -> Theme:
 	t.set_constant("shadow_offset_x", "Label", 1)
 	t.set_constant("shadow_offset_y", "Label", 2)
 
-	t.set_stylebox("panel", "PanelContainer", _box(C_PANEL, C_EDGE * Color(1, 1, 1, 0.45), 1, 6, 14))
-	t.set_stylebox("normal", "Button", _box(Color(0.07, 0.15, 0.2, 0.95), C_EDGE * Color(1, 1, 1, 0.6), 1, 4, 6))
-	t.set_stylebox("hover", "Button", _box(Color(0.10, 0.26, 0.34, 1.0), C_CYAN, 2, 4, 12))
-	t.set_stylebox("pressed", "Button", _box(Color(0.30, 0.80, 0.95, 1.0), Color.WHITE, 2, 4, 4))
+	t.set_stylebox("panel", "PanelContainer", _box(C_PANEL, C_EDGE * Color(1, 1, 1, 0.45), 1, 14, 0))
+	t.set_stylebox("normal", "Button", _box(Color(0.16, 0.42, 0.62, 1.0), Color(0.55, 0.8, 1.0, 1.0), 2, 12, 0))
+	t.set_stylebox("hover", "Button", _box(Color(0.22, 0.55, 0.8, 1.0), Color.WHITE, 2, 12, 0))
+	t.set_stylebox("pressed", "Button", _box(Color(0.12, 0.32, 0.5, 1.0), Color.WHITE, 2, 12, 0))
 	t.set_stylebox("disabled", "Button", _box(Color(0.08, 0.1, 0.12, 0.7), Color(0.3, 0.3, 0.35, 0.4), 1, 4, 0))
 	t.set_stylebox("focus", "Button", _box(Color(0, 0, 0, 0), C_GREEN, 2, 4, 0))
-	t.set_color("font_color", "Button", Color(0.75, 0.95, 1.0))
+	t.set_color("font_color", "Button", Color(1, 1, 1))
 	t.set_color("font_hover_color", "Button", Color(1.0, 1.0, 1.0))
-	t.set_color("font_pressed_color", "Button", Color(0.02, 0.1, 0.14))
+	t.set_color("font_pressed_color", "Button", Color(1, 1, 1))
 	t.set_color("font_disabled_color", "Button", Color(0.4, 0.45, 0.5))
 
 	t.set_stylebox("background", "ProgressBar", _box(Color(0.02, 0.03, 0.04, 0.85), Color(1, 1, 1, 0.25), 1, 3, 0))
@@ -483,10 +485,10 @@ func _box(bg: Color, border: Color, bw: int, radius: int, glow: int) -> StyleBox
 	s.set_corner_radius_all(radius)
 	s.shadow_color = Color(border.r, border.g, border.b, 0.28 if glow > 0 else 0.0)
 	s.shadow_size = glow
-	s.content_margin_left = 10
-	s.content_margin_right = 10
-	s.content_margin_top = 6
-	s.content_margin_bottom = 6
+	s.content_margin_left = 14
+	s.content_margin_right = 14
+	s.content_margin_top = 8
+	s.content_margin_bottom = 8
 	return s
 
 func _radial_tex(sz: int, _unused: float) -> GradientTexture2D:
@@ -503,7 +505,7 @@ func _radial_tex(sz: int, _unused: float) -> GradientTexture2D:
 	tex.height = sz
 	return tex
 
-# ─────────────────────────────────────────────────────────────── shop UI ──
+# - shop UI -
 class Brackets extends Control:
 	var col := Color(0.3, 0.85, 1.0, 0.9)
 	var arm := 16.0
@@ -530,17 +532,16 @@ class Brackets extends Control:
 
 const GRID_SHADER := """
 shader_type canvas_item;
-uniform vec4 base : source_color = vec4(0.04, 0.06, 0.09, 0.96);
+uniform vec4 top : source_color = vec4(0.10, 0.13, 0.28, 1.0);
+uniform vec4 bottom : source_color = vec4(0.03, 0.04, 0.10, 1.0);
+float h(vec2 p){ return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
 void fragment(){
-	vec2 p = FRAGCOORD.xy;
-	float g1 = step(0.97, fract(p.x / 48.0)) + step(0.97, fract(p.y / 48.0));
-	float g2 = step(0.995, fract(p.x / 192.0)) + step(0.995, fract(p.y / 192.0));
-	float sweep = smoothstep(0.0, 1.0, 1.0 - abs(fract(TIME * 0.08 - UV.y) - 0.5) * 12.0);
-	vec3 col = base.rgb + vec3(0.0, 0.10, 0.14) * (g1 * 0.25 + g2 * 0.5);
-	col += vec3(0.0, 0.25, 0.3) * max(sweep, 0.0) * 0.06;
-	float v = distance(UV, vec2(0.5));
-	col *= 1.0 - v * 0.7;
-	COLOR = vec4(col, base.a);
+	vec3 col = mix(top.rgb, bottom.rgb, UV.y);
+	vec2 cell = floor(FRAGCOORD.xy / 6.0);
+	float star = step(0.9965, h(cell));
+	float tw = 0.5 + 0.5 * sin(TIME * 1.5 + h(cell + 3.0) * 20.0);
+	col += vec3(1.0) * star * (0.3 + 0.7 * tw);
+	COLOR = vec4(col, 1.0);
 }
 """
 
@@ -627,23 +628,6 @@ func _decorate_shop(shop: CanvasLayer) -> void:
 		title.add_theme_color_override("font_shadow_color", Color(0.2, 1.0, 0.4, 0.35))
 		title.add_theme_constant_override("shadow_offset_x", 0)
 		title.add_theme_constant_override("shadow_offset_y", 0)
-		title.visible_ratio = 0.0
-		create_tween().tween_property(title, "visible_ratio", 1.0, 1.0)
-	# status light in the corner (independent of layout)
-	var status := Label.new()
-	status.text = "● LINK ESTABLISHED"
-	status.theme = ui_theme
-	status.set_meta("polished", true)
-	status.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT)
-	status.grow_horizontal = Control.GROW_DIRECTION_BEGIN
-	status.position += Vector2(-24, 12)
-	status.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	status.add_theme_font_size_override("font_size", 13)
-	status.add_theme_color_override("font_color", C_GREEN)
-	shop.add_child(status)
-	var blink := status.create_tween().set_loops()
-	blink.tween_property(status, "modulate:a", 0.25, 0.7)
-	blink.tween_property(status, "modulate:a", 1.0, 0.7)
 
 func _walk_decorate(n: Node) -> void:
 	for c in n.get_children():
@@ -651,7 +635,7 @@ func _walk_decorate(n: Node) -> void:
 			_decorate_control(c)
 		_walk_decorate(c)
 
-## Decorates ONE control purely by its type — no assumptions about layout.
+## Decorates ONE control purely by its type - no assumptions about layout.
 func _decorate_control(c: Node) -> void:
 	if not is_instance_valid(c) or not (c is Control) or c.has_meta("polished") or _is_skipped(c):
 		return
@@ -666,23 +650,10 @@ func _decorate_control(c: Node) -> void:
 		_shop_labels[c] = [(c as Label).text, (c as Label).modulate]
 
 func _decorate_card(card: PanelContainer) -> void:
-	var br := Brackets.new()
-	br.set_meta("polished", true)
-	card.add_child(br)
-	if not card.has_theme_stylebox_override("panel"):   # respect your own panel style if you set one
-		var normal := _box(C_PANEL, C_EDGE * Color(1, 1, 1, 0.45), 1, 6, 14)
-		var hot := _box(Color(0.07, 0.12, 0.18, 0.97), C_CYAN, 2, 6, 26)
-		card.add_theme_stylebox_override("panel", normal)
-		card.mouse_entered.connect(func():
-			card.add_theme_stylebox_override("panel", hot)
-			br.arm = 26.0)
-		card.mouse_exited.connect(func():
-			card.add_theme_stylebox_override("panel", normal)
-			br.arm = 16.0)
-	var delay := minf(0.2 + _card_idx * 0.12, 1.0)
+	var delay := minf(0.1 + _card_idx * 0.08, 0.8)
 	_card_idx += 1
 	card.modulate.a = 0.0
-	create_tween().tween_property(card, "modulate:a", 1.0, 0.5).set_delay(delay)
+	create_tween().tween_property(card, "modulate:a", 1.0, 0.35).set_delay(delay)
 
 func _juice_button(b: Button) -> void:
 	b.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
@@ -709,7 +680,7 @@ func _juice_button(b: Button) -> void:
 		tw.tween_property(b, "self_modulate", Color(GLOW, GLOW, GLOW), 0.9)
 		tw.tween_property(b, "self_modulate", Color.WHITE, 0.9)
 
-# ──────────────────────────────────────────────────────────────────── HUD ──
+# - HUD -
 func _setup_hud() -> void:
 	_hud = CanvasLayer.new()
 	_hud.name = "SurvivalHUD"
@@ -735,21 +706,20 @@ func _setup_hud() -> void:
 	panel.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
 	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	root.add_child(panel)
-	panel.add_child(Brackets.new())
 	var vb := VBoxContainer.new()
 	vb.add_theme_constant_override("separation", 8)
 	panel.add_child(vb)
 	var head := Label.new()
-	head.text = "// HABITAT STATUS"
+	head.text = "Base health"
 	head.add_theme_font_size_override("font_size", 14)
 	head.add_theme_color_override("font_color", C_GREEN)
 	head.modulate = Color(GLOW, GLOW, GLOW)
 	vb.add_child(head)
 	vb.add_child(HSeparator.new())
-	_add_bar(vb, "O2   ", "o2", C_CYAN)
-	_add_bar(vb, "TEMP ", "temp", Color(1.0, 0.55, 0.25))
-	_add_bar(vb, "CORE ", "core", C_GREEN)
-	_add_bar(vb, "LOAD ", "load", C_AMBER)
+	_add_bar(vb, "Air    ", "o2", C_CYAN)
+	_add_bar(vb, "Warmth ", "temp", Color(1.0, 0.55, 0.25))
+	_add_bar(vb, "Power  ", "core", C_GREEN)
+	_add_bar(vb, "Load   ", "load", C_AMBER)
 	_hud_panel = panel
 
 	_alert_box = VBoxContainer.new()
@@ -835,7 +805,7 @@ func _update_hud(delta: float) -> void:
 func _on_module_broken(module_name: String) -> void:
 	if not _installed or _alert_box == null:
 		return
-	_toast("⚠  %s OFFLINE — HOLD [E] NEARBY TO REPAIR" % module_name.to_upper(), C_AMBER)
+	_toast("%s broke! Stand close and hold E to fix it." % module_name, C_AMBER)
 	var cam := get_viewport().get_camera_2d()
 	if cam != null:
 		var tw := create_tween()
@@ -846,7 +816,7 @@ func _on_module_broken(module_name: String) -> void:
 func _on_game_over(reason: String) -> void:
 	if not _installed or _crit_label == null:
 		return
-	_crit_label.text = "CRITICAL — " + reason
+	_crit_label.text = reason
 	_crit_time = 2.0   # re-armed every frame the condition persists
 
 func _toast(msg: String, col: Color) -> void:

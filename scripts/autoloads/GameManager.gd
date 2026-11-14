@@ -12,18 +12,44 @@ var inventory: Dictionary = {
 
 var catalog: Array[Dictionary] = [
 	{
+		"id": "Solar Panel",
+		"mass": 400.0,
+		"power": 0.0,
+		"scene_path": "res://scenes/modules/solar_panel.tscn",
+		"desc": "Makes free power from the sun.",
+		"color": Color(1.0, 0.8, 0.25)
+	},
+	{
 		"id": "Life Support",
 		"mass": 1000.0,
 		"power": 30.0,
 		"scene_path": "res://scenes/modules/life_support.tscn",
-		"desc": "Generates breathable O2 for the habitat.\nNASA Spec: Crew requires 0.84 kg of O2 per day.\nWithout power, O2 reserves critical in 30s."
+		"desc": "Gives you air to breathe.",
+		"color": Color(0.35, 0.85, 1.0)
 	},
 	{
 		"id": "Thermal Control",
 		"mass": 800.0,
 		"power": 20.0,
 		"scene_path": "res://scenes/modules/thermal.tscn",
-		"desc": "Maintains internal cabin temperature against Martian -60°C lows.\nPrevents hypothermia and coolant line freeze."
+		"desc": "Keeps the base nice and warm.",
+		"color": Color(1.0, 0.55, 0.3)
+	},
+	{
+		"id": "Shield",
+		"mass": 600.0,
+		"power": 25.0,
+		"scene_path": "res://scenes/modules/shield.tscn",
+		"desc": "Protects the base from space storms.",
+		"color": Color(0.7, 0.55, 1.0)
+	},
+	{
+		"id": "Comms",
+		"mass": 500.0,
+		"power": 15.0,
+		"scene_path": "res://scenes/modules/comms.tscn",
+		"desc": "A big dish to call home.",
+		"color": Color(0.45, 1.0, 0.6)
 	}
 ]
 
