@@ -506,4 +506,3 @@ func _play(stream: AudioStream, pitch: float = 1.0, extra_db: float = 0.0) -> vo
 	add_child(pl)
 	pl.finished.connect(pl.queue_free)
 	pl.play()
-

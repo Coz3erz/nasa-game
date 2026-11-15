@@ -1445,4 +1445,3 @@ func _start_rover_transition() -> void:
 	day_loop.start_timer()
 	if player != null and player.has_method("set_input_locked"):
 		player.set_input_locked(false)
-

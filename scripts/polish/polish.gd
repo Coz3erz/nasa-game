@@ -867,4 +867,3 @@ func _toast(msg: String, col: Color) -> void:
 	tw.tween_interval(3.2)
 	tw.tween_property(p, "modulate:a", 0.0, 0.5)
 	tw.tween_callback(p.queue_free)
-

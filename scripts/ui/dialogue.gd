@@ -24,10 +24,10 @@ const SCREEN_TOP := &"__screen_top__"
 @export var box_size: Vector2 = Vector2(560, 170)
 @export var anchor_gap: float = 24.0
 @export var screen_margin: float = 8.0
-@export var background_color: Color = Color(0.03, 0.10, 0.16, 0.96)
-@export var border_color: Color = Color(0.45, 0.95, 1.0)
+@export var background_color: Color = Color(0.015, 0.025, 0.045, 0.97)
+@export var border_color: Color = Color(0.35, 0.9, 1.0)
 @export var text_color: Color = Color(0.94, 0.96, 1.0)
-@export var name_color: Color = Color(0.55, 1.0, 0.78)
+@export var name_color: Color = Color(1.0, 0.32, 0.38)
 @export var dim_strength: float = 0.84
 
 const DIM_SHADER := """
@@ -97,7 +97,6 @@ func _ready() -> void:
 	dialogue_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	dialogue_box.add_theme_stylebox_override("panel", GlassUI.panel(background_color, border_color, 14, 14))
 	add_child(dialogue_box)
-	GlassUI.gloss(dialogue_box, 4.0, 0.34)
 
 	portrait = TextureRect.new()
 	portrait.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
@@ -201,7 +200,9 @@ func _set_dim(on: bool, spot: Variant) -> void:
 	if on:
 		dim_rect.visible = true
 	_dim_tween = create_tween()
-	_dim_tween.tween_method(func(v: float) -> void: mat.set_shader_parameter("dim", v), float(mat.get_shader_parameter("dim")), dim_strength if on else 0.0, 0.25)
+	var cur: Variant = mat.get_shader_parameter("dim")
+	var from_v: float = 0.0 if cur == null else float(cur)
+	_dim_tween.tween_method(func(v: float) -> void: mat.set_shader_parameter("dim", v), from_v, dim_strength if on else 0.0, 0.25)
 	if not on:
 		_dim_tween.tween_callback(func() -> void: dim_rect.visible = false)
 
@@ -360,4 +361,3 @@ func _layout_content() -> void:
 	body.size = Vector2(maxf(1.0, size.x - left - pad), maxf(1.0, size.y - top - pad - 20.0))
 	hint_label.position = Vector2(size.x - 120.0 - pad, size.y - 22.0 - 6.0)
 	hint_label.size = Vector2(120.0, 20.0)
-

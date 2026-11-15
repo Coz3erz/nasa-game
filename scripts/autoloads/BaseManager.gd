@@ -159,4 +159,3 @@ func reset_for_day(day: int) -> void:
 	day_failed_sent = false
 	solar_efficiency = 1.0
 	apply_day(day)
-

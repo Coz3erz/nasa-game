@@ -1381,4 +1381,3 @@ class ConstructionFX extends Node2D:
 			draw_rect(Rect2(pos.x + fw - 2.0, pos.y, 2.0, h), Color(1, 1, 1, 0.9))
 		var label := "Building...  %d%%" % int(shown * 100.0) if near else "Come back inside the circle!"
 		draw_string(font, pos + Vector2(-60, -10), label, HORIZONTAL_ALIGNMENT_CENTER, w + 120, 17, Color(col.r, col.g, col.b, 1.0))
-

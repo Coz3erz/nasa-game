@@ -824,7 +824,10 @@ func _ready() -> void:
 	get_viewport().size_changed.connect(_on_resize)
 	rng.randomize()
 
-	font = GameFont.get_font()
+	set_meta("no_polish", true)
+	var _courier := SystemFont.new()
+	_courier.font_names = PackedStringArray(["Courier New", "monospace"])
+	font = _courier
 
 	world = Control.new()
 	world.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -1233,4 +1236,3 @@ func _process(delta: float) -> void:
 	_update_post()
 	_update_text(delta)
 	_update_audio()
-

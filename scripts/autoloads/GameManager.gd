@@ -135,4 +135,3 @@ func restart_day() -> void:
 func restart_all() -> void:
 	current_sol = 1
 	begin_day()
-

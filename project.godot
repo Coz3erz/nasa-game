@@ -10,7 +10,7 @@ config_version=5
 
 [application]
 
-config/name="Nasa Game"
+config/name="Crashfall"
 run/main_scene="res://scenes/main scenes/main_menu.tscn"
 config/features=PackedStringArray("4.6", "GL Compatibility")
 config/icon="uid://o5q4o7ocx6td"

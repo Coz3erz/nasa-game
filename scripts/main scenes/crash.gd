@@ -66,7 +66,10 @@ func _ready() -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 
-	font = GameFont.get_font()
+	set_meta("no_polish", true)
+	var _courier := SystemFont.new()
+	_courier.font_names = PackedStringArray(["Courier New", "monospace"])
+	font = _courier
 
 	bg_rect = ColorRect.new()
 	bg_rect.color = Color.BLACK
@@ -386,4 +389,3 @@ func _generate_type_click_wav() -> AudioStreamWAV:
 	wav.stereo = false
 	wav.data = data
 	return wav
-

@@ -87,6 +87,7 @@ func _build_objective_label() -> void:
 	sb.content_margin_bottom = 6
 	panel.add_theme_stylebox_override("panel", sb)
 	_objective_label = Label.new()
+	_objective_label.add_theme_font_override("font", GameFont.get_font())
 	_objective_label.add_theme_font_size_override("font_size", 18)
 	_objective_label.add_theme_color_override("font_color", Color(0.75, 1.0, 0.9))
 	panel.add_child(_objective_label)
@@ -313,4 +314,3 @@ func _exit_tree() -> void:
 		if not is_instance_valid(module) or is_ancestor_of(module):
 			BaseManager.active_modules.remove_at(i)
 	BaseManager.calculate_power()
-

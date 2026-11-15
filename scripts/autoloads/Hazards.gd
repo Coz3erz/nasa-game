@@ -1,3 +1,4 @@
+
 extends Node
 ## AUTOLOAD (name it Hazards, put it LAST in the autoload list).
 ## Runs the two Mars hazards during the SURVIVE phase and reads BaseManager for shield / comms / power.
@@ -237,7 +238,6 @@ float flare_burst(vec2 p, vec2 c, float a, float w){
 	return (blob * 1.9 + ring * 0.5) * env * w;
 }
 void fragment(){
-	if (age < 0.0) { COLOR = vec4(0.0); return; }
 	vec2 res = 1.0 / SCREEN_PIXEL_SIZE;
 	float asp = res.x / res.y;
 	vec2 p = (UV - 0.5) * 2.0;
@@ -256,7 +256,7 @@ void fragment(){
 	vec3 c1 = mix(edge_col.rgb * vec3(0.55, 0.12, 0.05), edge_col.rgb, smoothstep(0.0, 0.55, x));
 	c1 = mix(c1, mid_col.rgb, smoothstep(0.50, 1.15, x));
 	c1 = mix(c1, core_col.rgb, smoothstep(1.05, 1.90, x));
-	COLOR = vec4(c1 * clamp(x, 0.0, 1.4), 1.0);
+	COLOR = (age < 0.0) ? vec4(0.0) : vec4(c1 * clamp(x, 0.0, 1.4), 1.0);
 }
 """
 	const EDGE_SHADER := """
@@ -316,6 +316,7 @@ void fragment(){
 		warn_label.set_anchors_and_offsets_preset(Control.PRESET_CENTER_TOP)
 		warn_label.grow_horizontal = Control.GROW_DIRECTION_BOTH
 		warn_label.position.y = 90
+		warn_label.add_theme_font_override("font", GameFont.get_font())
 		warn_label.add_theme_font_size_override("font_size", 34)
 		warn_label.add_theme_color_override("font_color", Color(1.0, 0.8, 0.3))
 		warn_label.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.9))
@@ -456,6 +457,7 @@ void fragment(){
 		p.add_theme_stylebox_override("panel", sb)
 		var l := Label.new()
 		l.text = msg
+		l.add_theme_font_override("font", GameFont.get_font())
 		l.add_theme_font_size_override("font_size", 18)
 		l.add_theme_color_override("font_color", col)
 		l.mouse_filter = Control.MOUSE_FILTER_IGNORE

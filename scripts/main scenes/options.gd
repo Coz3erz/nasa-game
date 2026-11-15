@@ -260,7 +260,10 @@ func _ready() -> void:
 
 	_gs()
 
-	font = GameFont.get_font()
+	set_meta("no_polish", true)
+	var _courier := SystemFont.new()
+	_courier.font_names = PackedStringArray(["Courier New", "monospace"])
+	font = _courier
 
 	_create_background_layer()
 	_create_glow_layer()
@@ -1278,4 +1281,3 @@ func _slider_bar(value: float, min_val: float, max_val: float, width: int = 18) 
 	var ratio := (value - min_val) / maxf(max_val - min_val, 1.0)
 	var filled := int(ratio * width)
 	return "â–ˆ".repeat(filled) + "Â·".repeat(width - filled)
-
