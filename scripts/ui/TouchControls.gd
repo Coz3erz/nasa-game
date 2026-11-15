@@ -1,27 +1,28 @@
 extends CanvasLayer
-## Dynamic (floating) touch controls.
-## - Left half of the screen = movement stick that spawns where your thumb lands and follows it.
-## - Right side (build mode only) = aim stick, same behaviour, in the free area above the buttons.
-## - Buttons have priority over stick zones. Every finger is tracked by its touch index.
-## Everything is released on pause / focus loss / scene change / cancel.
+## Dynamic (floating) touch controls. Web-safe, glitch-resilient.
+## Left half = movement stick. Right half (build mode) = aim stick.
+## Added to /root as last child by InputSupport so _input runs before the game
+## scene — otherwise aim touches get eaten as "place module" in build mode.
+## Shop check applies in BOTH scenes (tutorial has a shop too).
+## Phase check applies only in game.tscn (tutorial doesn't set Phase.SURVIVE).
 
-const BASE_R := 64.0          # stick radius at scale 1
-const DEADZONE := 0.12        # inner deadzone, output is rescaled so there is no "jump" past it
-const FOLLOW := true          # base slides after the thumb when dragged past the rim (Roblox-style)
-const GRACE := 0.3            # tolerate brief "inactive" flicker before dropping held input
+const BASE_R := 64.0
+const DEADZONE := 0.08
+const FOLLOW := false
+const GRACE := 0.3
 const FADE_SPEED := 14.0
 
 var _surface: Control
-var _fingers: Dictionary = {}       # touch index -> "move" | "aim" | action name
-var _sent: Dictionary = {}          # action -> strength currently pressed
-var _buttons: Dictionary = {}       # action -> Rect2
+var _fingers: Dictionary = {}
+var _sent: Dictionary = {}
+var _buttons: Dictionary = {}
 var _enabled := false
 var _grace := 0.0
 var _dirty := true
 var _swallow_mouse := false
 var _last_size := Vector2.ZERO
 
-var _u := 1.0                        # UI scale
+var _u := 1.0
 var _r := BASE_R
 var _move_zone := Rect2()
 var _aim_zone := Rect2()
@@ -29,7 +30,6 @@ var _move_home := Vector2.ZERO
 var _aim_home := Vector2.ZERO
 var _build_mode := false
 
-# stick state: base position, thumb offset (normalized), fade alpha
 var _move_base := Vector2.ZERO
 var _move_val := Vector2.ZERO
 var _move_alpha := 0.0
@@ -45,14 +45,52 @@ func _ready() -> void:
 	_surface.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_surface.draw.connect(_draw_controls)
 	add_child(_surface)
+	_surface.visible = false
 
-# ---------------------------------------------------------------- state / layout
+func _current_scene_name() -> String:
+	var s := get_tree().current_scene
+	if s == null:
+		return ""
+	return s.scene_file_path.get_file()
+
+func _in_game_scene() -> bool:
+	var n := _current_scene_name()
+	return n == "game.tscn" or n == "tutorial.tscn"
+
+func _should_be_enabled() -> bool:
+	if not _in_game_scene():
+		return false
+	if get_tree().paused:
+		return false
+
+	# Shop check applies in BOTH scenes — tutorial has a shop too.
+	for n in get_tree().get_nodes_in_group("shop_ui"):
+		if n is CanvasItem and n.is_visible_in_tree():
+			return false
+
+	# Phase check applies only to game.tscn — tutorial uses its own state machine
+	# and never sets Phase.SURVIVE, so gating on phase there kills touch entirely.
+	var scene_name := _current_scene_name()
+	if scene_name == "game.tscn":
+		if "current_phase" in GameManager and GameManager.current_phase != GameManager.Phase.SURVIVE:
+			return false
+
+	if not InputSupport.touch_active():
+		return false
+	var player := get_tree().get_first_node_in_group("player")
+	if player == null:
+		return false
+	var active_val = player.get("is_active")
+	if active_val != null and bool(active_val) == false:
+		return false
+	var locked_val = player.get("input_locked")
+	if locked_val != null and bool(locked_val) == true:
+		return false
+	return true
 
 func _process(delta: float) -> void:
-	var player := get_tree().get_first_node_in_group("player")
-	var shop_open := get_tree().get_nodes_in_group("shop_ui").any(func(n: Node) -> bool: return n is CanvasItem and n.is_visible_in_tree())
-	var active: bool = InputSupport.device_kind == "touch" and not get_tree().paused and not Transition.transitioning and player != null and player.get("is_active") == true and player.get("input_locked") == false and not Dialogue._line_visible and not shop_open
-	if active:
+	var want := _should_be_enabled()
+	if want:
 		_grace = 0.0
 		_enabled = true
 	else:
@@ -64,6 +102,7 @@ func _process(delta: float) -> void:
 	_surface.visible = _enabled
 	if not _enabled:
 		return
+	var player := get_tree().get_first_node_in_group("player")
 	var build: bool = player != null and player.get("is_build_mode") == true
 	if build != _build_mode:
 		_build_mode = build
@@ -77,24 +116,20 @@ func _process(delta: float) -> void:
 		_last_size = size
 		_layout(size)
 		_dirty = true
-	# fade the sticks in/out
 	var t := clampf(delta * FADE_SPEED, 0.0, 1.0)
 	var mt := 1.0 if _fingers.values().has("move") else 0.0
 	var at := 1.0 if _fingers.values().has("aim") else 0.0
 	if not is_equal_approx(_move_alpha, mt) or not is_equal_approx(_aim_alpha, at):
 		_move_alpha = lerpf(_move_alpha, mt, t)
 		_aim_alpha = lerpf(_aim_alpha, at, t)
-		if absf(_move_alpha - mt) < 0.01:
-			_move_alpha = mt
-		if absf(_aim_alpha - at) < 0.01:
-			_aim_alpha = at
+		if absf(_move_alpha - mt) < 0.01: _move_alpha = mt
+		if absf(_aim_alpha - at) < 0.01: _aim_alpha = at
 		_dirty = true
 	if _dirty:
 		_dirty = false
 		_surface.queue_redraw()
 
 func _insets(size: Vector2) -> Vector4:
-	# left, top, right, bottom. Only native mobile has notches/cutouts worth reading.
 	if not InputSupport.is_native_mobile():
 		return Vector4.ZERO
 	var win := Vector2(DisplayServer.window_get_size())
@@ -104,43 +139,51 @@ func _insets(size: Vector2) -> Vector4:
 	if safe.size.x <= 0.0:
 		return Vector4.ZERO
 	var k := size / win
-	return Vector4(maxf(0.0, safe.position.x) * k.x, maxf(0.0, safe.position.y) * k.y, maxf(0.0, win.x - safe.end.x) * k.x, maxf(0.0, win.y - safe.end.y) * k.y)
+	return Vector4(
+		maxf(0.0, safe.position.x) * k.x,
+		maxf(0.0, safe.position.y) * k.y,
+		maxf(0.0, win.x - safe.end.x) * k.x,
+		maxf(0.0, win.y - safe.end.y) * k.y
+	)
 
 func _layout(size: Vector2) -> void:
 	_u = clampf(minf(size.x, size.y) / 720.0, 0.75, 1.4)
 	_r = BASE_R * _u
 	var ins := _insets(size)
-	var m := 24.0 * _u
+	var m := 20.0 * _u
 	var left := ins.x + m
 	var right := size.x - ins.z - m
 	var bottom := size.y - ins.w - m
 	var top := ins.y + m
-	var big := 112.0 * _u
-	var bw := 96.0 * _u
-	var bh := 66.0 * _u
-	var gap := 12.0 * _u
-	_buttons = {
-		"interact": Rect2(right - big, bottom - big, big, big),
-		"build_mode": Rect2(right - big - gap - bw, bottom - bh, bw, bh),
-		"cycle_module": Rect2(right - big - gap - bw, bottom - bh * 2.0 - gap, bw, bh),
-		"rotate_port": Rect2(right - bw, bottom - big - gap - bh, bw, bh),
-		"use_medkit": Rect2(left, bottom - _r * 2.0 - 24.0 * _u - bh, 86.0 * _u, bh),
-		"pause_game": Rect2(size.x * 0.5 - 48.0 * _u, top * 0.6 + ins.y * 0.4, 96.0 * _u, 52.0 * _u)}
-	_move_home = Vector2(left + _r + 8.0 * _u, bottom - _r - 8.0 * _u)
-	_aim_home = Vector2(right - _r - 8.0 * _u, size.y * 0.40)
-	# Movement: whole left half (minus a strip at the very top so HUD taps don't start a stick).
-	_move_zone = Rect2(0.0, size.y * 0.14, size.x * 0.5, size.y * 0.86)
-	# Aim: right half, above the button cluster.
-	var cluster_top: float = (_buttons["rotate_port"] as Rect2).position.y - 10.0 * _u
-	_aim_zone = Rect2(size.x * 0.5, size.y * 0.14, size.x * 0.5, maxf(40.0, cluster_top - size.y * 0.14))
 
-# ---------------------------------------------------------------- input
+	var big := 108.0 * _u
+	var sm := 62.0 * _u
+	var gap := 10.0 * _u
+
+	_buttons = {
+		"interact":     Rect2(right - big, bottom - big, big, big),
+		"rotate_port":  Rect2(right - big, bottom - big - gap - sm, big, sm),
+		"use_medkit":   Rect2(right - big, bottom - big - gap - sm - gap - sm, big, sm),
+		"build_mode":   Rect2(right - big - gap - sm, bottom - sm, sm, sm),
+		"cycle_module": Rect2(right - big - gap - sm, bottom - sm * 2.0 - gap, sm, sm),
+		"pause_game":   Rect2(right - 78.0 * _u, size.y * 0.18, 78.0 * _u, 68.0 * _u)
+	}
+
+	_move_home = Vector2(left + _r + 8.0 * _u, bottom - _r - 8.0 * _u)
+	_aim_home = Vector2(right - _r - 8.0 * _u, size.y * 0.42)
+
+	_move_zone = Rect2(0.0, size.y * 0.18, size.x * 0.5, size.y * 0.82)
+	_aim_zone = Rect2(
+		size.x * 0.5,
+		size.y * 0.20,
+		size.x * 0.5,
+		size.y * 0.58
+	)
 
 func _input(event: InputEvent) -> void:
 	if not _enabled:
 		return
-	# Touch is also emulated as mouse (needed for menus). Hide that echo from gameplay while a stick owns finger 0.
-	if _swallow_mouse and event is InputEventMouse and event.device == InputEvent.DEVICE_ID_EMULATION:
+	if _swallow_mouse and event is InputEventMouse:
 		if event is InputEventMouseButton and not event.pressed:
 			_swallow_mouse = false
 		get_viewport().set_input_as_handled()
@@ -200,7 +243,6 @@ func _update_stick(which: String, point: Vector2) -> void:
 	var dist := offset.length()
 	if dist > _r:
 		if FOLLOW:
-			# Slide the base so the thumb never runs out of room.
 			base += offset.normalized() * (dist - _r)
 			base = _clamp_base(base)
 			offset = point - base
@@ -212,7 +254,7 @@ func _update_stick(which: String, point: Vector2) -> void:
 		out = offset / dist * ((mag - DEADZONE) / (1.0 - DEADZONE))
 	if which == "move":
 		_move_base = base
-		_move_val = offset / _r      # visual thumb offset
+		_move_val = offset / _r
 		_apply_move(out)
 	else:
 		_aim_base = base
@@ -227,17 +269,33 @@ func _apply_move(v: Vector2) -> void:
 	_send("ui_down", v.y > 0.0, maxf(0.0, v.y))
 
 func _send(action: StringName, pressed: bool, strength: float = 1.0) -> void:
-	# Change-only: no per-frame event spam.
 	if pressed:
 		if _sent.has(action) and absf(float(_sent[action]) - strength) < 0.02:
 			return
 		_sent[action] = strength
 		Input.action_press(action, strength)
+		# action_press does NOT fire _input events. Movement code that polls
+		# is_action_pressed() works, but interact/build/cycle/rotate code that
+		# uses event.is_action_pressed() needs a real InputEventAction.
+		# Skip ui_* actions — those are polled, and injecting them can
+		# double-fire menu focus traversal.
+		if not str(action).begins_with("ui_"):
+			var ev := InputEventAction.new()
+			ev.action = action
+			ev.pressed = true
+			ev.strength = strength
+			get_viewport().push_input(ev)
 	else:
 		if not _sent.has(action):
 			return
 		_sent.erase(action)
 		Input.action_release(action)
+		if not str(action).begins_with("ui_"):
+			var ev := InputEventAction.new()
+			ev.action = action
+			ev.pressed = false
+			ev.strength = 0.0
+			get_viewport().push_input(ev)
 
 func _buzz() -> void:
 	if InputSupport.is_native_mobile():
@@ -277,8 +335,6 @@ func _notification(what: int) -> void:
 func _exit_tree() -> void:
 	_release_all()
 
-# ---------------------------------------------------------------- drawing
-
 func _draw_stick(base: Vector2, val: Vector2, alpha: float, label: String) -> void:
 	var rim := Color(0.5, 0.88, 1.0, 0.55 * alpha)
 	_surface.draw_circle(base, _r, Color(0.02, 0.06, 0.10, 0.40 * alpha))
@@ -296,7 +352,6 @@ func _draw_controls() -> void:
 	if not _enabled:
 		return
 	var font := ThemeDB.fallback_font
-	# Movement: faint home hint while idle, live stick while held.
 	if _move_alpha < 0.99:
 		_draw_stick(_move_home, Vector2.ZERO, 0.35 * (1.0 - _move_alpha), "MOVE")
 	if _move_alpha > 0.01:
@@ -312,6 +367,24 @@ func _draw_controls() -> void:
 		var tint := Color(0.5, 0.88, 1.0, 0.55 if held else 0.24)
 		var fill := Color(0.10, 0.28, 0.38, 0.85) if held else Color(0.03, 0.08, 0.12, 0.65)
 		_surface.draw_style_box(GlassUI.panel(fill, tint, 10, 10), rect)
-		var text := "Place / Use" if action == "interact" else InputSupport.label(action)
-		var width := font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, 16).x
-		_surface.draw_string(font, rect.get_center() + Vector2(-width * 0.5, 6.0), text, HORIZONTAL_ALIGNMENT_LEFT, -1, 16, Color.WHITE)
+		var c := rect.get_center()
+		if action == "pause_game":
+			# Classic pause icon — two vertical bars
+			var bar_w := 9.0 * _u
+			var bar_h := 28.0 * _u
+			var bar_gap := 12.0 * _u
+			var x0 := c.x - bar_gap * 0.5 - bar_w
+			var x1 := c.x + bar_gap * 0.5
+			var y0 := c.y - bar_h * 0.5
+			_surface.draw_rect(Rect2(x0, y0, bar_w, bar_h), Color.WHITE)
+			_surface.draw_rect(Rect2(x1, y0, bar_w, bar_h), Color.WHITE)
+		elif action == "interact":
+			var text := "Place / Use"
+			var fs := 14
+			var width := font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x
+			_surface.draw_string(font, c + Vector2(-width * 0.5, 5.0), text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, Color.WHITE)
+		else:
+			var text := InputSupport.label(action)
+			var fs := 13
+			var width := font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x
+			_surface.draw_string(font, c + Vector2(-width * 0.5, 5.0), text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, Color.WHITE)

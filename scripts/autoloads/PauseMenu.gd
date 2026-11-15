@@ -117,11 +117,16 @@ func open_options() -> void:
 	add_child(options)
 
 func _options_closed() -> void:
+	if not is_inside_tree():
+		return
+	var tree := get_tree()
+	if tree == null:
+		return
 	options = null
 	if opened and not _quitting:
-		menu.show()
-		get_tree().paused = true
-
+		if is_instance_valid(menu):
+			menu.show()
+		tree.paused = true
 func quit_to_menu() -> void:
 	if _quitting:
 		return

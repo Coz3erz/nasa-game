@@ -51,6 +51,10 @@ func _ready() -> void:
 		default_settings["low_detail"] = true
 	settings = default_settings.duplicate(true)
 	load_settings()
+	# Auto-cap FPS on native mobile — uncapped drains battery and triggers
+	# thermal throttling, which paradoxically makes the game stutter MORE.
+	if InputSupport.is_native_mobile() and int(settings.get("max_fps", 0)) == 0:
+		settings["max_fps"] = 60
 	load_player_input_map()
 	apply_settings()
 	get_tree().node_added.connect(_on_node_added)
@@ -136,6 +140,9 @@ func _apply_display() -> void:
 		if DisplayServer.window_get_mode() != target_mode:
 			DisplayServer.window_set_mode(target_mode)
 		DisplayServer.window_set_flag(DisplayServer.WINDOW_FLAG_BORDERLESS, w_mode == "Borderless")
+	else:
+		# Web/mobile: no window control, but FPS cap still applies.
+		Engine.max_fps = int(settings.get("max_fps", 0))
 
 	var msaa_str: String = str(settings.get("msaa", "Off"))
 	var vp := get_viewport()
@@ -147,29 +154,61 @@ func _apply_display() -> void:
 			_: vp.msaa_2d = Viewport.MSAA_DISABLED
 
 func _apply_graphics_and_gameplay() -> void:
-	var particles_on: bool = bool(settings.get("particles", true))
-	var glow_on: bool = bool(settings.get("glow", true))
+	var ld := bool(settings.get("low_detail", false))
+	var particles_on := bool(settings.get("particles", true))
+	var glow_on := bool(settings.get("glow", true))
+	# Low detail hard-overrides the two most expensive visual features.
+	# This is what actually fixes mobile framerate.
+	if ld:
+		glow_on = false
+		particles_on = false
 	var root := get_tree().root
 	if root != null:
 		_apply_recursive(root, particles_on, glow_on)
 
-func _apply_recursive(n: Node, particles_on: bool, glow_on: bool) -> void:
-	if n is CPUParticles2D or n is GPUParticles2D:
-		_apply_particle(n, particles_on)
-	elif n is WorldEnvironment:
-		var we := n as WorldEnvironment
+func _apply_recursive(node: Node, particles_on: bool, glow_on: bool) -> void:
+	# Guard: node may be freed mid-walk (options slider drag → apply_settings
+	# fires many times per second during scene teardown).
+	if node == null:
+		return
+	if not is_instance_valid(node):
+		return
+	if not node.is_inside_tree():
+		return
+
+	# Audio players — apply bus volume from settings, guarded
+	if node is AudioStreamPlayer or node is AudioStreamPlayer2D or node is AudioStreamPlayer3D:
+		var bus_name := ""
+		if node.get("bus") != null:
+			bus_name = str(node.get("bus"))
+		if bus_name == "SFX" or bus_name == "Ambient":
+			var v := float(settings.get("sfx_volume", 100)) / 100.0
+			if node.get("volume_db") != null:
+				node.set("volume_db", linear_to_db(maxf(v, 0.0001)))
+		elif bus_name == "Music":
+			var v := float(settings.get("music_volume", 100)) / 100.0
+			if node.get("volume_db") != null:
+				node.set("volume_db", linear_to_db(maxf(v, 0.0001)))
+
+	# Particles — visibility from the "particles" setting
+	if node is CPUParticles2D or node is GPUParticles2D:
+		_apply_particle(node, particles_on)
+
+	# WorldEnvironment — glow toggle + full zero-out when off
+	if node is WorldEnvironment:
+		var we := node as WorldEnvironment
 		if we.environment != null:
 			we.environment.glow_enabled = glow_on
-	elif n is AudioStreamPlayer or n is AudioStreamPlayer2D or n is AudioStreamPlayer3D:
-		var p := n as AudioStreamPlayer
-		if p.bus == &"Master":
-			var nm := p.name.to_lower()
-			if nm.contains("music") or nm.contains("ambient") or nm.contains("audio_player"):
-				p.bus = &"Music"
-			else:
-				p.bus = &"SFX"
-	for c in n.get_children():
-		_apply_recursive(c, particles_on, glow_on)
+			if not glow_on:
+				we.environment.glow_intensity = 0.0
+				we.environment.glow_bloom = 0.0
+
+	# Recurse — snapshot children so a child freed mid-iteration can't null-deref
+	var children := node.get_children()
+	for i in range(children.size()):
+		var child = children[i]
+		if child != null and is_instance_valid(child):
+			_apply_recursive(child, particles_on, glow_on)
 
 func reset_settings_to_default() -> void:
 	settings = default_settings.duplicate(true)

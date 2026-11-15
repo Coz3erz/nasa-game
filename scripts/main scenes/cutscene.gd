@@ -494,7 +494,6 @@ void fragment() {
 
 	float lum = dot(col, vec3(0.30, 0.59, 0.11));
 	col = mix(col, col * vec3(0.90, 0.97, 1.10), 1.0 - smoothstep(0.0, 0.30, lum));
-	// Cubic grading is defined only on [0,1]; HDR inputs used to invert channels.
 	col = clamp(col, vec3(0.0), vec3(1.0));
 	col = mix(col, col * col * (3.0 - 2.0 * col), 0.30);
 	col *= 1.0 + 0.05 * (breath - 0.5);
@@ -764,7 +763,6 @@ var sol_flash: float = 0.0
 var sol_base_pos: Vector2 = Vector2.ZERO
 
 func _ready() -> void:
-	# Cinematics own their render baseline; gameplay must not leak HDR into replay.
 	get_viewport().use_hdr_2d = false
 	time = 0.0
 	breath = 0.0
@@ -896,6 +894,12 @@ func _build_sol_text() -> void:
 	add_child(skip_label)
 
 func _build_post() -> void:
+	# Skip the entire post-processing pass on low-detail / mobile.
+	# This is the single biggest framerate win in the cutscene.
+	if bool(GameSettings.settings.get("low_detail", false)):
+		post_layer = null
+		post_mat = null
+		return
 	post_layer = ColorRect.new()
 	post_layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	post_layer.color = Color.WHITE
@@ -979,8 +983,9 @@ func _layout() -> void:
 	bg_mat.set_shader_parameter("aspect", aspect)
 	bg_mat.set_shader_parameter("lens_center", Vector2(sun_center.x / view_size.y, sun_center.y / view_size.y))
 	bg_mat.set_shader_parameter("lens_radius", container_size * 0.5 / view_size.y)
-	post_mat.set_shader_parameter("aspect", aspect)
-	post_mat.set_shader_parameter("sun_uv", Vector2(sun_center.x / view_size.x, sun_center.y / view_size.y))
+	if post_mat != null:
+		post_mat.set_shader_parameter("aspect", aspect)
+		post_mat.set_shader_parameter("sun_uv", Vector2(sun_center.x / view_size.x, sun_center.y / view_size.y))
 
 	var r_uv := sunspot_radius / (sun_container_size_ratio * 0.5)
 	var la := _sun_uv_to_lonlat(_screen_to_sun_uv(Vector2(view_size.x * 0.74, view_size.y * 0.30)))
@@ -1148,6 +1153,8 @@ func _update_camera() -> void:
 	world.rotation = sin(time * 0.27) * 0.0025 * camera_shake
 
 func _update_post() -> void:
+	if post_mat == null:
+		return
 	post_mat.set_shader_parameter("time", time)
 	post_mat.set_shader_parameter("breath", breath)
 	post_mat.set_shader_parameter("tension", tension)

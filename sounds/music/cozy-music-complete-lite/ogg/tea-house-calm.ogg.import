@@ -12,7 +12,7 @@ dest_files=["res://.godot/imported/tea-house-calm.ogg-28f77dbef1a38413ae2230b325
 
 [params]
 
-loop=false
+loop=true
 loop_offset=0
 bpm=0
 beat_count=0

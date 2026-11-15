@@ -12,7 +12,7 @@ dest_files=["res://.godot/imported/late-night-study-calm.ogg-6a0f4e0b11df0b83dd7
 
 [params]
 
-loop=false
+loop=true
 loop_offset=0
 bpm=0
 beat_count=0

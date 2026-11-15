@@ -593,18 +593,18 @@ func _build_audio_page() -> void:
 func _build_graphics_page() -> void:
 	current_page = "graphics"
 	entries.clear()
-	if InputSupport.desktop_window_controls():
-		entries.append({"text": _bool_text("VSync", _get_setting("vsync", true)), "action": "toggle", "param": "vsync"})
-	if InputSupport.desktop_window_controls():
-		entries.append(_cycle_entry("Max FPS", "max_fps", [0, 30, 60, 120, 144, 240]))
+	# VSync + FPS — always visible, including web
+	entries.append({"text": _bool_text("VSync", _get_setting("vsync", true)), "action": "toggle", "param": "vsync"})
+	entries.append(_cycle_entry("Max FPS", "max_fps", [0, 30, 60, 120, 144, 240]))
 	entries.append(_cycle_entry("MSAA", "msaa", ["Off", "2x", "4x", "8x"]))
-	if InputSupport.desktop_window_controls():
-		entries.append(_cycle_entry("Window Mode", "window_mode", ["Windowed", "Fullscreen", "Borderless"]))
 	entries.append(_slider_entry("Brightness", "brightness", 20, 200))
+	# Desktop-only: resolution + window mode
+	if InputSupport.desktop_window_controls():
+		entries.append(_cycle_entry("Resolution", "resolution", ["1280x720", "1600x900", "1920x1080", "2560x1440"]))
+		entries.append(_cycle_entry("Window Mode", "window_mode", ["Windowed", "Fullscreen", "Borderless"]))
 	scroll_offset = 0
 	_update_scroll_range()
 	queue_redraw()
-
 func _build_controls_page() -> void:
 	current_page = "controls"
 	entries.clear()
@@ -885,6 +885,10 @@ func _input(event: InputEvent) -> void:
 		else:
 			if event.button_index == MOUSE_BUTTON_LEFT and dragging_slider:
 				dragging_slider = false
+				# Apply the new value once, now that the drag is over.
+				var gs := _gs()
+				if gs != null and gs.has_method("apply_settings"):
+					gs.apply_settings()
 	elif event is InputEventKey and event.pressed:
 		using_mouse = false
 		match event.keycode:
@@ -1032,7 +1036,14 @@ func _handle_mouse_motion(pos: Vector2) -> void:
 	var actual_rect := Rect2(base_rect.position + float_offset, base_rect.size).grow(5)
 	var ratio := clampf((pos.x - actual_rect.position.x) / actual_rect.size.x, 0.0, 1.0)
 	var entry := entries[selected_index]
-	_set_setting(entry.param, int(entry.min + ratio * (entry.max - entry.min)))
+	# Do NOT call _set_setting during a drag — it triggers apply_settings()
+	# 60 times per second, which re-walks the whole scene tree and can hit
+	# freed nodes (GameSettings.gd:165 _apply_recursive crash).
+	# Just update the dict; apply_settings runs once on release.
+	var gs := _gs()
+	if gs != null and "settings" in gs:
+		gs.settings[entry.param] = int(entry.min + ratio * (entry.max - entry.min))
+		gs.dirty = true
 	_rebuild_current_page()
 
 func _get_float_offset_for_entry(index: int) -> Vector2:

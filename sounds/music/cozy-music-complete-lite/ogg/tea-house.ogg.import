@@ -12,7 +12,7 @@ dest_files=["res://.godot/imported/tea-house.ogg-59b01291e4ed7310a99ea8c8f7f923c
 
 [params]
 
-loop=false
+loop=true
 loop_offset=0
 bpm=0
 beat_count=0

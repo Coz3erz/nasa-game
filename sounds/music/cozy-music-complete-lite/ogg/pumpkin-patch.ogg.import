@@ -12,7 +12,7 @@ dest_files=["res://.godot/imported/pumpkin-patch.ogg-3f7ff5c9fef746f4bf4ce9e72ec
 
 [params]
 
-loop=false
+loop=true
 loop_offset=0
 bpm=0
 beat_count=0

@@ -31,7 +31,7 @@ var running: bool = false
 var ended: bool = false
 var _leaving := false
 
-var font: SystemFont
+var font
 var panel: PanelContainer
 var day_lbl: Label
 var time_lbl: Label

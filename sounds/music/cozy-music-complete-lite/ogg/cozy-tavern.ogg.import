@@ -12,7 +12,7 @@ dest_files=["res://.godot/imported/cozy-tavern.ogg-36cb8deb07ecf247d82851f5765b0
 
 [params]
 
-loop=false
+loop=true
 loop_offset=0
 bpm=0
 beat_count=0

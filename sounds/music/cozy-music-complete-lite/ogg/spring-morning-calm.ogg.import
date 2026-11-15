@@ -12,7 +12,7 @@ dest_files=["res://.godot/imported/spring-morning-calm.ogg-588c91dd56905fa8bd65a
 
 [params]
 
-loop=false
+loop=true
 loop_offset=0
 bpm=0
 beat_count=0

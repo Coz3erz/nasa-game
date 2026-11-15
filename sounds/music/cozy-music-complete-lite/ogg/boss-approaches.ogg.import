@@ -12,7 +12,7 @@ dest_files=["res://.godot/imported/boss-approaches.ogg-1bf0bf6465bfa9e4005e422d2
 
 [params]
 
-loop=false
+loop=true
 loop_offset=0
 bpm=0
 beat_count=0

@@ -12,7 +12,7 @@ dest_files=["res://.godot/imported/pixel-meadow-calm.ogg-ccd618d7ce018b27c270dcc
 
 [params]
 
-loop=false
+loop=true
 loop_offset=0
 bpm=0
 beat_count=0
