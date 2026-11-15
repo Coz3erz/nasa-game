@@ -83,6 +83,8 @@ extends Control
 @export_group("Scene")
 @export_file("*.tscn") var next_scene: String = "res://scenes/main scenes/crash.tscn"
 
+const FONT_PATH := "res://resources/fonts/Monospace.ttf"
+
 const BG_SHADER := """
 shader_type canvas_item;
 uniform float time = 0.0;
@@ -777,9 +779,10 @@ func _ready() -> void:
 	rng.randomize()
 
 	set_meta("no_polish", true)
-	var _courier := SystemFont.new()
-	_courier.font_names = PackedStringArray(["Courier New", "monospace"])
-	font = _courier
+	font = load(FONT_PATH)
+	if font == null:
+		push_warning("cutscene: failed to load " + FONT_PATH + ", using fallback")
+		font = ThemeDB.fallback_font
 
 	world = Control.new()
 	world.mouse_filter = Control.MOUSE_FILTER_IGNORE

@@ -262,9 +262,10 @@ func _ready() -> void:
 	_gs()
 
 	set_meta("no_polish", true)
-	font = SystemFont.new()
-	font.font_names = PackedStringArray(["Courier New", "monospace"])
-
+	font = load("res://resources/fonts/Monospace.ttf")
+	if font == null:
+		push_warning("options: failed to load font, using fallback")
+		font = ThemeDB.fallback_font
 	_create_background_layer()
 	_create_glow_layer()
 

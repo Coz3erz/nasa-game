@@ -1,4 +1,5 @@
 # CHANGELOG (2026-11-15): Pause the survival clock with gameplay; persistent death/reload fade prevents default-grey flash; honest day text.
+# Combined with original SystemFont (Courier New) for consistency with options.gd restore.
 extends CanvasLayer
 class_name DayLoop
 
@@ -30,7 +31,7 @@ var running: bool = false
 var ended: bool = false
 var _leaving := false
 
-var font: Font
+var font: SystemFont
 var panel: PanelContainer
 var day_lbl: Label
 var time_lbl: Label
@@ -41,7 +42,9 @@ var _t: float = 0.0
 func _ready() -> void:
 	layer = 30
 	process_mode = Node.PROCESS_MODE_PAUSABLE
-	font = GameFont.get_font()
+	font = load("res://resources/fonts/Monospace.ttf")
+	if font == null:
+		font = ThemeDB.fallback_font
 	_cover = ColorRect.new()
 	_cover.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_cover.color = Color.BLACK

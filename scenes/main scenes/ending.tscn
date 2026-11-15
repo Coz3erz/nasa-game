@@ -1,0 +1,20 @@
+[gd_scene format=3 uid="uid://43bvj7y0jh8b"]
+
+[ext_resource type="Script" uid="uid://buxi6lo72ehb3" path="res://scripts/main scenes/ending.gd" id="1"]
+[ext_resource type="AudioStream" uid="uid://druwnf3l0duu7" path="res://sounds/cutscene/cutscene.wav" id="2_cyoc8"]
+[ext_resource type="AudioStream" uid="uid://08n8kgkq3efk" path="res://sounds/cutscene/key_type.mp3" id="3_8n8ti"]
+[ext_resource type="AudioStream" uid="uid://cf74ldrurmce7" path="res://sounds/sfx/dragon-studio-epic-whoosh.mp3" id="4_jq1yu"]
+[ext_resource type="AudioStream" uid="uid://bunm2ru55fyo5" path="res://sounds/sfx/dragon-studio-whoosh-cinematic-sound-effect.mp3" id="4_v3i17"]
+
+[node name="Ending" type="Control" unique_id=806101267]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1")
+ambient_audio = ExtResource("2_cyoc8")
+typing_sfx = ExtResource("3_8n8ti")
+title_sfx = ExtResource("4_jq1yu")
+ship_sfx = ExtResource("4_v3i17")

@@ -20,6 +20,8 @@ extends Control
 @export var line_pause: float = 0.55
 @export var terminal_color: Color = Color(0.42, 1.0, 0.55)
 
+const FONT_PATH := "res://resources/fonts/Monospace.ttf"
+
 var log_lines: Array[String] = [
 	">> [FLIGHT_RECORDER // ARES_LANDER_04 // LOG_DUMP_884.LOG]",
 	">> [00:00:02.14] CRITICAL ALERT: X-CLASS SOLAR FLARE IMPACT",
@@ -66,9 +68,10 @@ func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 
 	set_meta("no_polish", true)
-	var _courier := SystemFont.new()
-	_courier.font_names = PackedStringArray(["Courier New", "monospace"])
-	font = _courier
+	font = load(FONT_PATH)
+	if font == null:
+		push_warning("crash: failed to load " + FONT_PATH + ", using fallback")
+		font = ThemeDB.fallback_font
 
 	bg_rect = ColorRect.new()
 	bg_rect.color = Color.BLACK
