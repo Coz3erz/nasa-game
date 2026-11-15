@@ -1,3 +1,4 @@
+# CHANGELOG (2026-11-15): Use transformed collision/art centre for build exclusion, interaction and tutorial spotlight.
 extends StaticBody2D
 class_name BaseModule
 
@@ -51,7 +52,7 @@ func _ready() -> void:
 func get_center() -> Vector2:
 	var col := get_node_or_null("CollisionShape2D") as CollisionShape2D
 	if col != null:
-		return global_position + col.position
+		return to_global(col.position)
 	return global_position
 
 func get_half_size() -> Vector2:
@@ -294,7 +295,7 @@ func _tick_sparks(delta: float) -> void:
 	get_parent().add_child(p)
 	p.global_position = pos
 	p.emitting = true
-	get_tree().create_timer(1.4).timeout.connect(p.queue_free)
+	SceneDelay.timer(self, 1.4).timeout.connect(p.queue_free)
 
 ## Progress bar above a broken module (fills while you hold E).
 class RepairBar extends Node2D:

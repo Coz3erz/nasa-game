@@ -1,4 +1,4 @@
-
+# CHANGELOG (2026-11-15): Register every shop view for contextual hint suppression and stop title music on gameplay entry.
 extends Node2D
 
 @export_group("Music & Audio")
@@ -493,7 +493,24 @@ void fragment() {
 }
 """
 
+	var _nasa_fact: Label
+
+	func _update_nasa_fact() -> void:
+		if is_instance_valid(_nasa_fact):
+			_nasa_fact.text = MarsWeather.status_text
+
 	func _ready() -> void:
+		add_to_group("shop_ui")
+		_nasa_fact = Label.new()
+		_nasa_fact.name = "NASAFact"
+		_nasa_fact.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_nasa_fact.add_theme_font_override("font", GameFont.get_font())
+		_nasa_fact.add_theme_font_size_override("font_size", 12)
+		_nasa_fact.add_theme_color_override("font_color", Color(0.4, 0.9, 1.0))
+		_nasa_fact.text = MarsWeather.status_text
+		_nasa_fact.position = Vector2(24, 4)
+		add_child(_nasa_fact)
+		MarsWeather.updated.connect(_update_nasa_fact)
 		set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 		mouse_filter = Control.MOUSE_FILTER_STOP
 		focus_mode = Control.FOCUS_ALL
@@ -1071,6 +1088,7 @@ func _apply_transition_sfx() -> void:
 		tm.sfx_open = shutter_open_sfx
 
 func _ready() -> void:
+	GameAudio.set_menu_music(false)
 	GameManager.total_days = total_days
 	GameManager.day_length = day_length
 	day_loop = DayLoop.new()
@@ -1269,7 +1287,7 @@ func _transition_player_to_mars() -> void:
 	var w_tw := create_tween()
 	w_tw.tween_property(wind_player, "volume_db", wind_volume_db, 1.0)
 
-	await get_tree().create_timer(0.2).timeout
+	await SceneDelay.timer(self, 0.2, false).timeout
 	_ignore_mars_trigger = false
 
 	if trans != null:
@@ -1300,7 +1318,7 @@ func _transition_player_inside() -> void:
 	var w_tw := create_tween()
 	w_tw.tween_property(wind_player, "volume_db", -60.0, 0.8)
 
-	await get_tree().create_timer(0.2).timeout
+	await SceneDelay.timer(self, 0.2, false).timeout
 	_ignore_outside_trigger = false
 
 	if trans != null:
@@ -1360,7 +1378,7 @@ func _play_rover_turn_animation() -> void:
 		var tw := create_tween()
 		tw.tween_property(rover, "scale", Vector2(base_scale.x * 1.04, base_scale.y * 0.96), 0.05)
 		tw.tween_property(rover, "scale", base_scale, 0.06)
-		await get_tree().create_timer(0.11).timeout
+		await SceneDelay.timer(self, 0.11, false).timeout
 
 func _start_rover_transition() -> void:
 	GameManager.current_phase = GameManager.Phase.ROVER
@@ -1405,7 +1423,7 @@ func _start_rover_transition() -> void:
 		rover.global_position = rover_start_pos
 		_set_rover_frame(0)
 
-	await get_tree().create_timer(0.15).timeout
+	await SceneDelay.timer(self, 0.15, false).timeout
 	_ignore_mars_trigger = false
 
 	if trans != null:
@@ -1425,7 +1443,7 @@ func _start_rover_transition() -> void:
 	if not has_supplies:
 		GameManager.deliver_pending_supplies()
 
-	await get_tree().create_timer(0.25).timeout
+	await SceneDelay.timer(self, 0.25, false).timeout
 
 	await _play_rover_turn_animation()
 

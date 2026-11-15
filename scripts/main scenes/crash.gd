@@ -1,4 +1,4 @@
-
+# CHANGELOG (2026-11-15): Transfer selection focus on mouse hover so tutorial choice never has independent stale keyboard selection.
 extends Control
 
 @export_group("Scene Transition")
@@ -23,7 +23,6 @@ extends Control
 var log_lines: Array[String] = [
 	">> [FLIGHT_RECORDER // ARES_LANDER_04 // LOG_DUMP_884.LOG]",
 	">> [00:00:02.14] CRITICAL ALERT: X-CLASS SOLAR FLARE IMPACT",
-	">> [00:00:03.89] AVIONICS FAILURE... GUIDANCE OFFLINE... HULL BREACH",
 	">> [00:00:08.41] HARD IMPACT DETECTED // ELEVATION: -7,152m",
 	"",
 	"THE SOLAR FLARE KNOCKED OUT YOUR SHIP AND YOU CRASHED IN HELLAS PLANITIA,",
@@ -146,6 +145,8 @@ func _on_viewport_resized() -> void:
 		skip_warn_label.position = vp_size - skip_warn_label.size - Vector2(36, 28)
 
 func _input(event: InputEvent) -> void:
+	if event is InputEventKey and event.keycode == KEY_F11:
+		return
 	if transitioning_out or choosing or skip_cooldown > 0.0:
 		return
 	var pressed: bool = false
@@ -249,7 +250,7 @@ func _run_crash_sequence() -> void:
 	var tw := create_tween()
 	tw.tween_property(flash_rect, "color:a", 0.0, 1.4)
 
-	await get_tree().create_timer(1.4).timeout
+	await SceneDelay.timer(self, 1.4).timeout
 	if not is_inside_tree() or transitioning_out:
 		return
 
@@ -262,7 +263,7 @@ func _run_crash_sequence() -> void:
 		var line: String = log_lines[line_idx]
 		if line == "":
 			full_displayed_text += "\n"
-			await get_tree().create_timer(line_pause * 0.6).timeout
+			await SceneDelay.timer(self, line_pause * 0.6).timeout
 			continue
 		for i in range(line.length()):
 			if skip_requested or transitioning_out or not is_inside_tree():
@@ -272,7 +273,7 @@ func _run_crash_sequence() -> void:
 			if ch != " ":
 				typing_player.pitch_scale = randf_range(0.92, 1.12)
 				typing_player.play()
-			await get_tree().create_timer(char_delay).timeout
+			await SceneDelay.timer(self, char_delay).timeout
 		if skip_requested:
 			break
 		full_displayed_text += "\n"
@@ -281,7 +282,7 @@ func _run_crash_sequence() -> void:
 			crash_player.volume_db = crash_volume_db - 4.0
 			crash_player.play()
 			shake_strength = 14.0
-		await get_tree().create_timer(line_pause).timeout
+		await SceneDelay.timer(self, line_pause).timeout
 	if transitioning_out or not is_inside_tree():
 		return
 	if skip_requested:
@@ -291,6 +292,9 @@ func _run_crash_sequence() -> void:
 	_show_choice()
 
 func _show_choice() -> void:
+	if choosing or transitioning_out:
+		return
+	full_displayed_text += ""
 	choosing = true
 	choice_box = HBoxContainer.new()
 	choice_box.add_theme_constant_override("separation", 22)
@@ -307,6 +311,8 @@ func _show_choice() -> void:
 	choice_hint.add_theme_color_override("font_color", Color(0.5, 0.75, 0.7))
 	add_child(choice_hint)
 	_layout_choice()
+	yes.mouse_entered.connect(yes.grab_focus)
+	no.mouse_entered.connect(no.grab_focus)
 	yes.grab_focus()
 
 func _choice_button(text: String) -> Button:

@@ -1,3 +1,4 @@
+# CHANGELOG (2026-11-15): Commit visual endpoints before callbacks; atomic graph-safe disconnect and plug feedback.
 extends Node2D
 
 @export var rope_segments: int = 24
@@ -120,6 +121,8 @@ func setup(start_pos: Vector2, custom_color: Color = Color(0.85, 0.15, 0.15), or
 		old_rope_points.append(start_pos)
 
 func pick_up(player_pos: Vector2) -> void:
+	if is_plugged:
+		disconnect_wire(player_pos)
 	is_held = true
 	is_plugged = false
 	is_dropped = false
@@ -130,6 +133,9 @@ func pick_up(player_pos: Vector2) -> void:
 		wire.default_color = wire_color
 
 func drop(drop_pos: Vector2) -> void:
+	if is_plugged:
+		disconnect_wire(drop_pos)
+		return
 	is_held = false
 	is_plugged = false
 	is_dropped = true
@@ -158,7 +164,12 @@ func plug_in(receiver_node: Node2D) -> void:
 		hand_pos = receiver_node.global_position
 	if wire != null:
 		wire.default_color = wire_color
+	if not rope_points.is_empty():
+		rope_points[rope_segments] = hand_pos
+		old_rope_points[rope_segments] = hand_pos
+	queue_redraw()
 	if not already_connected:
+		GameAudio.play_plug()
 		EventBus.wire_connected.emit(self, receiver_node)
 
 func get_total_rope_length() -> float:
@@ -319,3 +330,18 @@ func _draw() -> void:
 	draw_style_box(plug_body_style, Rect2(-9, -8, 18, 16))
 	draw_line(Vector2(-3, -4), Vector2(-3, 4), wire_color, 3.0, true)
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+
+func disconnect_wire(drop_pos: Vector2) -> void:
+	var receiver := plugged_receiver
+	var was_plugged := is_plugged
+	is_plugged = false
+	is_held = false
+	is_dropped = true
+	plugged_receiver = null
+	target_module = null
+	hand_pos = drop_pos
+	if is_instance_valid(receiver) and receiver.has_method("remove_wire"):
+		receiver.remove_wire(self)
+	if was_plugged:
+		GameAudio.play_unplug()
+	queue_redraw()

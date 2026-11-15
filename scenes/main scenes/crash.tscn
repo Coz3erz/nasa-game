@@ -1,3 +1,4 @@
+; CHANGELOG (2026-11-15): Portable path target replaces missing UID-only scene reference.
 [gd_scene format=3 uid="uid://ddpefoc34vlx3"]
 
 [ext_resource type="Script" uid="uid://bubcbpsj7c88y" path="res://scripts/main scenes/crash.gd" id="1_8c4bi"]
@@ -12,7 +13,7 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 script = ExtResource("1_8c4bi")
-target_scene = "uid://65xbkmaftctv"
+target_scene = "res://scenes/main scenes/game.tscn"
 start_delay = 1.2
 crash_sfx = ExtResource("2_r14ux")
 typing_sfx = ExtResource("3_hr3i7")

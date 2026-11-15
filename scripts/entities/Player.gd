@@ -1,4 +1,4 @@
-
+# CHANGELOG (2026-11-15): Fix synchronous tutorial plug race; hide ghost ports, player preview ring and inapplicable hints; use shared reactor centre.
 extends CharacterBody2D
 ## PLAYER
 ##   SPACE           toggle build mode (you can still walk around in it)
@@ -175,7 +175,8 @@ func set_input_locked(locked: bool) -> void:
 		if is_build_mode:
 			_exit_build_mode()
 		if current_wire != null and is_instance_valid(current_wire):
-			current_wire.drop(global_position)
+			if not current_wire.is_plugged:
+				current_wire.drop(global_position)
 			current_wire = null
 		_update_animation(Vector2.ZERO)
 
@@ -303,7 +304,8 @@ func _physics_process(delta: float) -> void:
 	if current_wire != null and is_instance_valid(current_wire) and current_wire.has_method("apply_tension_to_player"):
 		var did_snap: bool = current_wire.apply_tension_to_player(self, delta)
 		if did_snap:
-			current_wire.drop(global_position)
+			if not current_wire.is_plugged:
+				current_wire.drop(global_position)
 			current_wire = null
 			_pop(-0.18)
 			shake(0.25)
@@ -554,6 +556,10 @@ func _spawn_ghost() -> void:
 
 ## The preview must not collide, be interactable, or be treated as a wire target.
 func _neutralize_ghost(n: Node) -> void:
+	if n is WirePort or (n is CanvasItem and (n.has_method("can_spawn_wire") or n.has_method("get_receiver_position"))):
+		n.visible = false
+		n.set_process(false)
+		n.set_process_input(false)
 	if n is CollisionObject2D:
 		(n as CollisionObject2D).collision_layer = 0
 		(n as CollisionObject2D).collision_mask = 0
@@ -638,7 +644,10 @@ func _reactor_node() -> BaseModule:
 	return null
 
 func _exit_rect() -> Rect2:
-	var area := get_tree().current_scene.find_child("outside", true, false) as Area2D
+	var scene := get_tree().current_scene
+	if scene == null:
+		return Rect2()
+	var area := scene.find_child("outside", true, false) as Area2D
 	if area == null:
 		return Rect2()
 	var cs := area.get_node_or_null("CollisionShape2D") as CollisionShape2D
@@ -825,9 +834,12 @@ func _try_interact() -> void:
 			shake(0.15)
 			return
 		if receiver != null:
-			receiver.accept_wire(current_wire)
-			current_wire.plug_in(receiver)
-			current_wire = null
+			var connecting := current_wire
+			current_wire = null # release ownership before tutorial callbacks lock input
+			receiver.accept_wire(connecting)
+			if not connecting.is_plugged:
+				current_wire = connecting
+				return
 			var rp: Vector2 = receiver.get_receiver_position() if receiver.has_method("get_receiver_position") else receiver.global_position
 			Fx.burst(get_parent(), rp, Color(1.2, 3.0, 3.6, 1.0), 14, 40.0, 140.0, 0.45, 0.04, 0.09, true)
 			Ring.spawn(get_parent(), rp, Color(0.4, 1.3, 1.6), 44.0, 0.35)
@@ -838,7 +850,8 @@ func _try_interact() -> void:
 			if refusing != null:
 				_deny_wire(refusing)
 				return
-			current_wire.drop(global_position)
+			if not current_wire.is_plugged:
+				current_wire.drop(global_position)
 			current_wire = null
 			_pop(0.08)
 		return
@@ -1068,6 +1081,10 @@ func _compute_hint_rows() -> Array:
 	return rows
 
 func _update_hints() -> void:
+	if _hint_panel != null and (not is_active or input_locked or get_tree().get_nodes_in_group("shop_ui").any(func(n): return n.is_visible_in_tree())):
+		_hint_panel.hide()
+		_hint_marks.clear()
+		return
 	if not is_active:
 		return
 	_hint_marks.clear()
@@ -1105,7 +1122,9 @@ func _update_hints() -> void:
 						if src != null:
 							_hint_kind = "grab"
 							_hint_marks.append({"pos": src.global_position, "col": C_CYAN, "text": "E  grab wire"})
-	_set_hint_rows(_compute_hint_rows())
+	var show_build := _has_buildables() and not is_outside and not input_locked and (GameManager.current_phase in [GameManager.Phase.BUILD, GameManager.Phase.SURVIVE])
+	_hint_panel.visible = show_build
+	_set_hint_rows([["SPACE", "build"]] if show_build else [])
 
 ## Drawn by the Hints node (world space, always on top): the build circle in build mode.
 func _overlay_draw(c: Node2D) -> void:
@@ -1122,7 +1141,7 @@ func _overlay_draw(c: Node2D) -> void:
 		var eg := ex.grow(exit_block_margin)
 		c.draw_rect(eg, Color(1.0, 0.3, 0.25, 0.07))
 		c.draw_rect(eg, Color(1.0, 0.35, 0.3, 0.55 + 0.2 * pulse), false, 3.0)
-	c.draw_arc(global_position, _ghost_reach(), 0.0, TAU, 96, Color(1, 1, 1, 0.12 + 0.06 * pulse), 2.0, true)
+	# No player-centred preview circle.
 	var ctr := _ghost_origin + _ghost_center_off
 	c.draw_circle(ctr, _ghost_zone, Color(col.r, col.g, col.b, 0.05))
 	var n := 40
@@ -1210,7 +1229,7 @@ class Fx:
 		parent.add_child(p)
 		p.global_position = pos
 		p.emitting = true
-		parent.get_tree().create_timer(life + 0.4).timeout.connect(p.queue_free)
+		SceneDelay.timer(p, life + 0.4).timeout.connect(p.queue_free)
 
 class Ring extends Node2D:
 	var r := 4.0

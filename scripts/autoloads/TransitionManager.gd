@@ -1,13 +1,17 @@
+# CHANGELOG (2026-11-15): Persistent blackout across reloads; serialize scene changes; cancel competing fade tweens safely.
 extends CanvasLayer
 ## Plain fade (used by the cutscene - unchanged) + a new SHUTTER wipe used by day/shop/survival.
 
 var overlay: ColorRect
 var transitioning: bool = false
+var _fade_tween: Tween
+var _fade_generation := 0
 
 var shutter: ColorRect
 var shutter_progress: float = 0.0
 var _shutter_mat: ShaderMaterial
 var _shutter_tween: Tween
+var _shutter_generation := 0
 
 ## set by game.gd from its "Transition SFX" exports
 var sfx_close: AudioStream
@@ -47,7 +51,7 @@ void fragment() {
 """
 
 func _ready() -> void:
-	layer = 100
+	layer = 200
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	overlay = ColorRect.new()
 	overlay.color = Color.BLACK
@@ -67,35 +71,58 @@ func _ready() -> void:
 	shutter.material = _shutter_mat
 	add_child(shutter)
 
-func fade_to_black(duration: float = 0.8) -> void:
+func _fade(alpha: float, duration: float) -> void:
+	_fade_generation += 1
+	var generation := _fade_generation
+	if is_instance_valid(_fade_tween):
+		_fade_tween.kill()
 	overlay.mouse_filter = Control.MOUSE_FILTER_STOP
-	var tw := create_tween()
-	tw.tween_property(overlay, "modulate:a", 1.0, duration)
-	await tw.finished
+	_fade_tween = create_tween().set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
+	_fade_tween.tween_property(overlay, "modulate:a", alpha, maxf(duration, 0.001))
+	# Do not await a killable tween's finished signal: killed tweens never emit it.
+	while generation == _fade_generation and _fade_tween.is_running():
+		await get_tree().process_frame
+	if generation == _fade_generation and alpha <= 0.0:
+		overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
-func fade_from_black(duration: float = 0.8) -> void:
-	var tw := create_tween()
-	tw.tween_property(overlay, "modulate:a", 0.0, duration)
-	await tw.finished
-	overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
+func fade_to_black(duration: float = 0.5) -> void:
+	await _fade(1.0, duration)
 
-func change_scene(path: String, duration: float = 0.8) -> void:
+func fade_from_black(duration: float = 0.5) -> void:
+	if transitioning:
+		return # scene-ready callbacks must not reveal a half-loaded scene
+	await _fade(0.0, duration)
+
+func change_scene(path: String, duration: float = 0.5) -> void:
 	if transitioning:
 		return
+	if not ResourceLoader.exists(path):
+		push_error("Scene does not exist: " + path)
+		return
 	transitioning = true
-	await fade_to_black(duration)
-	get_tree().change_scene_to_file(path)
-	await get_tree().process_frame
-	await fade_from_black(duration)
+	get_tree().paused = false
+	await _fade(1.0, duration)
+	await SceneDelay.timer(self, 0.2).timeout
+	_set_shutter(0.0)
+	var err := get_tree().change_scene_to_file(path)
+	if err != OK:
+		push_error("Scene load failed: " + path)
+	else:
+		await get_tree().scene_changed
+		await get_tree().process_frame
+		await get_tree().process_frame
+	await _fade(0.0, duration)
 	transitioning = false
 
-# ───────────────────────────── shutter wipe ─────────────────────────────
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ shutter wipe â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 func _set_shutter(v: float) -> void:
 	shutter_progress = v
 	shutter.visible = v > 0.0
 	_shutter_mat.set_shader_parameter("progress", v)
 
 func _run_shutter(to: float, duration: float, color: Color) -> void:
+	_shutter_generation += 1
+	var generation := _shutter_generation
 	_shutter_mat.set_shader_parameter("edge_color", color)
 	if _shutter_tween != null and _shutter_tween.is_valid():
 		_shutter_tween.kill()
@@ -103,8 +130,9 @@ func _run_shutter(to: float, duration: float, color: Color) -> void:
 	_play(sfx_close if to >= 1.0 else sfx_open)
 	_shutter_tween = create_tween()
 	_shutter_tween.tween_method(_set_shutter, shutter_progress, to, duration).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
-	await _shutter_tween.finished
-	if to <= 0.0:
+	while generation == _shutter_generation and _shutter_tween.is_running():
+		await get_tree().process_frame
+	if generation == _shutter_generation and to <= 0.0:
 		shutter.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
 ## Blinds slam shut with a glowing edge.

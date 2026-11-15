@@ -1,3 +1,4 @@
+# CHANGELOG (2026-11-15): Route disconnects through atomic endpoint cleanup, including direct receiver removals.
 @tool
 extends StaticBody2D
 class_name WireReceiver
@@ -133,6 +134,14 @@ func can_accept_wire(wire_node: Node2D = null) -> bool:
 	return accepts_wire(wire_node)
 
 func accept_wire(wire_node: Node2D) -> void:
+	if not is_instance_valid(wire_node):
+		return
+	if wire_node.is_plugged and wire_node.plugged_receiver == self:
+		return
+	if not can_accept_wire(wire_node):
+		return
+	if wire_node.is_plugged:
+		wire_node.disconnect_wire(wire_node.hand_pos)
 	_clean_wires()
 	if target_module == null and get_parent() is BaseModule:
 		target_module = get_parent() as BaseModule
@@ -141,9 +150,13 @@ func accept_wire(wire_node: Node2D) -> void:
 	connected_wire = wire_node
 	if target_module != null:
 		target_module.accept_wire(wire_node)
+	wire_node.plug_in(self) # emits only after both logical endpoints are committed
 	queue_redraw()
 
 func remove_wire(wire_node: Node2D) -> void:
+	if is_instance_valid(wire_node) and wire_node.is_plugged and wire_node.plugged_receiver == self:
+		wire_node.disconnect_wire(get_receiver_position())
+		return
 	connected_wires.erase(wire_node)
 	_clean_wires()
 	if target_module != null:

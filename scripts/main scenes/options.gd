@@ -1,4 +1,3 @@
-
 extends Control
 
 @export_category("Terminal Style")
@@ -167,8 +166,8 @@ void fragment() {
 """
 
 var font: Font
-var font_size: int = 38
-var line_height: int = 48
+var font_size: int = 40
+var line_height: int = 50
 var padding: float = 30.0
 
 var section_names: Array[String] = ["GAMEPLAY", "AUDIO", "GRAPHICS", "CONTROLS"]
@@ -261,9 +260,8 @@ func _ready() -> void:
 	_gs()
 
 	set_meta("no_polish", true)
-	var _courier := SystemFont.new()
-	_courier.font_names = PackedStringArray(["Courier New", "monospace"])
-	font = _courier
+	font = SystemFont.new()
+	font.font_names = PackedStringArray(["Courier New", "monospace"])
 
 	_create_background_layer()
 	_create_glow_layer()
@@ -313,8 +311,8 @@ func _process(delta: float) -> void:
 func _on_resized() -> void:
 	var vs := get_viewport_rect().size
 	var base := minf(vs.x, vs.y)
-	font_size = clampi(int(base * 0.045), 24, 44)
-	line_height = int(font_size * 1.32)
+	font_size = clampi(int(base * 0.05), 28, 48)
+	line_height = int(font_size * 1.3)
 	padding = font_size
 
 	var top_area := padding + line_height * 2
@@ -348,7 +346,7 @@ func _draw() -> void:
 	for i in range(num_sections):
 		var section_text := section_names[i]
 		if i == selected_section:
-			section_text = "âœ¦ [ " + section_text + " ] âœ¦"
+			section_text = "[ " + section_text + " ]"
 		else:
 			section_text = "  " + section_text + "  "
 		var col := highlight_color if i == selected_section else text_color
@@ -439,14 +437,14 @@ func _wrap_text(text: String, max_width: float) -> Array[String]:
 
 func _draw_bottom_actions() -> void:
 	var bottom_y := size.y - line_height * 2
-	var gap := font_size * 4.5
+	var gap := font_size * 5
 	var x := padding
 
 	for i in range(bottom_actions.size()):
 		var action_text := bottom_actions[i]
 		var is_selected := focus_on_bottom and i == selected_bottom_index
 
-		var display_text := ("âœ¦ > " if is_selected else "    ") + action_text
+		var display_text := ("> " if is_selected else "  ") + action_text
 		var drawn_text := display_text
 		if animate_reveal:
 			var visible_chars := int(reveal * display_text.length())
@@ -569,9 +567,6 @@ func _build_gameplay_page() -> void:
 	current_page = "gameplay"
 	entries.clear()
 	entries.append({"text": _bool_text("Particles", _get_setting("particles", true)), "action": "toggle", "param": "particles"})
-	entries.append({"text": _bool_text("Glow", _get_setting("glow", true)), "action": "toggle", "param": "glow"})
-	entries.append({"text": _bool_text("Screen Shake", _get_setting("screen_shake", true)), "action": "toggle", "param": "screen_shake"})
-	entries.append({"text": _bool_text("Low Detail Mode", _get_setting("low_detail", false)), "action": "toggle", "param": "low_detail"})
 	scroll_offset = 0
 	_update_scroll_range()
 	queue_redraw()
@@ -714,7 +709,7 @@ func _open_section(idx: int) -> void:
 
 func _get_entry_layout(i: int, line_y: float) -> Dictionary:
 	var is_active := (i == selected_index and not focus_on_sections and not focus_on_bottom)
-	var prefix := "âœ¦ > " if is_active else "    "
+	var prefix := "> " if is_active else "  "
 	var full_text: String = prefix + entries[i].text
 	var layout := {
 		"y": line_y,
@@ -764,7 +759,7 @@ func _section_index_from_pos(pos: Vector2) -> int:
 	for i in range(num_sections):
 		var section_text := section_names[i]
 		if i == selected_section:
-			section_text = "âœ¦ [ " + section_text + " ] âœ¦"
+			section_text = "[ " + section_text + " ]"
 		else:
 			section_text = "  " + section_text + "  "
 		var text_width := font.get_string_size(section_text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x
@@ -777,9 +772,9 @@ func _bottom_action_index(pos: Vector2) -> int:
 	if pos.y < size.y - line_height * 2 or pos.y >= size.y - line_height:
 		return -1
 	var x := padding
-	var gap := font_size * 4.5
+	var gap := font_size * 5
 	for i in range(bottom_actions.size()):
-		var display_text := ("âœ¦ > " if focus_on_bottom and i == selected_bottom_index else "    ") + bottom_actions[i]
+		var display_text := ("> " if focus_on_bottom and i == selected_bottom_index else "  ") + bottom_actions[i]
 		var width := font.get_string_size(display_text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x
 		var segment_width := width + gap
 		if pos.x >= x and pos.x < x + segment_width:
@@ -788,6 +783,8 @@ func _bottom_action_index(pos: Vector2) -> int:
 	return -1
 
 func _input(event: InputEvent) -> void:
+	if event is InputEventKey and event.keycode == KEY_F11:
+		return # reserved global shortcut, never bind it as a gameplay key
 	if confirming_exit:
 		_input_confirm(event)
 		return
@@ -1241,13 +1238,10 @@ func _save_all() -> void:
 	_rebuild_current_page()
 
 func _exit_to_main_menu() -> void:
-	var sm := get_node_or_null("/root/SceneManager")
-	if sm and sm.has_method("return_to_previous_scene"):
-		sm.return_to_previous_scene()
-	elif get_parent() != null and get_parent() != get_tree().root:
+	if has_meta("embedded_options") or (get_parent() != null and get_parent() != get_tree().root and get_tree().current_scene != self):
 		queue_free()
 	else:
-		get_tree().change_scene_to_file("res://scenes/main scenes/cutscene.tscn")
+		Transition.change_scene("res://scenes/main scenes/main_menu.tscn")
 
 func _get_custom_actions() -> Array[String]:
 	var result: Array[String] = []
@@ -1257,13 +1251,13 @@ func _get_custom_actions() -> Array[String]:
 	return result
 
 func _bool_text(label: String, value: bool) -> String:
-	return "%s: [%s]" % [label, "ONLINE" if value else "OFFLINE"]
+	return "%s: [%s]" % [label, "X" if value else " "]
 
 func _slider_entry(label: String, key: String, min_val: float, max_val: float) -> Dictionary:
 	var value := int(_get_setting(key, min_val))
 	var bar_str := _slider_bar(value, min_val, max_val)
 	return {
-		"text": "%s: [%s] %d%%" % [label, bar_str, value],
+		"text": "%s: [%s] %d" % [label, bar_str, value],
 		"action": "adjust",
 		"param": key,
 		"min": min_val,
@@ -1277,7 +1271,7 @@ func _cycle_entry(label: String, key: String, options: Array) -> Dictionary:
 	var display := "Uncapped" if key == "max_fps" and int(current) == 0 else str(current)
 	return {"text": "%s: < %s >" % [label, display], "action": "cycle", "param": key, "options": options}
 
-func _slider_bar(value: float, min_val: float, max_val: float, width: int = 18) -> String:
+func _slider_bar(value: float, min_val: float, max_val: float, width: int = 20) -> String:
 	var ratio := (value - min_val) / maxf(max_val - min_val, 1.0)
 	var filled := int(ratio * width)
-	return "â–ˆ".repeat(filled) + "Â·".repeat(width - filled)
+	return "=".repeat(clampi(filled, 0, width)) + "-".repeat(width - clampi(filled, 0, width))

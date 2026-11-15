@@ -11,24 +11,26 @@ config_version=5
 [application]
 
 config/name="Crashfall"
+config/description="You are stranded in hell , survive."
 run/main_scene="res://scenes/main scenes/main_menu.tscn"
 config/features=PackedStringArray("4.6", "GL Compatibility")
+boot_splash/bg_color=Color(0, 0, 0, 1)
+boot_splash/image="uid://7dl70lfjlwjc"
 config/icon="uid://o5q4o7ocx6td"
-
-[audio]
-
-buses/default_bus_layout="uid://cj08fvlsnbidg"
 
 [autoload]
 
 GameFont="*res://scripts/autoloads/GameFont.gd"
-Transition="*uid://biwie4aohk6df"
-EventBus="*uid://bl05nu4e54tqs"
-GameManager="*uid://ecq8du2oji08"
-BaseManager="*uid://ckvgjnnhg08wv"
-Polish="*uid://bn3mme6x63rk3"
-GameSettings="*uid://d27a8kthqk3d3"
+Transition="*res://scripts/autoloads/TransitionManager.gd"
+EventBus="*res://scripts/autoloads/EventBus.gd"
+GameManager="*res://scripts/autoloads/GameManager.gd"
+BaseManager="*res://scripts/autoloads/BaseManager.gd"
+Polish="*res://scripts/polish/polish.gd"
+GameSettings="*res://scripts/autoloads/GameSettings.gd"
 Dialogue="*res://scenes/ui/dialogue.tscn"
+GameAudio="*res://scripts/autoloads/GameAudio.gd"
+PauseMenu="*res://scripts/autoloads/PauseMenu.gd"
+MarsWeather="*res://scripts/autoloads/MarsWeather.gd"
 Hazards="*res://scripts/autoloads/Hazards.gd"
 
 [display]
@@ -85,3 +87,4 @@ interact={
 rendering_device/driver.windows="d3d12"
 renderer/rendering_method="gl_compatibility"
 renderer/rendering_method.mobile="gl_compatibility"
+environment/defaults/default_clear_color=Color(0, 0, 0, 1)

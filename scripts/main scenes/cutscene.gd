@@ -1,4 +1,4 @@
-
+# CHANGELOG (2026-11-15): One-input skip bypasses GUI consumption; idempotent finish and independent wall-clock watchdog.
 extends Control
 
 @export_group("Assets")
@@ -434,68 +434,7 @@ void fragment() {
 }
 """
 
-const SUN_OUTER_SHADER := """
-shader_type canvas_item;
-render_mode blend_add;
-uniform float time = 0.0;
-uniform vec2 sun_aspect = vec2(1.0, 1.0);
-uniform float outer_uv = 1.95;
-uniform vec4 near_col : source_color = vec4(1.0, 0.78, 0.32, 1.0);
-uniform vec4 mid_col : source_color = vec4(1.0, 0.48, 0.12, 1.0);
-uniform vec4 far_col : source_color = vec4(0.95, 0.28, 0.06, 1.0);
-
-float hash(vec2 p) { return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
-float noise(vec2 p) {
-	vec2 i = floor(p);
-	vec2 f = fract(p);
-	vec2 u = f * f * (3.0 - 2.0 * f);
-	return mix(mix(hash(i), hash(i + vec2(1.0, 0.0)), u.x),
-	           mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), u.x), u.y);
-}
-float fbm(vec2 p) {
-	float v = 0.0;
-	float a = 0.5;
-	for (int i = 0; i < 5; i++) { v += a * noise(p); p *= 2.0; a *= 0.5; }
-	return v;
-}
-
-void fragment() {
-	vec2 uv = (UV - 0.5) * 2.0;
-	uv.x /= sun_aspect.x;
-	uv.y /= sun_aspect.y;
-	float dist = length(uv);
-	if (dist < 0.85 || dist > outer_uv) { discard; }
-
-	float angle = atan(-uv.y, -uv.x);
-	float t = clamp(dist / outer_uv, 0.0, 1.0);
-
-	float streak_a = fbm(vec2(angle * 7.0, t * 3.5 - time * 0.14));
-	float streak_b = fbm(vec2(angle * 22.0, t * 8.0 - time * 0.30));
-	float streak_c = fbm(vec2(angle * 48.0, t * 16.0 - time * 0.55));
-
-	float streaks = streak_a * 0.50 + streak_b * 0.32 + streak_c * 0.18;
-	streaks = smoothstep(0.25, 0.78, streaks);
-
-	float fade = smoothstep(0.85, 1.05, dist) * (1.0 - smoothstep(1.0, outer_uv, dist));
-	fade = pow(fade, 1.6);
-
-	float intensity = fade * (streaks * 2.0 + 0.22);
-
-	vec3 col;
-	if (t < 0.35) {
-		col = mix(near_col.rgb, mid_col.rgb, t / 0.35);
-	} else {
-		col = mix(mid_col.rgb, far_col.rgb, (t - 0.35) / 0.65);
-	}
-
-	float prom = fbm(vec2(angle * 2.5, t * 4.5 - time * 0.09));
-	float prom_mask = smoothstep(0.55, 0.86, prom);
-	float prom_band = smoothstep(1.1, 0.95, dist);
-	col += near_col.rgb * prom_mask * prom_band * 0.85;
-
-	COLOR = vec4(col * intensity * 1.6, 1.0);
-}
-"""
+const SUN_OUTER_SHADER := SolarGas.SHADER
 
 const POST_SHADER := """
 shader_type canvas_item;
@@ -798,6 +737,7 @@ var post_mat: ShaderMaterial
 var typing_started: bool = false
 var ship_placed: bool = false
 var scene_ending: bool = false
+var _started_ms: int = 0
 
 var rng := RandomNumberGenerator.new()
 var sun_center: Vector2 = Vector2.ZERO
@@ -818,6 +758,8 @@ var sol_flash: float = 0.0
 var sol_base_pos: Vector2 = Vector2.ZERO
 
 func _ready() -> void:
+	process_mode = Node.PROCESS_MODE_ALWAYS
+	_started_ms = Time.get_ticks_msec()
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	view_size = get_viewport_rect().size
@@ -932,8 +874,8 @@ func _build_sol_text() -> void:
 	sls.font_color = sol_color
 	sls.font_size = 16
 	skip_label.label_settings = sls
-	skip_label.text = "[ PRESS ANY BUTTON AGAIN TO SKIP ]"
-	skip_label.modulate.a = 0.0
+	skip_label.text = "[ CLICK / SPACE / ENTER TO SKIP ]"
+	skip_label.modulate.a = 0.7
 	add_child(skip_label)
 
 func _build_post() -> void:
@@ -1029,22 +971,16 @@ func _layout() -> void:
 func _on_resize() -> void:
 	_layout()
 
-func _unhandled_input(event: InputEvent) -> void:
+func _input(event: InputEvent) -> void:
 	if scene_ending:
 		return
-	var pressed: bool = (event is InputEventKey and event.pressed and not event.echo) \
-		or (event is InputEventMouseButton and event.pressed) \
-		or (event is InputEventJoypadButton and event.pressed)
-	if not pressed:
-		return
-
-	if skip_armed_timer > 0.0:
+	var pressed: bool = (event is InputEventKey and event.pressed and not event.echo and event.keycode != KEY_F11) or (event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT) or (event is InputEventJoypadButton and event.pressed)
+	if pressed:
+		get_viewport().set_input_as_handled()
 		_end_cutscene()
-	else:
-		skip_armed_timer = 3.5
 
 func _schedule_end() -> void:
-	await get_tree().create_timer(total_duration).timeout
+	await SceneDelay.timer(self, total_duration).timeout
 	if not is_inside_tree() or scene_ending:
 		return
 	_end_cutscene()
@@ -1060,12 +996,15 @@ func _end_cutscene() -> void:
 
 	var trans = get_node_or_null("/root/Transition")
 	if trans:
-		trans.change_scene(next_scene, fade_out_duration)
+		while trans.transitioning and is_inside_tree():
+			await get_tree().process_frame
+		if is_inside_tree():
+			trans.change_scene(next_scene, minf(fade_out_duration, 0.25))
 	else:
 		get_tree().change_scene_to_file(next_scene)
 
 func _delayed_type_sol() -> void:
-	await get_tree().create_timer(sol_type_delay).timeout
+	await SceneDelay.timer(self, sol_type_delay).timeout
 	if not is_inside_tree():
 		return
 	_type_sol()
@@ -1085,7 +1024,7 @@ func _type_sol() -> void:
 		sol_flash = 1.0
 		if typing_player and typing_player.stream:
 			typing_player.play()
-		await get_tree().create_timer(sol_char_delay).timeout
+		await SceneDelay.timer(self, sol_char_delay).timeout
 	typing_active = false
 
 func _apply_sun_uniforms() -> void:
@@ -1217,13 +1156,15 @@ func _update_text(delta: float) -> void:
 			var target_a: float = 0.65 + 0.25 * sin(time * 8.0) if skip_armed_timer > 0.5 else (skip_armed_timer / 0.5) * 0.8
 			skip_label.modulate.a = lerpf(skip_label.modulate.a, target_a, delta * 14.0)
 		else:
-			skip_label.modulate.a = lerpf(skip_label.modulate.a, 0.0, delta * 10.0)
+			skip_label.modulate.a = 0.65 + 0.15 * sin(time * 3.0)
 
 func _update_audio() -> void:
 	if audio_player and audio_player.playing and not scene_ending:
 		audio_player.volume_db = audio_volume_db + (breath - 0.5) * 3.0 + tension * 2.0
 
 func _process(delta: float) -> void:
+	if not scene_ending and float(Time.get_ticks_msec() - _started_ms) / 1000.0 > maxf(total_duration, 0.1) + 5.0:
+		_end_cutscene()
 	time += delta
 	var t01 := clampf(time / maxf(total_duration, 0.1), 0.0, 1.0)
 	tension = t01 * t01 * (3.0 - 2.0 * t01)

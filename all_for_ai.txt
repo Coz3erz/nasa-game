@@ -1,6 +1,6 @@
 ﻿PROJECT COMPILATION FOR AI
-Generated on: 11/15/2026 19:24:44
-Total Files: 63
+Generated on: 11/15/2026 21:47:20
+Total Files: 70
 
 
 ================================================================================
@@ -444,6 +444,7 @@ position_smoothing_speed = 2.0
 FILE: scenes\main scenes\crash.tscn
 ================================================================================
 
+; CHANGELOG (2026-11-15): Portable path target replaces missing UID-only scene reference.
 [gd_scene format=3 uid="uid://ddpefoc34vlx3"]
 
 [ext_resource type="Script" uid="uid://bubcbpsj7c88y" path="res://scripts/main scenes/crash.gd" id="1_8c4bi"]
@@ -458,7 +459,7 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 script = ExtResource("1_8c4bi")
-target_scene = "uid://65xbkmaftctv"
+target_scene = "res://scenes/main scenes/game.tscn"
 start_delay = 1.2
 crash_sfx = ExtResource("2_r14ux")
 typing_sfx = ExtResource("3_hr3i7")
@@ -467,6 +468,7 @@ typing_sfx = ExtResource("3_hr3i7")
 FILE: scenes\main scenes\cutscene.tscn
 ================================================================================
 
+; CHANGELOG (2026-11-15): Portable path target replaces missing UID-only scene reference.
 [gd_scene format=3 uid="uid://bw7mjm563g20s"]
 
 [ext_resource type="Script" uid="uid://ymxcwnobphie" path="res://scripts/main scenes/cutscene.gd" id="1_vg5b8"]
@@ -489,7 +491,7 @@ gas_radius = 3.8
 lens_strength = 0.0
 sol_text = "mars"
 sol_color = Color(0, 1, 0.25490198, 1)
-next_scene = "uid://ddpefoc34vlx3"
+next_scene = "res://scenes/main scenes/crash.tscn"
 
 ================================================================================
 FILE: scenes\main scenes\game.tscn
@@ -616,10 +618,10 @@ script = ExtResource("1_menu")
 FILE: scenes\main scenes\options.tscn
 ================================================================================
 
+; CHANGELOG (2026-11-15): Menu owns music; remove options-local spatial player to avoid duplicate tracks.
 [gd_scene format=3 uid="uid://8l7a726gqrgy"]
 
 [ext_resource type="Script" uid="uid://cpeild6kfv5x1" path="res://scripts/main scenes/options.gd" id="1_84gng"]
-[ext_resource type="AudioStream" uid="uid://2amsf138kwlq" path="res://sounds/music/cozy-music-complete-lite/ogg/late-night-study.ogg" id="2_6vb07"]
 
 [node name="options" type="Control" unique_id=1598926747]
 layout_mode = 3
@@ -632,11 +634,6 @@ script = ExtResource("1_84gng")
 ring_color = Color(0.026789214, 0.22363332, 0.4552654, 1)
 secondary_ring_color = Color(0.09542095, 0.2607471, 0.38898093, 1)
 foam_color = Color(6.497651e-07, 0.19375122, 0.23164523, 0.8509804)
-
-[node name="music" type="AudioStreamPlayer2D" parent="." unique_id=658461057]
-stream = ExtResource("2_6vb07")
-autoplay = true
-parameters/looping = true
 
 ================================================================================
 FILE: scenes\main scenes\tutorial.tscn
@@ -999,10 +996,11 @@ script = ExtResource("1_dialogue")
 FILE: scripts\autoloads\BaseManager.gd
 ================================================================================
 
-
+# CHANGELOG (2026-11-15): Remove passive healing; 8s oxygen / 20s warmth with unbounded daily scaling; NASA-calibrated panels and frequency curve.
 extends Node
 
-const BASE_REACTOR_POWER: float = 50.0
+const EARTH_PANEL_RATING_KW: float = 116.086660
+const BASE_REACTOR_POWER: float = EARTH_PANEL_RATING_KW * MarsData.SOLAR_EFFICIENCY_VS_EARTH
 
 var active_modules: Array = []
 var total_power: float = 0.0
@@ -1013,8 +1011,8 @@ var temp_level: float = 100.0
 
 var health: float = 100.0
 var health_drain: float = 4.0
-var o2_drain: float = 0.6
-var temp_drain: float = 0.5
+var o2_drain: float = 12.5
+var temp_drain: float = 5.0
 var reactor_drain_mult: float = 0.4
 var hazard_interval: float = 75.0
 var day_failed_sent: bool = false
@@ -1061,7 +1059,7 @@ func calculate_power() -> void:
 			continue
 
 		if mod.is_fed_by_solar():
-			mod.is_powered = true
+			mod.is_powered = solar_efficiency >= 1.0 or mod.power_draw <= BASE_REACTOR_POWER * solar_efficiency
 		elif mod.is_fed_by_reactor() and (current_power_draw + mod.power_draw <= total_power):
 			mod.is_powered = true
 			current_power_draw += mod.power_draw
@@ -1111,8 +1109,7 @@ func _tick_power_and_systems(delta: float) -> void:
 		if health <= 0.0 and not day_failed_sent:
 			day_failed_sent = true
 			GameManager.day_failed.emit(reason)
-	elif health < 100.0 and oxygen_level > 30.0 and temp_level > 30.0:
-		health = minf(100.0, health + 1.5 * delta)
+
 
 func _tick_random_failures(delta: float) -> void:
 	_failure_timer += delta
@@ -1139,12 +1136,12 @@ func _tick_random_failures(delta: float) -> void:
 			break
 
 func apply_day(day: int) -> void:
-	var k := float(clampi(day, 1, 5) - 1)
+	var k := float(maxi(day, 1) - 1)
 	failure_roll_interval = maxf(6.0, 24.0 - 4.5 * k)
 	failure_chance = 0.10 + 0.05 * k
-	hazard_interval = maxf(25.0, 75.0 - 12.0 * k)
-	o2_drain = 0.6 + 0.15 * k
-	temp_drain = 0.5 + 0.12 * k
+	hazard_interval = maxf(50.0, 120.0 * pow(0.75, k))
+	o2_drain = 12.5 * (1.0 + 0.15 * k)
+	temp_drain = 5.0 * (1.0 + 0.15 * k)
 	reactor_drain_mult = 0.4 + 0.1 * k
 	health_drain = 4.0 + 1.0 * k
 
@@ -1187,6 +1184,113 @@ signal player_moved(player: Node2D)
 signal module_placed(module: BaseModule)
 signal module_built(module: BaseModule)
 signal wire_connected(wire: Node2D, receiver: Node2D)
+
+================================================================================
+FILE: scripts\autoloads\GameAudio.gd
+================================================================================
+
+# CHANGELOG (2026-11-15): Asset-optional connection SFX, active-machine loop, accelerating oxygen alarm and continuous title/options music.
+extends Node
+
+@export_group("Module audio overrides")
+@export var plug_sfx: AudioStream
+@export var unplug_sfx: AudioStream
+@export var machine_loop: AudioStream
+@export var oxygen_alarm_loop: AudioStream
+@export_group("Title audio")
+@export var title_music: AudioStream
+
+const ORIGINAL_TITLE_TRACK := "res://sounds/music/cozy-music-complete-lite/ogg/late-night-study.ogg"
+var music: AudioStreamPlayer
+var hum: AudioStreamPlayer
+var alarm: AudioStreamPlayer
+var _plug: AudioStream
+var _unplug: AudioStream
+var _flare: AudioStream
+
+func _ready() -> void:
+	music = _player("Music", -12.0)
+	hum = _player("SFX", -27.0)
+	alarm = _player("SFX", -13.0)
+	_plug = plug_sfx if plug_sfx != null else load("res://sounds/sfx/plug.wav")
+	_unplug = unplug_sfx if unplug_sfx != null else load("res://sounds/sfx/unplug.wav")
+	_flare = load("res://sounds/sfx/solar_flare.wav")
+	hum.stream = _loop(machine_loop if machine_loop != null else load("res://sounds/sfx/machine_hum.wav"))
+	alarm.stream = _loop(oxygen_alarm_loop if oxygen_alarm_loop != null else load("res://sounds/sfx/oxygen_alarm.wav"))
+	if title_music != null:
+		music.stream = _loop(title_music)
+	elif ResourceLoader.exists(ORIGINAL_TITLE_TRACK):
+		music.stream = _loop(load(ORIGINAL_TITLE_TRACK))
+	else:
+		music.stream = _loop(load("res://sounds/music/menu_fallback.wav"))
+
+func _player(bus_name: String, db: float) -> AudioStreamPlayer:
+	var player := AudioStreamPlayer.new()
+	player.bus = bus_name if AudioServer.get_bus_index(bus_name) >= 0 else "Master"
+	player.volume_db = db
+	add_child(player)
+	return player
+
+func _loop(source: AudioStream) -> AudioStream:
+	if source == null:
+		return null
+	var stream := source.duplicate() as AudioStream
+	if stream is AudioStreamWAV:
+		stream.loop_mode = AudioStreamWAV.LOOP_FORWARD
+		stream.loop_begin = 0
+		stream.loop_end = int(stream.get_length() * stream.mix_rate)
+	elif "loop" in stream:
+		stream.loop = true
+	return stream
+
+func set_menu_music(enabled: bool) -> void:
+	if enabled and not music.playing:
+		music.play()
+	elif not enabled:
+		music.stop()
+
+func _one_shot(stream: AudioStream, db: float = -10.0) -> void:
+	if stream == null:
+		return
+	var player := _player("SFX", db)
+	player.stream = stream
+	player.finished.connect(player.queue_free)
+	player.play()
+
+func play_plug() -> void:
+	_one_shot(_plug)
+
+func play_unplug() -> void:
+	_one_shot(_unplug)
+
+func play_flare(override_stream: AudioStream = null, db: float = -8.0) -> void:
+	_one_shot(override_stream if override_stream != null else _flare, db)
+
+func alarm_pitch(oxygen: float) -> float:
+	if oxygen >= 15.0:
+		return lerpf(1.0, 1.5, clampf((30.0 - oxygen) / 15.0, 0.0, 1.0))
+	return lerpf(1.5, 2.0, clampf((15.0 - oxygen) / 10.0, 0.0, 1.0))
+
+func _process(_delta: float) -> void:
+	var scene := get_tree().current_scene
+	var gameplay := scene != null and scene.scene_file_path in ["res://scenes/main scenes/game.tscn", "res://scenes/main scenes/tutorial.tscn"]
+	var active := false
+	if gameplay:
+		for module in BaseManager.active_modules:
+			if is_instance_valid(module) and module.is_powered and not module.is_broken and not module.is_constructing:
+				active = true
+				break
+	if active and not hum.playing:
+		hum.play()
+	elif not active:
+		hum.stop()
+	var critical := gameplay and GameManager.current_phase == GameManager.Phase.SURVIVE and BaseManager.oxygen_level < 30.0 and not BaseManager.day_failed_sent
+	if critical:
+		alarm.pitch_scale = alarm_pitch(BaseManager.oxygen_level)
+		if not alarm.playing:
+			alarm.play()
+	else:
+		alarm.stop()
 
 ================================================================================
 FILE: scripts\autoloads\GameFont.gd
@@ -1631,15 +1735,19 @@ func load_player_input_map() -> void:
 FILE: scripts\autoloads\Hazards.gd
 ================================================================================
 
-
+# CHANGELOG (2026-11-15): Day-one storms; sever every cable without hidden immunity; reuse cutscene gas shader and exported flare audio; storm penalty lasts until storm end.
 extends Node
 ## AUTOLOAD (name it Hazards, put it LAST in the autoload list).
 ## Runs the two Mars hazards during the SURVIVE phase and reads BaseManager for shield / comms / power.
 ##
 ## SOLAR FLARE : Comms (powered) warns 15 s ahead. On impact: a powered Storm Shield blocks everything.
 ##               Without it: 15 damage, and every RUNNING module fails. Unplugged modules are safe.
-## DUST STORM  : cannot be avoided. Every module fails, solar output x0.5 for the storm, 25 damage.
+## DUST STORM  : cannot be avoided. Every cable disconnects, solar output x0.5 for the storm, 25 damage.
 ## Modules wired DIRECTLY to a solar panel are immune to both (BaseModule.has_failure_immunity()).
+@export_group("Hazard Audio")
+@export var solar_flare_sfx: AudioStream
+@export var solar_flare_volume_db: float = -8.0
+
 signal demo_finished
 
 const FLARE_WARNING_SECONDS := 15.0
@@ -1648,7 +1756,7 @@ const STORM_DAMAGE := 25.0
 const STORM_SOLAR_FACTOR := 0.5
 const STORM_SECONDS := 30.0
 const FLARE_FX_SECONDS := 3.0
-const STORM_FROM_DAY := 2            # day 1 only has flares so new players can learn
+const STORM_FROM_DAY := 1            # all hazards can occur from day one
 const STORM_CHANCE := 0.45
 const SHIELD := "Shield"
 const COMMS := "Comms"
@@ -1708,15 +1816,20 @@ func clear() -> void:
 
 ## Effects only, nothing breaks and nobody gets hurt. Used by the tutorial.
 func demo(kind: String) -> void:
+	var generation := _gen
 	if kind == "storm":
 		_fx.start_storm()
-		await get_tree().create_timer(7.0).timeout
+		await SceneDelay.timer(self, 7.0, false).timeout
+		if generation != _gen:
+			return
 		_fx.stop_storm()
-		await get_tree().create_timer(2.5).timeout
+		await SceneDelay.timer(self, 2.5, false).timeout
 	else:
 		_fx.play_flare(false)
-		await get_tree().create_timer(FLARE_FX_SECONDS + 0.4).timeout
-	demo_finished.emit()
+		GameAudio.play_flare(solar_flare_sfx, solar_flare_volume_db)
+		await SceneDelay.timer(self, FLARE_FX_SECONDS + 0.4, false).timeout
+	if generation == _gen:
+		demo_finished.emit()
 
 # ---------------------------------------------------------------- scheduling
 func _launch() -> void:
@@ -1749,6 +1862,7 @@ func _flare_hit() -> void:
 	_fx.show_warning(false)
 	var shielded := _module_running(SHIELD)
 	_fx.play_flare(shielded)
+	GameAudio.play_flare(solar_flare_sfx, solar_flare_volume_db)
 	if shielded:
 		_fx.toast("The storm shield held. The flare did no damage.", CYAN)
 	else:
@@ -1758,7 +1872,7 @@ func _flare_hit() -> void:
 			_fx.toast("Solar flare! -%d health and %d system(s) failed." % [int(FLARE_DAMAGE), broke], RED)
 		else:
 			_fx.toast("Solar flare! -%d health. Nothing was plugged in, so no equipment failed." % int(FLARE_DAMAGE), RED)
-	await get_tree().create_timer(FLARE_FX_SECONDS).timeout
+	await SceneDelay.timer(self, FLARE_FX_SECONDS, false).timeout
 	if gen != _gen:
 		return
 	_finish("Solar Flare")
@@ -1769,17 +1883,22 @@ func _start_storm() -> void:
 	_state = S.STORM
 	_storm_left = STORM_SECONDS
 	BaseManager.solar_efficiency = STORM_SOLAR_FACTOR
-	_break_modules(false)
+	# Snapshot all wires, including immune solar links and the cable in the player hand.
+	for cable in get_tree().get_nodes_in_group("wires"):
+		if is_instance_valid(cable) and cable.has_method("disconnect_wire"):
+			cable.disconnect_wire(cable.hand_pos)
+	for player in get_tree().get_nodes_in_group("player"):
+		player.current_wire = null
 	BaseManager.calculate_power()
 	_damage(STORM_DAMAGE, "CAUGHT IN THE DUST STORM")
 	_fx.start_storm()
-	_fx.toast("Dust storm! Dust got into everything. Equipment failed and solar power is cut in half.", ORANGE)
+	_fx.toast("Dust storm! All cables disconnected. Solar output is halved for the storm. Reconnect manually.", ORANGE)
 
 func _end_storm() -> void:
 	BaseManager.solar_efficiency = 1.0
 	BaseManager.calculate_power()
 	_fx.stop_storm()
-	_fx.toast("The dust storm has passed. Solar power is back to normal.", CYAN)
+	_fx.toast("The storm passed. Solar output is normal; cables stay disconnected until you reconnect them.", CYAN)
 	_finish("Dust Storm")
 
 # ---------------------------------------------------------------- helpers
@@ -1903,6 +2022,8 @@ void fragment(){
 """
 	var storm: ColorRect
 	var flare: ColorRect
+	var corona: ColorRect
+	var _flare_tween: Tween
 	var edge: ColorRect
 	var hurt: ColorRect
 	var warn_label: Label
@@ -1937,6 +2058,8 @@ void fragment(){
 		storm = _make_rect(STORM_SHADER)
 		(storm.material as ShaderMaterial).set_shader_parameter("intensity", 0.0)
 		storm.visible = false
+		corona = _make_rect(SolarGas.SHADER)
+		corona.visible = false
 		flare = _make_rect(FLARE_SHADER)
 		flare.visible = false
 		edge = _make_rect(EDGE_SHADER)
@@ -1984,6 +2107,8 @@ void fragment(){
 
 	func _process(delta: float) -> void:
 		_t += delta
+		if corona.visible:
+			(corona.material as ShaderMaterial).set_shader_parameter("time", _t)
 		var amount := _storm_level * 2.2 + _shake
 		_shake = maxf(0.0, _shake - delta * 22.0)
 		var cam := get_viewport().get_camera_2d()
@@ -2024,6 +2149,17 @@ void fragment(){
 
 	# ---------------- flare
 	func play_flare(shielded: bool) -> void:
+		if is_instance_valid(_flare_tween):
+			_flare_tween.kill()
+		corona.visible = true
+		corona.modulate.a = 0.0
+		var gas := corona.material as ShaderMaterial
+		gas.set_shader_parameter("sun_aspect", Vector2.ONE)
+		gas.set_shader_parameter("outer_uv", 1.95)
+		_flare_tween = create_tween()
+		_flare_tween.tween_property(corona, "modulate:a", 0.38 if shielded else 0.75, 0.35)
+		_flare_tween.tween_property(corona, "modulate:a", 0.0, 2.65)
+		_flare_tween.tween_callback(corona.hide)
 		var mat := flare.material as ShaderMaterial
 		if shielded:
 			mat.set_shader_parameter("strength", 0.35)
@@ -2036,7 +2172,7 @@ void fragment(){
 			mat.set_shader_parameter("mid_col", Color(1.0, 0.85, 0.40))
 			mat.set_shader_parameter("edge_col", Color(1.0, 0.58, 0.15))
 		flare.visible = true
-		sfx.play()
+		# The hazard owner plays its exported/fallback flare sound once.
 		_shake = 5.0 if shielded else 16.0
 		var tw := create_tween()
 		tw.tween_method(func(v: float) -> void: mat.set_shader_parameter("age", v), 0.0, 3.0, 3.0)
@@ -2062,6 +2198,9 @@ void fragment(){
 		hurt.color.a = 0.45
 
 	func stop_all() -> void:
+		if is_instance_valid(_flare_tween):
+			_flare_tween.kill()
+		corona.hide()
 		show_warning(false)
 		if _storm_tween != null:
 			_storm_tween.kill()
@@ -2104,19 +2243,210 @@ void fragment(){
 		tw.tween_callback(p.queue_free)
 
 ================================================================================
+FILE: scripts\autoloads\MarsWeather.gd
+================================================================================
+
+# CHANGELOG (2026-11-15): Nonblocking NASA DONKI flare lookup; bounded timeout, validated JSON, offline-safe informational use only.
+# API reference: https://api.nasa.gov/ (DONKI / FLR). Observed solar activity is not a Mars surface forecast.
+extends Node
+
+signal updated
+@export var fetch_live_data: bool = true
+@export var api_key: String = "DEMO_KEY"
+var status_text := "NASA FACT: Mars receives about 43% of Earth's sunlight."
+var last_flare_class := ""
+var live_available := false
+var _request: HTTPRequest
+
+func _ready() -> void:
+	if DisplayServer.get_name() == "headless" or not fetch_live_data:
+		return
+	_request = HTTPRequest.new()
+	_request.timeout = 5.0
+	_request.body_size_limit = 1048576
+	add_child(_request)
+	_request.request_completed.connect(_on_completed)
+	var today := Time.get_date_string_from_system(true)
+	var err := _request.request("https://api.nasa.gov/DONKI/FLR?startDate=%s&endDate=%s&api_key=%s" % [today, today, api_key.uri_encode()])
+	if err != OK:
+		updated.emit()
+
+func _on_completed(result: int, code: int, _headers: PackedStringArray, body: PackedByteArray) -> void:
+	live_available = false
+	if result != HTTPRequest.RESULT_SUCCESS or code != 200:
+		updated.emit()
+		return
+	var json := JSON.new()
+	if json.parse(body.get_string_from_utf8()) != OK:
+		updated.emit()
+		return
+	var data: Variant = json.data
+	if not (data is Array):
+		updated.emit()
+		return
+	live_available = true
+	last_flare_class = ""
+	for item in data:
+		if item is Dictionary and item.get("classType") is String:
+			last_flare_class = item["classType"].left(24)
+	status_text = "NASA DONKI: no solar flares reported today." if last_flare_class.is_empty() else "NASA DONKI: latest reported flare %s. Not a Mars forecast." % last_flare_class
+	updated.emit()
+
+================================================================================
+FILE: scripts\autoloads\PauseMenu.gd
+================================================================================
+
+# CHANGELOG (2026-11-15): Persistent pause/options owner; frozen gameplay and survival timers; global F11 shortcut.
+extends CanvasLayer
+
+var menu: Control
+var panel: PanelContainer
+var options: Control
+var opened := false
+var _quitting := false
+var _fullscreen_down := false
+
+func _ready() -> void:
+	layer = 150
+	process_mode = Node.PROCESS_MODE_ALWAYS
+	menu = Control.new()
+	menu.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	add_child(menu)
+	var backdrop := ColorRect.new()
+	backdrop.color = Color(0.005, 0.01, 0.025, 0.86)
+	backdrop.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	menu.add_child(backdrop)
+	var center := CenterContainer.new()
+	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	menu.add_child(center)
+	panel = PanelContainer.new()
+	panel.custom_minimum_size = Vector2(340, 0)
+	panel.add_theme_stylebox_override("panel", GlassUI.panel())
+	center.add_child(panel)
+	var box := VBoxContainer.new()
+	box.add_theme_constant_override("separation", 18)
+	panel.add_child(box)
+	var title := Label.new()
+	title.text = "SIGNAL PAUSED"
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.add_theme_font_override("font", GameFont.get_font())
+	title.add_theme_font_size_override("font_size", 24)
+	box.add_child(title)
+	for item in [["RESUME", resume], ["OPTIONS", open_options], ["QUIT TO MAIN MENU", quit_to_menu]]:
+		var button := Button.new()
+		button.text = item[0]
+		button.custom_minimum_size = Vector2(300, 50)
+		button.add_theme_font_override("font", GameFont.get_font())
+		GlassUI.style_button(button, 20)
+		button.pressed.connect(item[1])
+		button.mouse_entered.connect(button.grab_focus)
+		box.add_child(button)
+	menu.hide()
+
+func _input(event: InputEvent) -> void:
+	if not (event is InputEventKey and event.pressed and not event.echo):
+		return
+	if event.keycode == KEY_F11 or event.physical_keycode == KEY_F11:
+		if not _fullscreen_down:
+			toggle_fullscreen()
+		_fullscreen_down = true
+		get_viewport().set_input_as_handled()
+		return
+	if event.keycode not in [KEY_ESCAPE, KEY_P]:
+		return
+	if _quitting:
+		return
+	if opened:
+		get_viewport().set_input_as_handled()
+		if is_instance_valid(options):
+			if event.keycode == KEY_ESCAPE:
+				options._exit_action()
+		else:
+			resume()
+		return
+	var scene := get_tree().current_scene
+	if scene == null or Transition.transitioning:
+		return
+	if scene.scene_file_path not in ["res://scenes/main scenes/game.tscn", "res://scenes/main scenes/tutorial.tscn"]:
+		return
+	get_viewport().set_input_as_handled()
+	pause_game()
+
+func pause_game() -> void:
+	if opened:
+		return
+	opened = true
+	menu.show()
+	get_tree().paused = true
+	panel.get_child(0).get_child(1).grab_focus()
+
+func resume() -> void:
+	if is_instance_valid(options):
+		options.queue_free()
+	options = null
+	opened = false
+	menu.hide()
+	get_tree().paused = false
+
+func open_options() -> void:
+	if not opened or is_instance_valid(options):
+		return
+	options = load("res://scenes/main scenes/options.tscn").instantiate()
+	options.process_mode = Node.PROCESS_MODE_ALWAYS
+	options.set_meta("embedded_options", true)
+	options.tree_exited.connect(_options_closed)
+	menu.hide()
+	add_child(options)
+
+func _options_closed() -> void:
+	options = null
+	if opened and not _quitting:
+		menu.show()
+		get_tree().paused = true
+
+func quit_to_menu() -> void:
+	if _quitting:
+		return
+	_quitting = true
+	resume()
+	Dialogue.hide_dialogue()
+	Hazards.clear()
+	GameManager.current_phase = GameManager.Phase.INTRO
+	await Transition.change_scene("res://scenes/main scenes/main_menu.tscn", 0.5)
+	_quitting = false
+
+func toggle_fullscreen() -> void:
+	var fullscreen := DisplayServer.window_get_mode() in [DisplayServer.WINDOW_MODE_FULLSCREEN, DisplayServer.WINDOW_MODE_EXCLUSIVE_FULLSCREEN]
+	var mode := "Windowed" if fullscreen else "Fullscreen"
+	GameSettings.settings["window_mode"] = mode
+	GameSettings._apply_display()
+	GameSettings.save_settings()
+
+func _process(_delta: float) -> void:
+	# Polling fallback survives any scene/custom UI consuming the original key event.
+	var down := Input.is_physical_key_pressed(KEY_F11) or Input.is_key_pressed(KEY_F11)
+	if down and not _fullscreen_down:
+		toggle_fullscreen()
+	_fullscreen_down = down
+
+================================================================================
 FILE: scripts\autoloads\TransitionManager.gd
 ================================================================================
 
+# CHANGELOG (2026-11-15): Persistent blackout across reloads; serialize scene changes; cancel competing fade tweens safely.
 extends CanvasLayer
 ## Plain fade (used by the cutscene - unchanged) + a new SHUTTER wipe used by day/shop/survival.
 
 var overlay: ColorRect
 var transitioning: bool = false
+var _fade_tween: Tween
+var _fade_generation := 0
 
 var shutter: ColorRect
 var shutter_progress: float = 0.0
 var _shutter_mat: ShaderMaterial
 var _shutter_tween: Tween
+var _shutter_generation := 0
 
 ## set by game.gd from its "Transition SFX" exports
 var sfx_close: AudioStream
@@ -2156,7 +2486,7 @@ void fragment() {
 """
 
 func _ready() -> void:
-	layer = 100
+	layer = 200
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	overlay = ColorRect.new()
 	overlay.color = Color.BLACK
@@ -2176,35 +2506,58 @@ func _ready() -> void:
 	shutter.material = _shutter_mat
 	add_child(shutter)
 
-func fade_to_black(duration: float = 0.8) -> void:
+func _fade(alpha: float, duration: float) -> void:
+	_fade_generation += 1
+	var generation := _fade_generation
+	if is_instance_valid(_fade_tween):
+		_fade_tween.kill()
 	overlay.mouse_filter = Control.MOUSE_FILTER_STOP
-	var tw := create_tween()
-	tw.tween_property(overlay, "modulate:a", 1.0, duration)
-	await tw.finished
+	_fade_tween = create_tween().set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
+	_fade_tween.tween_property(overlay, "modulate:a", alpha, maxf(duration, 0.001))
+	# Do not await a killable tween's finished signal: killed tweens never emit it.
+	while generation == _fade_generation and _fade_tween.is_running():
+		await get_tree().process_frame
+	if generation == _fade_generation and alpha <= 0.0:
+		overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
-func fade_from_black(duration: float = 0.8) -> void:
-	var tw := create_tween()
-	tw.tween_property(overlay, "modulate:a", 0.0, duration)
-	await tw.finished
-	overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
+func fade_to_black(duration: float = 0.5) -> void:
+	await _fade(1.0, duration)
 
-func change_scene(path: String, duration: float = 0.8) -> void:
+func fade_from_black(duration: float = 0.5) -> void:
+	if transitioning:
+		return # scene-ready callbacks must not reveal a half-loaded scene
+	await _fade(0.0, duration)
+
+func change_scene(path: String, duration: float = 0.5) -> void:
 	if transitioning:
 		return
+	if not ResourceLoader.exists(path):
+		push_error("Scene does not exist: " + path)
+		return
 	transitioning = true
-	await fade_to_black(duration)
-	get_tree().change_scene_to_file(path)
-	await get_tree().process_frame
-	await fade_from_black(duration)
+	get_tree().paused = false
+	await _fade(1.0, duration)
+	await SceneDelay.timer(self, 0.2).timeout
+	_set_shutter(0.0)
+	var err := get_tree().change_scene_to_file(path)
+	if err != OK:
+		push_error("Scene load failed: " + path)
+	else:
+		await get_tree().scene_changed
+		await get_tree().process_frame
+		await get_tree().process_frame
+	await _fade(0.0, duration)
 	transitioning = false
 
-# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ shutter wipe â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ shutter wipe Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 func _set_shutter(v: float) -> void:
 	shutter_progress = v
 	shutter.visible = v > 0.0
 	_shutter_mat.set_shader_parameter("progress", v)
 
 func _run_shutter(to: float, duration: float, color: Color) -> void:
+	_shutter_generation += 1
+	var generation := _shutter_generation
 	_shutter_mat.set_shader_parameter("edge_color", color)
 	if _shutter_tween != null and _shutter_tween.is_valid():
 		_shutter_tween.kill()
@@ -2212,8 +2565,9 @@ func _run_shutter(to: float, duration: float, color: Color) -> void:
 	_play(sfx_close if to >= 1.0 else sfx_open)
 	_shutter_tween = create_tween()
 	_shutter_tween.tween_method(_set_shutter, shutter_progress, to, duration).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
-	await _shutter_tween.finished
-	if to <= 0.0:
+	while generation == _shutter_generation and _shutter_tween.is_running():
+		await get_tree().process_frame
+	if generation == _shutter_generation and to <= 0.0:
 		shutter.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
 ## Blinds slam shut with a glowing edge.
@@ -2240,7 +2594,7 @@ func _play(stream: AudioStream) -> void:
 FILE: scripts\entities\Player.gd
 ================================================================================
 
-
+# CHANGELOG (2026-11-15): Fix synchronous tutorial plug race; hide ghost ports, player preview ring and inapplicable hints; use shared reactor centre.
 extends CharacterBody2D
 ## PLAYER
 ##   SPACE           toggle build mode (you can still walk around in it)
@@ -2417,7 +2771,8 @@ func set_input_locked(locked: bool) -> void:
 		if is_build_mode:
 			_exit_build_mode()
 		if current_wire != null and is_instance_valid(current_wire):
-			current_wire.drop(global_position)
+			if not current_wire.is_plugged:
+				current_wire.drop(global_position)
 			current_wire = null
 		_update_animation(Vector2.ZERO)
 
@@ -2545,7 +2900,8 @@ func _physics_process(delta: float) -> void:
 	if current_wire != null and is_instance_valid(current_wire) and current_wire.has_method("apply_tension_to_player"):
 		var did_snap: bool = current_wire.apply_tension_to_player(self, delta)
 		if did_snap:
-			current_wire.drop(global_position)
+			if not current_wire.is_plugged:
+				current_wire.drop(global_position)
 			current_wire = null
 			_pop(-0.18)
 			shake(0.25)
@@ -2796,6 +3152,10 @@ func _spawn_ghost() -> void:
 
 ## The preview must not collide, be interactable, or be treated as a wire target.
 func _neutralize_ghost(n: Node) -> void:
+	if n is WirePort or (n is CanvasItem and (n.has_method("can_spawn_wire") or n.has_method("get_receiver_position"))):
+		n.visible = false
+		n.set_process(false)
+		n.set_process_input(false)
 	if n is CollisionObject2D:
 		(n as CollisionObject2D).collision_layer = 0
 		(n as CollisionObject2D).collision_mask = 0
@@ -2880,7 +3240,10 @@ func _reactor_node() -> BaseModule:
 	return null
 
 func _exit_rect() -> Rect2:
-	var area := get_tree().current_scene.find_child("outside", true, false) as Area2D
+	var scene := get_tree().current_scene
+	if scene == null:
+		return Rect2()
+	var area := scene.find_child("outside", true, false) as Area2D
 	if area == null:
 		return Rect2()
 	var cs := area.get_node_or_null("CollisionShape2D") as CollisionShape2D
@@ -3067,9 +3430,12 @@ func _try_interact() -> void:
 			shake(0.15)
 			return
 		if receiver != null:
-			receiver.accept_wire(current_wire)
-			current_wire.plug_in(receiver)
-			current_wire = null
+			var connecting := current_wire
+			current_wire = null # release ownership before tutorial callbacks lock input
+			receiver.accept_wire(connecting)
+			if not connecting.is_plugged:
+				current_wire = connecting
+				return
 			var rp: Vector2 = receiver.get_receiver_position() if receiver.has_method("get_receiver_position") else receiver.global_position
 			Fx.burst(get_parent(), rp, Color(1.2, 3.0, 3.6, 1.0), 14, 40.0, 140.0, 0.45, 0.04, 0.09, true)
 			Ring.spawn(get_parent(), rp, Color(0.4, 1.3, 1.6), 44.0, 0.35)
@@ -3080,7 +3446,8 @@ func _try_interact() -> void:
 			if refusing != null:
 				_deny_wire(refusing)
 				return
-			current_wire.drop(global_position)
+			if not current_wire.is_plugged:
+				current_wire.drop(global_position)
 			current_wire = null
 			_pop(0.08)
 		return
@@ -3310,6 +3677,10 @@ func _compute_hint_rows() -> Array:
 	return rows
 
 func _update_hints() -> void:
+	if _hint_panel != null and (not is_active or input_locked or get_tree().get_nodes_in_group("shop_ui").any(func(n): return n.is_visible_in_tree())):
+		_hint_panel.hide()
+		_hint_marks.clear()
+		return
 	if not is_active:
 		return
 	_hint_marks.clear()
@@ -3347,7 +3718,9 @@ func _update_hints() -> void:
 						if src != null:
 							_hint_kind = "grab"
 							_hint_marks.append({"pos": src.global_position, "col": C_CYAN, "text": "E  grab wire"})
-	_set_hint_rows(_compute_hint_rows())
+	var show_build := _has_buildables() and not is_outside and not input_locked and (GameManager.current_phase in [GameManager.Phase.BUILD, GameManager.Phase.SURVIVE])
+	_hint_panel.visible = show_build
+	_set_hint_rows([["SPACE", "build"]] if show_build else [])
 
 ## Drawn by the Hints node (world space, always on top): the build circle in build mode.
 func _overlay_draw(c: Node2D) -> void:
@@ -3364,7 +3737,7 @@ func _overlay_draw(c: Node2D) -> void:
 		var eg := ex.grow(exit_block_margin)
 		c.draw_rect(eg, Color(1.0, 0.3, 0.25, 0.07))
 		c.draw_rect(eg, Color(1.0, 0.35, 0.3, 0.55 + 0.2 * pulse), false, 3.0)
-	c.draw_arc(global_position, _ghost_reach(), 0.0, TAU, 96, Color(1, 1, 1, 0.12 + 0.06 * pulse), 2.0, true)
+	# No player-centred preview circle.
 	var ctr := _ghost_origin + _ghost_center_off
 	c.draw_circle(ctr, _ghost_zone, Color(col.r, col.g, col.b, 0.05))
 	var n := 40
@@ -3452,7 +3825,7 @@ class Fx:
 		parent.add_child(p)
 		p.global_position = pos
 		p.emitting = true
-		parent.get_tree().create_timer(life + 0.4).timeout.connect(p.queue_free)
+		SceneDelay.timer(p, life + 0.4).timeout.connect(p.queue_free)
 
 class Ring extends Node2D:
 	var r := 4.0
@@ -3628,14 +4001,14 @@ class ConstructionFX extends Node2D:
 FILE: scripts\game systems\day_loop.gd
 ================================================================================
 
-
+# CHANGELOG (2026-11-15): Pause the survival clock with gameplay; persistent death/reload fade prevents default-grey flash; honest day text.
 extends CanvasLayer
 class_name DayLoop
 
 const TAGLINES := [
 	"Build the base and get the power on.",
 	"Machines fail more often today.",
-	"Dust storms can start today. Stay close to your equipment.",
+	"Conditions are worsening. Hazards strike more often.",
 	"Almost there. Keep everything running.",
 	"Last day. Hold on until the rescue team lands."
 ]
@@ -3669,7 +4042,7 @@ var _t: float = 0.0
 
 func _ready() -> void:
 	layer = 30
-	process_mode = Node.PROCESS_MODE_ALWAYS
+	process_mode = Node.PROCESS_MODE_PAUSABLE
 	font = GameFont.get_font()
 	_cover = ColorRect.new()
 	_cover.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -3891,7 +4264,7 @@ func _card(title: String, sub: String, col: Color, hold: float, solid: bool, dis
 	tw.tween_property(vb, "scale", Vector2(1.04, 1.04), build_t + hold + 0.5)   # slow push-in
 
 	# `hold` = how long everything stays fully readable AFTER the build-in finishes
-	await get_tree().create_timer(build_t + hold).timeout
+	await SceneDelay.timer(self, build_t + hold, false).timeout
 
 	if solid:
 		_intro_card = card
@@ -3963,7 +4336,7 @@ func reveal() -> void:
 		await get_tree().process_frame
 		await trans.shutter_open(0.85)       # blinds sweep open on the finished shop
 		return
-	await get_tree().create_timer(0.5).timeout
+	await SceneDelay.timer(self, 0.5, false).timeout
 	var tw := create_tween()
 	tw.tween_property(_cover, "modulate:a", 0.0, 0.9)
 	await tw.finished
@@ -4067,7 +4440,7 @@ func _on_failed(reason: String) -> void:
 			p.set_input_locked(true)
 	await _death_sequence(reason)
 	GameManager.restart_day()
-	get_tree().reload_current_scene()
+	await Transition.change_scene(get_tree().current_scene.scene_file_path, 0.5)
 
 func _death_shake(v: float, cam: Camera2D) -> void:
 	if is_instance_valid(cam):
@@ -4077,7 +4450,7 @@ func _death_shake(v: float, cam: Camera2D) -> void:
 func _death_sequence(reason: String) -> void:
 	var layer_fx := CanvasLayer.new()
 	layer_fx.layer = 95
-	layer_fx.process_mode = Node.PROCESS_MODE_ALWAYS
+	layer_fx.process_mode = Node.PROCESS_MODE_PAUSABLE
 	add_child(layer_fx)
 	var flash := ColorRect.new()
 	flash.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -4122,7 +4495,7 @@ func _reload(col: Color = CYAN) -> void:
 	var trans := get_node_or_null("/root/Transition")
 	if trans != null:
 		await trans.shutter_close(0.7, col)
-	get_tree().reload_current_scene()
+	await Transition.change_scene(get_tree().current_scene.scene_file_path, 0.5)
 
 func _play(stream: AudioStream, pitch: float = 1.0, extra_db: float = 0.0) -> void:
 	if stream == null:
@@ -4199,6 +4572,7 @@ func _plug_fx() -> void:
 FILE: scripts\game systems\wire.gd
 ================================================================================
 
+# CHANGELOG (2026-11-15): Commit visual endpoints before callbacks; atomic graph-safe disconnect and plug feedback.
 extends Node2D
 
 @export var rope_segments: int = 24
@@ -4321,6 +4695,8 @@ func setup(start_pos: Vector2, custom_color: Color = Color(0.85, 0.15, 0.15), or
 		old_rope_points.append(start_pos)
 
 func pick_up(player_pos: Vector2) -> void:
+	if is_plugged:
+		disconnect_wire(player_pos)
 	is_held = true
 	is_plugged = false
 	is_dropped = false
@@ -4331,6 +4707,9 @@ func pick_up(player_pos: Vector2) -> void:
 		wire.default_color = wire_color
 
 func drop(drop_pos: Vector2) -> void:
+	if is_plugged:
+		disconnect_wire(drop_pos)
+		return
 	is_held = false
 	is_plugged = false
 	is_dropped = true
@@ -4359,7 +4738,12 @@ func plug_in(receiver_node: Node2D) -> void:
 		hand_pos = receiver_node.global_position
 	if wire != null:
 		wire.default_color = wire_color
+	if not rope_points.is_empty():
+		rope_points[rope_segments] = hand_pos
+		old_rope_points[rope_segments] = hand_pos
+	queue_redraw()
 	if not already_connected:
+		GameAudio.play_plug()
 		EventBus.wire_connected.emit(self, receiver_node)
 
 func get_total_rope_length() -> float:
@@ -4521,10 +4905,26 @@ func _draw() -> void:
 	draw_line(Vector2(-3, -4), Vector2(-3, 4), wire_color, 3.0, true)
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
+func disconnect_wire(drop_pos: Vector2) -> void:
+	var receiver := plugged_receiver
+	var was_plugged := is_plugged
+	is_plugged = false
+	is_held = false
+	is_dropped = true
+	plugged_receiver = null
+	target_module = null
+	hand_pos = drop_pos
+	if is_instance_valid(receiver) and receiver.has_method("remove_wire"):
+		receiver.remove_wire(self)
+	if was_plugged:
+		GameAudio.play_unplug()
+	queue_redraw()
+
 ================================================================================
 FILE: scripts\game systems\wire_module.gd
 ================================================================================
 
+# CHANGELOG (2026-11-15): Route disconnects through atomic endpoint cleanup, including direct receiver removals.
 @tool
 extends StaticBody2D
 
@@ -4623,7 +5023,10 @@ func spawn_wire() -> Node2D:
 		return null
 
 	var new_wire: Node2D = wire_scene.instantiate() as Node2D
-	get_tree().current_scene.add_child(new_wire)
+	var scene := get_tree().current_scene
+	if scene == null:
+		scene = get_parent()
+	scene.add_child(new_wire)
 	if new_wire.has_method("register_ignored_rid"):
 		new_wire.register_ignored_rid(get_rid())
 		if parent_module != null:
@@ -4908,6 +5311,7 @@ static func rotate_port_around_module(port: Node2D) -> void:
 FILE: scripts\game systems\wire_reciever.gd
 ================================================================================
 
+# CHANGELOG (2026-11-15): Route disconnects through atomic endpoint cleanup, including direct receiver removals.
 @tool
 extends StaticBody2D
 class_name WireReceiver
@@ -5043,6 +5447,14 @@ func can_accept_wire(wire_node: Node2D = null) -> bool:
 	return accepts_wire(wire_node)
 
 func accept_wire(wire_node: Node2D) -> void:
+	if not is_instance_valid(wire_node):
+		return
+	if wire_node.is_plugged and wire_node.plugged_receiver == self:
+		return
+	if not can_accept_wire(wire_node):
+		return
+	if wire_node.is_plugged:
+		wire_node.disconnect_wire(wire_node.hand_pos)
 	_clean_wires()
 	if target_module == null and get_parent() is BaseModule:
 		target_module = get_parent() as BaseModule
@@ -5051,9 +5463,13 @@ func accept_wire(wire_node: Node2D) -> void:
 	connected_wire = wire_node
 	if target_module != null:
 		target_module.accept_wire(wire_node)
+	wire_node.plug_in(self) # emits only after both logical endpoints are committed
 	queue_redraw()
 
 func remove_wire(wire_node: Node2D) -> void:
+	if is_instance_valid(wire_node) and wire_node.is_plugged and wire_node.plugged_receiver == self:
+		wire_node.disconnect_wire(get_receiver_position())
+		return
 	connected_wires.erase(wire_node)
 	_clean_wires()
 	if target_module != null:
@@ -5121,6 +5537,7 @@ func _draw() -> void:
 FILE: scripts\inheritance\BaseModule.gd
 ================================================================================
 
+# CHANGELOG (2026-11-15): Use transformed collision/art centre for build exclusion, interaction and tutorial spotlight.
 extends StaticBody2D
 class_name BaseModule
 
@@ -5174,7 +5591,7 @@ func _ready() -> void:
 func get_center() -> Vector2:
 	var col := get_node_or_null("CollisionShape2D") as CollisionShape2D
 	if col != null:
-		return global_position + col.position
+		return to_global(col.position)
 	return global_position
 
 func get_half_size() -> Vector2:
@@ -5417,7 +5834,7 @@ func _tick_sparks(delta: float) -> void:
 	get_parent().add_child(p)
 	p.global_position = pos
 	p.emitting = true
-	get_tree().create_timer(1.4).timeout.connect(p.queue_free)
+	SceneDelay.timer(self, 1.4).timeout.connect(p.queue_free)
 
 ## Progress bar above a broken module (fills while you hold E).
 class RepairBar extends Node2D:
@@ -5477,6 +5894,24 @@ static func set_flag(key: String, value: bool = true) -> void:
 	cfg.load(PATH)
 	cfg.set_value("flags", key, value)
 	cfg.save(PATH)
+
+================================================================================
+FILE: scripts\inheritance\SceneDelay.gd
+================================================================================
+
+# CHANGELOG (2026-11-15): Scene-owned one-shot timers avoid orphaned SceneTreeTimer coroutine references when a cutscene is skipped.
+class_name SceneDelay
+extends RefCounted
+
+static func timer(owner: Node, seconds: float, always: bool = false) -> Timer:
+	var clock := Timer.new()
+	clock.one_shot = true
+	clock.wait_time = maxf(0.001, seconds)
+	clock.process_mode = Node.PROCESS_MODE_ALWAYS if always else Node.PROCESS_MODE_PAUSABLE
+	owner.add_child(clock)
+	clock.timeout.connect(clock.queue_free)
+	clock.start()
+	return clock
 
 ================================================================================
 FILE: scripts\inheritance\SynthSfx.gd
@@ -5575,7 +6010,7 @@ static func beep_wav() -> AudioStreamWAV:
 FILE: scripts\main scenes\crash.gd
 ================================================================================
 
-
+# CHANGELOG (2026-11-15): Transfer selection focus on mouse hover so tutorial choice never has independent stale keyboard selection.
 extends Control
 
 @export_group("Scene Transition")
@@ -5600,7 +6035,6 @@ extends Control
 var log_lines: Array[String] = [
 	">> [FLIGHT_RECORDER // ARES_LANDER_04 // LOG_DUMP_884.LOG]",
 	">> [00:00:02.14] CRITICAL ALERT: X-CLASS SOLAR FLARE IMPACT",
-	">> [00:00:03.89] AVIONICS FAILURE... GUIDANCE OFFLINE... HULL BREACH",
 	">> [00:00:08.41] HARD IMPACT DETECTED // ELEVATION: -7,152m",
 	"",
 	"THE SOLAR FLARE KNOCKED OUT YOUR SHIP AND YOU CRASHED IN HELLAS PLANITIA,",
@@ -5723,6 +6157,8 @@ func _on_viewport_resized() -> void:
 		skip_warn_label.position = vp_size - skip_warn_label.size - Vector2(36, 28)
 
 func _input(event: InputEvent) -> void:
+	if event is InputEventKey and event.keycode == KEY_F11:
+		return
 	if transitioning_out or choosing or skip_cooldown > 0.0:
 		return
 	var pressed: bool = false
@@ -5826,7 +6262,7 @@ func _run_crash_sequence() -> void:
 	var tw := create_tween()
 	tw.tween_property(flash_rect, "color:a", 0.0, 1.4)
 
-	await get_tree().create_timer(1.4).timeout
+	await SceneDelay.timer(self, 1.4).timeout
 	if not is_inside_tree() or transitioning_out:
 		return
 
@@ -5839,7 +6275,7 @@ func _run_crash_sequence() -> void:
 		var line: String = log_lines[line_idx]
 		if line == "":
 			full_displayed_text += "\n"
-			await get_tree().create_timer(line_pause * 0.6).timeout
+			await SceneDelay.timer(self, line_pause * 0.6).timeout
 			continue
 		for i in range(line.length()):
 			if skip_requested or transitioning_out or not is_inside_tree():
@@ -5849,7 +6285,7 @@ func _run_crash_sequence() -> void:
 			if ch != " ":
 				typing_player.pitch_scale = randf_range(0.92, 1.12)
 				typing_player.play()
-			await get_tree().create_timer(char_delay).timeout
+			await SceneDelay.timer(self, char_delay).timeout
 		if skip_requested:
 			break
 		full_displayed_text += "\n"
@@ -5858,7 +6294,7 @@ func _run_crash_sequence() -> void:
 			crash_player.volume_db = crash_volume_db - 4.0
 			crash_player.play()
 			shake_strength = 14.0
-		await get_tree().create_timer(line_pause).timeout
+		await SceneDelay.timer(self, line_pause).timeout
 	if transitioning_out or not is_inside_tree():
 		return
 	if skip_requested:
@@ -5868,6 +6304,9 @@ func _run_crash_sequence() -> void:
 	_show_choice()
 
 func _show_choice() -> void:
+	if choosing or transitioning_out:
+		return
+	full_displayed_text += ""
 	choosing = true
 	choice_box = HBoxContainer.new()
 	choice_box.add_theme_constant_override("separation", 22)
@@ -5884,6 +6323,8 @@ func _show_choice() -> void:
 	choice_hint.add_theme_color_override("font_color", Color(0.5, 0.75, 0.7))
 	add_child(choice_hint)
 	_layout_choice()
+	yes.mouse_entered.connect(yes.grab_focus)
+	no.mouse_entered.connect(no.grab_focus)
 	yes.grab_focus()
 
 func _choice_button(text: String) -> Button:
@@ -5971,7 +6412,7 @@ func _generate_type_click_wav() -> AudioStreamWAV:
 FILE: scripts\main scenes\cutscene.gd
 ================================================================================
 
-
+# CHANGELOG (2026-11-15): One-input skip bypasses GUI consumption; idempotent finish and independent wall-clock watchdog.
 extends Control
 
 @export_group("Assets")
@@ -6407,68 +6848,7 @@ void fragment() {
 }
 """
 
-const SUN_OUTER_SHADER := """
-shader_type canvas_item;
-render_mode blend_add;
-uniform float time = 0.0;
-uniform vec2 sun_aspect = vec2(1.0, 1.0);
-uniform float outer_uv = 1.95;
-uniform vec4 near_col : source_color = vec4(1.0, 0.78, 0.32, 1.0);
-uniform vec4 mid_col : source_color = vec4(1.0, 0.48, 0.12, 1.0);
-uniform vec4 far_col : source_color = vec4(0.95, 0.28, 0.06, 1.0);
-
-float hash(vec2 p) { return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
-float noise(vec2 p) {
-	vec2 i = floor(p);
-	vec2 f = fract(p);
-	vec2 u = f * f * (3.0 - 2.0 * f);
-	return mix(mix(hash(i), hash(i + vec2(1.0, 0.0)), u.x),
-	           mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), u.x), u.y);
-}
-float fbm(vec2 p) {
-	float v = 0.0;
-	float a = 0.5;
-	for (int i = 0; i < 5; i++) { v += a * noise(p); p *= 2.0; a *= 0.5; }
-	return v;
-}
-
-void fragment() {
-	vec2 uv = (UV - 0.5) * 2.0;
-	uv.x /= sun_aspect.x;
-	uv.y /= sun_aspect.y;
-	float dist = length(uv);
-	if (dist < 0.85 || dist > outer_uv) { discard; }
-
-	float angle = atan(-uv.y, -uv.x);
-	float t = clamp(dist / outer_uv, 0.0, 1.0);
-
-	float streak_a = fbm(vec2(angle * 7.0, t * 3.5 - time * 0.14));
-	float streak_b = fbm(vec2(angle * 22.0, t * 8.0 - time * 0.30));
-	float streak_c = fbm(vec2(angle * 48.0, t * 16.0 - time * 0.55));
-
-	float streaks = streak_a * 0.50 + streak_b * 0.32 + streak_c * 0.18;
-	streaks = smoothstep(0.25, 0.78, streaks);
-
-	float fade = smoothstep(0.85, 1.05, dist) * (1.0 - smoothstep(1.0, outer_uv, dist));
-	fade = pow(fade, 1.6);
-
-	float intensity = fade * (streaks * 2.0 + 0.22);
-
-	vec3 col;
-	if (t < 0.35) {
-		col = mix(near_col.rgb, mid_col.rgb, t / 0.35);
-	} else {
-		col = mix(mid_col.rgb, far_col.rgb, (t - 0.35) / 0.65);
-	}
-
-	float prom = fbm(vec2(angle * 2.5, t * 4.5 - time * 0.09));
-	float prom_mask = smoothstep(0.55, 0.86, prom);
-	float prom_band = smoothstep(1.1, 0.95, dist);
-	col += near_col.rgb * prom_mask * prom_band * 0.85;
-
-	COLOR = vec4(col * intensity * 1.6, 1.0);
-}
-"""
+const SUN_OUTER_SHADER := SolarGas.SHADER
 
 const POST_SHADER := """
 shader_type canvas_item;
@@ -6771,6 +7151,7 @@ var post_mat: ShaderMaterial
 var typing_started: bool = false
 var ship_placed: bool = false
 var scene_ending: bool = false
+var _started_ms: int = 0
 
 var rng := RandomNumberGenerator.new()
 var sun_center: Vector2 = Vector2.ZERO
@@ -6791,6 +7172,8 @@ var sol_flash: float = 0.0
 var sol_base_pos: Vector2 = Vector2.ZERO
 
 func _ready() -> void:
+	process_mode = Node.PROCESS_MODE_ALWAYS
+	_started_ms = Time.get_ticks_msec()
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	view_size = get_viewport_rect().size
@@ -6905,8 +7288,8 @@ func _build_sol_text() -> void:
 	sls.font_color = sol_color
 	sls.font_size = 16
 	skip_label.label_settings = sls
-	skip_label.text = "[ PRESS ANY BUTTON AGAIN TO SKIP ]"
-	skip_label.modulate.a = 0.0
+	skip_label.text = "[ CLICK / SPACE / ENTER TO SKIP ]"
+	skip_label.modulate.a = 0.7
 	add_child(skip_label)
 
 func _build_post() -> void:
@@ -7002,22 +7385,16 @@ func _layout() -> void:
 func _on_resize() -> void:
 	_layout()
 
-func _unhandled_input(event: InputEvent) -> void:
+func _input(event: InputEvent) -> void:
 	if scene_ending:
 		return
-	var pressed: bool = (event is InputEventKey and event.pressed and not event.echo) \
-		or (event is InputEventMouseButton and event.pressed) \
-		or (event is InputEventJoypadButton and event.pressed)
-	if not pressed:
-		return
-
-	if skip_armed_timer > 0.0:
+	var pressed: bool = (event is InputEventKey and event.pressed and not event.echo and event.keycode != KEY_F11) or (event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT) or (event is InputEventJoypadButton and event.pressed)
+	if pressed:
+		get_viewport().set_input_as_handled()
 		_end_cutscene()
-	else:
-		skip_armed_timer = 3.5
 
 func _schedule_end() -> void:
-	await get_tree().create_timer(total_duration).timeout
+	await SceneDelay.timer(self, total_duration).timeout
 	if not is_inside_tree() or scene_ending:
 		return
 	_end_cutscene()
@@ -7033,12 +7410,15 @@ func _end_cutscene() -> void:
 
 	var trans = get_node_or_null("/root/Transition")
 	if trans:
-		trans.change_scene(next_scene, fade_out_duration)
+		while trans.transitioning and is_inside_tree():
+			await get_tree().process_frame
+		if is_inside_tree():
+			trans.change_scene(next_scene, minf(fade_out_duration, 0.25))
 	else:
 		get_tree().change_scene_to_file(next_scene)
 
 func _delayed_type_sol() -> void:
-	await get_tree().create_timer(sol_type_delay).timeout
+	await SceneDelay.timer(self, sol_type_delay).timeout
 	if not is_inside_tree():
 		return
 	_type_sol()
@@ -7058,7 +7438,7 @@ func _type_sol() -> void:
 		sol_flash = 1.0
 		if typing_player and typing_player.stream:
 			typing_player.play()
-		await get_tree().create_timer(sol_char_delay).timeout
+		await SceneDelay.timer(self, sol_char_delay).timeout
 	typing_active = false
 
 func _apply_sun_uniforms() -> void:
@@ -7190,13 +7570,15 @@ func _update_text(delta: float) -> void:
 			var target_a: float = 0.65 + 0.25 * sin(time * 8.0) if skip_armed_timer > 0.5 else (skip_armed_timer / 0.5) * 0.8
 			skip_label.modulate.a = lerpf(skip_label.modulate.a, target_a, delta * 14.0)
 		else:
-			skip_label.modulate.a = lerpf(skip_label.modulate.a, 0.0, delta * 10.0)
+			skip_label.modulate.a = 0.65 + 0.15 * sin(time * 3.0)
 
 func _update_audio() -> void:
 	if audio_player and audio_player.playing and not scene_ending:
 		audio_player.volume_db = audio_volume_db + (breath - 0.5) * 3.0 + tension * 2.0
 
 func _process(delta: float) -> void:
+	if not scene_ending and float(Time.get_ticks_msec() - _started_ms) / 1000.0 > maxf(total_duration, 0.1) + 5.0:
+		_end_cutscene()
 	time += delta
 	var t01 := clampf(time / maxf(total_duration, 0.1), 0.0, 1.0)
 	tension = t01 * t01 * (3.0 - 2.0 * t01)
@@ -7214,7 +7596,7 @@ func _process(delta: float) -> void:
 FILE: scripts\main scenes\game.gd
 ================================================================================
 
-
+# CHANGELOG (2026-11-15): Register every shop view for contextual hint suppression and stop title music on gameplay entry.
 extends Node2D
 
 @export_group("Music & Audio")
@@ -7709,7 +8091,24 @@ void fragment() {
 }
 """
 
+	var _nasa_fact: Label
+
+	func _update_nasa_fact() -> void:
+		if is_instance_valid(_nasa_fact):
+			_nasa_fact.text = MarsWeather.status_text
+
 	func _ready() -> void:
+		add_to_group("shop_ui")
+		_nasa_fact = Label.new()
+		_nasa_fact.name = "NASAFact"
+		_nasa_fact.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_nasa_fact.add_theme_font_override("font", GameFont.get_font())
+		_nasa_fact.add_theme_font_size_override("font_size", 12)
+		_nasa_fact.add_theme_color_override("font_color", Color(0.4, 0.9, 1.0))
+		_nasa_fact.text = MarsWeather.status_text
+		_nasa_fact.position = Vector2(24, 4)
+		add_child(_nasa_fact)
+		MarsWeather.updated.connect(_update_nasa_fact)
 		set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 		mouse_filter = Control.MOUSE_FILTER_STOP
 		focus_mode = Control.FOCUS_ALL
@@ -8287,6 +8686,7 @@ func _apply_transition_sfx() -> void:
 		tm.sfx_open = shutter_open_sfx
 
 func _ready() -> void:
+	GameAudio.set_menu_music(false)
 	GameManager.total_days = total_days
 	GameManager.day_length = day_length
 	day_loop = DayLoop.new()
@@ -8485,7 +8885,7 @@ func _transition_player_to_mars() -> void:
 	var w_tw := create_tween()
 	w_tw.tween_property(wind_player, "volume_db", wind_volume_db, 1.0)
 
-	await get_tree().create_timer(0.2).timeout
+	await SceneDelay.timer(self, 0.2, false).timeout
 	_ignore_mars_trigger = false
 
 	if trans != null:
@@ -8516,7 +8916,7 @@ func _transition_player_inside() -> void:
 	var w_tw := create_tween()
 	w_tw.tween_property(wind_player, "volume_db", -60.0, 0.8)
 
-	await get_tree().create_timer(0.2).timeout
+	await SceneDelay.timer(self, 0.2, false).timeout
 	_ignore_outside_trigger = false
 
 	if trans != null:
@@ -8576,7 +8976,7 @@ func _play_rover_turn_animation() -> void:
 		var tw := create_tween()
 		tw.tween_property(rover, "scale", Vector2(base_scale.x * 1.04, base_scale.y * 0.96), 0.05)
 		tw.tween_property(rover, "scale", base_scale, 0.06)
-		await get_tree().create_timer(0.11).timeout
+		await SceneDelay.timer(self, 0.11, false).timeout
 
 func _start_rover_transition() -> void:
 	GameManager.current_phase = GameManager.Phase.ROVER
@@ -8621,7 +9021,7 @@ func _start_rover_transition() -> void:
 		rover.global_position = rover_start_pos
 		_set_rover_frame(0)
 
-	await get_tree().create_timer(0.15).timeout
+	await SceneDelay.timer(self, 0.15, false).timeout
 	_ignore_mars_trigger = false
 
 	if trans != null:
@@ -8641,7 +9041,7 @@ func _start_rover_transition() -> void:
 	if not has_supplies:
 		GameManager.deliver_pending_supplies()
 
-	await get_tree().create_timer(0.25).timeout
+	await SceneDelay.timer(self, 0.25, false).timeout
 
 	await _play_rover_turn_animation()
 
@@ -8666,6 +9066,7 @@ func _start_rover_transition() -> void:
 FILE: scripts\main scenes\main_menu.gd
 ================================================================================
 
+# CHANGELOG (2026-11-15): Persistent nonspatial menu music including embedded options, with offline synthesized fallback.
 extends Control
 ## CRASHFALL title screen. Same space background as the options menu, floating text, digital look.
 ## PLAY and OPTIONS always show. HOW TO PLAY appears once the tutorial has been finished.
@@ -8694,6 +9095,7 @@ var _blip: AudioStreamPlayer
 var _font: Font
 
 func _ready() -> void:
+	GameAudio.set_menu_music(true)
 	set_meta("no_polish", true)
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_STOP
@@ -8890,6 +9292,7 @@ func _start(path: String) -> void:
 	if _busy:
 		return
 	_busy = true
+	GameAudio.set_menu_music(false)
 	GameManager.restart_all()
 	Transition.change_scene(path)
 
@@ -8905,6 +9308,7 @@ func _open_options() -> void:
 	queue_redraw()
 	_options = scene.instantiate() as Control
 	_options.set_meta("no_polish", true)
+	_options.set_meta("embedded_options", true)
 	_options.tree_exited.connect(_on_options_closed)
 	add_child(_options)
 	_options.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -8918,7 +9322,6 @@ func _on_options_closed() -> void:
 ================================================================================
 FILE: scripts\main scenes\options.gd
 ================================================================================
-
 
 extends Control
 
@@ -9088,8 +9491,8 @@ void fragment() {
 """
 
 var font: Font
-var font_size: int = 38
-var line_height: int = 48
+var font_size: int = 40
+var line_height: int = 50
 var padding: float = 30.0
 
 var section_names: Array[String] = ["GAMEPLAY", "AUDIO", "GRAPHICS", "CONTROLS"]
@@ -9182,9 +9585,8 @@ func _ready() -> void:
 	_gs()
 
 	set_meta("no_polish", true)
-	var _courier := SystemFont.new()
-	_courier.font_names = PackedStringArray(["Courier New", "monospace"])
-	font = _courier
+	font = SystemFont.new()
+	font.font_names = PackedStringArray(["Courier New", "monospace"])
 
 	_create_background_layer()
 	_create_glow_layer()
@@ -9234,8 +9636,8 @@ func _process(delta: float) -> void:
 func _on_resized() -> void:
 	var vs := get_viewport_rect().size
 	var base := minf(vs.x, vs.y)
-	font_size = clampi(int(base * 0.045), 24, 44)
-	line_height = int(font_size * 1.32)
+	font_size = clampi(int(base * 0.05), 28, 48)
+	line_height = int(font_size * 1.3)
 	padding = font_size
 
 	var top_area := padding + line_height * 2
@@ -9269,7 +9671,7 @@ func _draw() -> void:
 	for i in range(num_sections):
 		var section_text := section_names[i]
 		if i == selected_section:
-			section_text = "Ã¢Å“Â¦ [ " + section_text + " ] Ã¢Å“Â¦"
+			section_text = "[ " + section_text + " ]"
 		else:
 			section_text = "  " + section_text + "  "
 		var col := highlight_color if i == selected_section else text_color
@@ -9360,14 +9762,14 @@ func _wrap_text(text: String, max_width: float) -> Array[String]:
 
 func _draw_bottom_actions() -> void:
 	var bottom_y := size.y - line_height * 2
-	var gap := font_size * 4.5
+	var gap := font_size * 5
 	var x := padding
 
 	for i in range(bottom_actions.size()):
 		var action_text := bottom_actions[i]
 		var is_selected := focus_on_bottom and i == selected_bottom_index
 
-		var display_text := ("Ã¢Å“Â¦ > " if is_selected else "    ") + action_text
+		var display_text := ("> " if is_selected else "  ") + action_text
 		var drawn_text := display_text
 		if animate_reveal:
 			var visible_chars := int(reveal * display_text.length())
@@ -9490,9 +9892,6 @@ func _build_gameplay_page() -> void:
 	current_page = "gameplay"
 	entries.clear()
 	entries.append({"text": _bool_text("Particles", _get_setting("particles", true)), "action": "toggle", "param": "particles"})
-	entries.append({"text": _bool_text("Glow", _get_setting("glow", true)), "action": "toggle", "param": "glow"})
-	entries.append({"text": _bool_text("Screen Shake", _get_setting("screen_shake", true)), "action": "toggle", "param": "screen_shake"})
-	entries.append({"text": _bool_text("Low Detail Mode", _get_setting("low_detail", false)), "action": "toggle", "param": "low_detail"})
 	scroll_offset = 0
 	_update_scroll_range()
 	queue_redraw()
@@ -9635,7 +10034,7 @@ func _open_section(idx: int) -> void:
 
 func _get_entry_layout(i: int, line_y: float) -> Dictionary:
 	var is_active := (i == selected_index and not focus_on_sections and not focus_on_bottom)
-	var prefix := "Ã¢Å“Â¦ > " if is_active else "    "
+	var prefix := "> " if is_active else "  "
 	var full_text: String = prefix + entries[i].text
 	var layout := {
 		"y": line_y,
@@ -9685,7 +10084,7 @@ func _section_index_from_pos(pos: Vector2) -> int:
 	for i in range(num_sections):
 		var section_text := section_names[i]
 		if i == selected_section:
-			section_text = "Ã¢Å“Â¦ [ " + section_text + " ] Ã¢Å“Â¦"
+			section_text = "[ " + section_text + " ]"
 		else:
 			section_text = "  " + section_text + "  "
 		var text_width := font.get_string_size(section_text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x
@@ -9698,9 +10097,9 @@ func _bottom_action_index(pos: Vector2) -> int:
 	if pos.y < size.y - line_height * 2 or pos.y >= size.y - line_height:
 		return -1
 	var x := padding
-	var gap := font_size * 4.5
+	var gap := font_size * 5
 	for i in range(bottom_actions.size()):
-		var display_text := ("Ã¢Å“Â¦ > " if focus_on_bottom and i == selected_bottom_index else "    ") + bottom_actions[i]
+		var display_text := ("> " if focus_on_bottom and i == selected_bottom_index else "  ") + bottom_actions[i]
 		var width := font.get_string_size(display_text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x
 		var segment_width := width + gap
 		if pos.x >= x and pos.x < x + segment_width:
@@ -9709,6 +10108,8 @@ func _bottom_action_index(pos: Vector2) -> int:
 	return -1
 
 func _input(event: InputEvent) -> void:
+	if event is InputEventKey and event.keycode == KEY_F11:
+		return # reserved global shortcut, never bind it as a gameplay key
 	if confirming_exit:
 		_input_confirm(event)
 		return
@@ -10162,13 +10563,10 @@ func _save_all() -> void:
 	_rebuild_current_page()
 
 func _exit_to_main_menu() -> void:
-	var sm := get_node_or_null("/root/SceneManager")
-	if sm and sm.has_method("return_to_previous_scene"):
-		sm.return_to_previous_scene()
-	elif get_parent() != null and get_parent() != get_tree().root:
+	if has_meta("embedded_options") or (get_parent() != null and get_parent() != get_tree().root and get_tree().current_scene != self):
 		queue_free()
 	else:
-		get_tree().change_scene_to_file("res://scenes/main scenes/cutscene.tscn")
+		Transition.change_scene("res://scenes/main scenes/main_menu.tscn")
 
 func _get_custom_actions() -> Array[String]:
 	var result: Array[String] = []
@@ -10178,13 +10576,13 @@ func _get_custom_actions() -> Array[String]:
 	return result
 
 func _bool_text(label: String, value: bool) -> String:
-	return "%s: [%s]" % [label, "ONLINE" if value else "OFFLINE"]
+	return "%s: [%s]" % [label, "X" if value else " "]
 
 func _slider_entry(label: String, key: String, min_val: float, max_val: float) -> Dictionary:
 	var value := int(_get_setting(key, min_val))
 	var bar_str := _slider_bar(value, min_val, max_val)
 	return {
-		"text": "%s: [%s] %d%%" % [label, bar_str, value],
+		"text": "%s: [%s] %d" % [label, bar_str, value],
 		"action": "adjust",
 		"param": key,
 		"min": min_val,
@@ -10198,20 +10596,27 @@ func _cycle_entry(label: String, key: String, options: Array) -> Dictionary:
 	var display := "Uncapped" if key == "max_fps" and int(current) == 0 else str(current)
 	return {"text": "%s: < %s >" % [label, display], "action": "cycle", "param": key, "options": options}
 
-func _slider_bar(value: float, min_val: float, max_val: float, width: int = 18) -> String:
+func _slider_bar(value: float, min_val: float, max_val: float, width: int = 20) -> String:
 	var ratio := (value - min_val) / maxf(max_val - min_val, 1.0)
 	var filled := int(ratio * width)
-	return "Ã¢â€“Ë†".repeat(filled) + "Ã‚Â·".repeat(width - filled)
+	return "=".repeat(clampi(filled, 0, width)) + "-".repeat(width - clampi(filled, 0, width))
 
 ================================================================================
 FILE: scripts\main scenes\tutorial.gd
 ================================================================================
 
-
+# CHANGELOG (2026-11-15): Buffered tutorial events avoid missed-signal stalls; contextual 0.5s shop fade; per-step speaker anchors; exported dim/region fallbacks and current balancing text.
 extends Node2D
 ## The opening briefing. It plays as the real first morning: story, the supply request screen,
 ## building, wiring, solar stacking, failures and both hazards, then drops into Day 1.
 ## Every box locks input until the player reads it. Important boxes darken the screen.
+@export_group("Spotlight fallback")
+@export var enable_tutorial_dim: bool = true
+@export var enable_region_spotlights: bool = true
+@export var commander_step_offsets: Dictionary = {0: Vector2(0, 1), 1: Vector2(1, 0), 2: Vector2(0, 1), 3: Vector2(-1, 0), 4: Vector2(0, -1), 5: Vector2(1, 0)}
+var _shop_step := 0
+var _pending_events: Array[String] = []
+
 @export_group("Commander")
 @export var commander_sprite: Texture2D          ## leave empty to auto-use the captain art
 @export var commander_name: String = "COMMANDER"
@@ -10238,8 +10643,15 @@ var _shop_layer: CanvasLayer
 var _shop: Control
 var _objective_label: Label
 var _done := false
+var _cancelled := false
+var _dialogue_poll: Timer
 
 func _ready() -> void:
+	GameAudio.set_menu_music(false)
+	_dialogue_poll = Timer.new()
+	_dialogue_poll.wait_time = 0.03
+	add_child(_dialogue_poll)
+	_dialogue_poll.start()
 	_saved_inventory = GameManager.inventory.duplicate(true)
 	_saved_pending = GameManager.pending_delivery.duplicate(true)
 	_saved_phase = GameManager.current_phase
@@ -10255,9 +10667,9 @@ func _ready() -> void:
 	player.enable_player()
 	_speaker_texture = _find_portrait(player)
 	_build_objective_label()
-	EventBus.player_moved.connect(func(_p: Node2D) -> void: _ev.emit("moved"))
-	EventBus.module_placed.connect(func(m: BaseModule) -> void: _ev.emit("placed:" + m.module_name))
-	EventBus.module_built.connect(func(m: BaseModule) -> void: _ev.emit("built:" + m.module_name))
+	EventBus.player_moved.connect(func(_p: Node2D) -> void: _record_event("moved"))
+	EventBus.module_placed.connect(func(m: BaseModule) -> void: _record_event("placed:" + m.module_name))
+	EventBus.module_built.connect(func(m: BaseModule) -> void: _record_event("built:" + m.module_name))
 	EventBus.wire_connected.connect(_on_wire_connected)
 	_run()
 
@@ -10312,23 +10724,42 @@ func _objective(text: String) -> void:
 func _lock(locked: bool) -> void:
 	($Player as Node).call("set_input_locked", locked)
 
+func _record_event(kind: String) -> void:
+	if kind == "moved" and _pending_events.has(kind):
+		return
+	_pending_events.append(kind)
+	_ev.emit(kind)
+
 func _wait(kind: String) -> void:
-	while true:
-		var k: String = await _ev
-		if k == kind:
+	while not _pending_events.has(kind) and not _cancelled:
+		await _ev
+		if _cancelled:
 			return
+	if not _cancelled:
+		_pending_events.remove_at(_pending_events.find(kind))
 
 func _on_wire_connected(wire: Node2D, receiver: Node2D) -> void:
 	var src: Variant = wire.get("source_module")
 	var dst := receiver.get_parent()
 	if src is BaseModule and dst is BaseModule:
-		_ev.emit("wire:%s>%s" % [(src as BaseModule).module_name, (dst as BaseModule).module_name])
+		_record_event("wire:%s>%s" % [(src as BaseModule).module_name, (dst as BaseModule).module_name])
 
 ## One commander box. dim = darken everything but the box. anchor/spot may be a node.
 func _say(text: String, dim: bool = false, anchor: Variant = null, spot: Variant = null) -> void:
+	if _cancelled:
+		return
 	if anchor == null:
 		anchor = Dialogue.SCREEN if dim else $Player
-	await Dialogue.say(text, anchor, commander_name, _speaker_texture, dim, spot)
+	_lock(true)
+	Dialogue.show_dialogue(text, anchor, commander_name, _speaker_texture, true)
+	Dialogue._set_dim(dim and enable_tutorial_dim, spot if enable_region_spotlights else null)
+	# Await an owned timer, not a persistent autoload coroutine after this scene is freed.
+	while Dialogue._line_visible and not _cancelled:
+		await _dialogue_poll.timeout
+		if _cancelled:
+			return
+	Dialogue._set_dim(false, null)
+	_lock(false)
 
 func _vp() -> Vector2:
 	return get_viewport().get_visible_rect().size
@@ -10343,57 +10774,134 @@ func _give(item: String, count: int) -> void:
 # ------------------------------------------------------------------ the briefing
 func _run() -> void:
 	await get_tree().process_frame
+	if _cancelled:
+		return
 	await _chapter_story()
+	if _cancelled:
+		return
 	await _chapter_crew()
+	if _cancelled:
+		return
 	await _chapter_walk()
+	if _cancelled:
+		return
 	await _chapter_supplies()
+	if _cancelled:
+		return
 	await _chapter_build()
+	if _cancelled:
+		return
 	await _chapter_reactor()
+	if _cancelled:
+		return
 	await _chapter_solar()
+	if _cancelled:
+		return
 	await _chapter_bars()
+	if _cancelled:
+		return
 	await _chapter_failures()
+	if _cancelled:
+		return
 	await _chapter_storm()
+	if _cancelled:
+		return
 	await _chapter_flare()
+	if _cancelled:
+		return
 	await _chapter_finish()
+	if _cancelled:
+		return
 
 func _chapter_story() -> void:
 	await _say("Can you hear me? Good. Stay where you are, you're safe now.", true)
+	if _cancelled:
+		return
 	await _say("I'm the commander. I run the Mars teams from our main base, a few thousand kilometers from you.", true)
+	if _cancelled:
+		return
 	await _say("The solar flare that hit your lander knocked out your guidance. You came down in Hellas Planitia, the deepest basin on Mars, about seven kilometers below the surrounding ground.", true)
+	if _cancelled:
+		return
 	await _say("You survived the landing, and this base took less damage than we feared. It still needs a lot of work.", true)
+	if _cancelled:
+		return
 	await _say("Rescue is five days out. Your job is to keep this base alive until then. Power, air, and heat.", true)
+	if _cancelled:
+		return
 	await _say("I'm on Mars too, so there's no delay on this channel. Earth is different. A message to them takes between three and twenty-two minutes each way, so out here we solve our own problems.", true)
+	if _cancelled:
+		return
 
 func _chapter_crew() -> void:
 	await _say("You're not alone. Three of my crew have spent the last few months building outposts across this region. They know this planet.", true)
+	if _cancelled:
+		return
 	await _say("They're hundreds of kilometers away, so they can't walk over. They drive supplies to you in a rover.", true)
+	if _cancelled:
+		return
 	await _say("Every morning you tell them what you need. They load the rover and bring it to your base.", true)
+	if _cancelled:
+		return
 	await _say("A rover can only carry so much weight, and it only makes one trip a day. Whatever isn't on it, you won't have until tomorrow.", true)
+	if _cancelled:
+		return
 
 func _chapter_walk() -> void:
 	await _say("First, get a feel for the base. Move around with WASD or the arrow keys.")
+	if _cancelled:
+		return
 	_objective("Walk around  (WASD / arrow keys)")
 	await _wait("moved")
-	await get_tree().create_timer(1.6).timeout
+	if _cancelled:
+		return
+	await SceneDelay.timer(self, 1.6, false).timeout
+	if _cancelled:
+		return
 	_objective("")
 
 func _chapter_supplies() -> void:
+	await _say("Alright, now let me teach you the shop.", true)
+	if _cancelled:
+		return
+	await Transition.fade_to_black(0.5)
+	if _cancelled:
+		return
 	_shop_layer = CanvasLayer.new()
 	_shop_layer.layer = 10
 	add_child(_shop_layer)
 	_shop = GameScript.MarsGearManifest.new()
-	_shop.deploy_confirmed.connect(func() -> void: _ev.emit("sent"))
+	_shop.deploy_confirmed.connect(func() -> void: _record_event("sent"))
 	_shop_layer.add_child(_shop)
 	await get_tree().process_frame
+	if _cancelled:
+		return
+	await Transition.fade_from_black(0.5)
+	if _cancelled:
+		return
 	await _say_shop("This is the supply request. You'll see it every morning, before the rover leaves.", null)
+	if _cancelled:
+		return
 	await _say_shop("Each row is a piece of equipment. Press + to put one on the rover, and - to take one off.", _frac(shop_list))
+	if _cancelled:
+		return
 	await _say_shop("Everything has a weight. This is how much the rover can carry in total. Go over it and the crew can't take it.", _frac(shop_top))
+	if _cancelled:
+		return
 	await _say_shop("Pick a row and this panel explains what it does, along with some of the real science behind it. Worth reading.", _frac(shop_info))
+	if _cancelled:
+		return
 	await _say_shop("When you're ready, press SEND REQUEST and the crew loads up. CLEAR REQUEST empties the list if you change your mind.", _frac(shop_buttons))
+	if _cancelled:
+		return
 	await _say_shop("For now you need one Oxygen Maker and two Solar Panels. Add those, then send the request.", _frac(shop_list))
+	if _cancelled:
+		return
 	_shop.process_mode = Node.PROCESS_MODE_INHERIT
 	_objective("Add 1 Oxygen Maker + 2 Solar Panels, then SEND REQUEST")
 	await _wait("sent")
+	if _cancelled:
+		return
 	_objective("")
 	_shop_layer.queue_free()
 	_lock(true)
@@ -10404,114 +10912,239 @@ func _chapter_supplies() -> void:
 		GameManager.inventory[key] = 0
 	_give("Life Support", 1)
 	await _say("The rover's here. Your supplies are on the ground.", false)
+	if _cancelled:
+		return
 	if had_ls < 1 or had_sp < 2:
 		await _say("You were short on a couple of things, so I've added what you need for this first build.", false)
+		if _cancelled:
+			return
 
 func _say_shop(text: String, spot: Variant) -> void:
 	_shop.process_mode = Node.PROCESS_MODE_DISABLED
-	await _say(text, spot != null, Dialogue.SCREEN_TOP if spot != null else Dialogue.SCREEN, spot)
+	Dialogue.preferred_screen_side = commander_step_offsets.get(_shop_step, Vector2.ZERO)
+	_shop_step += 1
+	await _say(text, true, Dialogue.SCREEN, spot)
+	if _cancelled:
+		return
+	Dialogue.preferred_screen_side = Vector2.ZERO
 	_shop.process_mode = Node.PROCESS_MODE_INHERIT
 
 func _chapter_build() -> void:
 	await _say("Press SPACE to enter build mode and aim with your mouse. Click or press E to place the Oxygen Maker. Leave some space around the reactor, it needs clearance.")
+	if _cancelled:
+		return
 	_objective("Place the Oxygen Maker  (SPACE, aim, E or click)")
 	await _wait("placed:Life Support")
+	if _cancelled:
+		return
 	_tracked_module = null
 	for m in BaseManager.active_modules:
 		if is_instance_valid(m) and m.module_name == "Life Support":
 			_tracked_module = m
 	_objective("Stay inside the ring until it's built")
 	await _say("Building takes a moment. Stay inside the ring until it finishes, or the work stops.", false, _tracked_module if _tracked_module != null else $Player)
+	if _cancelled:
+		return
 	await _wait("built:Life Support")
+	if _cancelled:
+		return
 	_objective("")
 	await _say("Done. See the sockets that appeared on it? That's where cables plug in.", false, _tracked_module)
+	if _cancelled:
+		return
 
 func _chapter_reactor() -> void:
 	var reactor := $Reactor as Node2D
 	await _say("This is the reactor. Every machine in the base gets its power from here.", true, reactor, reactor)
+	if _cancelled:
+		return
 	await _say("The reactor doesn't make power on its own. It collects it from solar panels and shares it out. No panels, no power.", true, reactor, reactor)
+	if _cancelled:
+		return
 	await _say("Mars is about one and a half times farther from the Sun than Earth, so sunlight here is less than half as strong. Panels are the only practical option, and we need plenty of them.", true)
+	if _cancelled:
+		return
 	await _say("To connect equipment, walk up to a reactor output and press E to pick up its cable. Carry it to the socket and press E again to plug it in.", false, reactor)
+	if _cancelled:
+		return
 	_objective("Plug the reactor into the Oxygen Maker  (E to grab, E to connect)")
 	await _wait("wire:Reactor>Life Support")
+	if _cancelled:
+		return
 	_objective("")
 	await _say("Connected. It won't run yet, because nothing is feeding the reactor. Let's fix that.", false, _tracked_module)
+	if _cancelled:
+		return
 
 func _chapter_solar() -> void:
 	var reactor := $Reactor as Node2D
 	_give("Solar Panel", 1)
 	await _say("Here's your first Solar Panel. Open build mode and place it near the reactor.")
+	if _cancelled:
+		return
 	_objective("Place the Solar Panel near the reactor")
 	await _wait("placed:Solar Panel")
+	if _cancelled:
+		return
 	await _wait("built:Solar Panel")
+	if _cancelled:
+		return
 	_objective("Plug the panel's cable into the reactor")
 	await _say("Now plug the panel into the reactor. Pick up the cable on the panel and connect it to the reactor.", false, reactor)
+	if _cancelled:
+		return
 	await _wait("wire:Solar Panel>Reactor")
+	if _cancelled:
+		return
 	_objective("")
 	await _say("One panel gives the reactor 50 kilowatts of power. Every machine uses some of that. The Oxygen Maker takes 30, the heater 20, the storm shield 40, and the comms dish 15.", true, reactor, reactor)
+	if _cancelled:
+		return
 	await _say("So one panel runs the Oxygen Maker and the heater, and that's all 50. Nothing left over.", true)
+	if _cancelled:
+		return
 	await _say("But panels stack, and they stack fast. Two panels give 100 kilowatts. Three give 200.", true)
+	if _cancelled:
+		return
 	_give("Solar Panel", 1)
 	await _say("Here's your second panel. Place it and plug it into the reactor as well.")
+	if _cancelled:
+		return
 	_objective("Place the second panel and plug it into the reactor")
 	await _wait("placed:Solar Panel")
+	if _cancelled:
+		return
 	await _wait("built:Solar Panel")
+	if _cancelled:
+		return
 	await _wait("wire:Solar Panel>Reactor")
+	if _cancelled:
+		return
 	_objective("")
 	await _say("That's 100 kilowatts now, double what you had. A second panel is almost always worth its weight.", true, reactor, reactor)
+	if _cancelled:
+		return
 	await _say("The reactor also keeps a reserve. The more power your equipment draws, the faster it drains. If it runs empty, everything shuts off, so don't run more than you need.", true)
+	if _cancelled:
+		return
 
 func _chapter_bars() -> void:
 	var v := _vp()
 	await _say("These bars are what keep you alive. Air, warmth, and health.", true, Dialogue.SCREEN, _frac(hud_area))
-	await _say("Air drains slowly. The atmosphere here is 95 percent carbon dioxide, so the Oxygen Maker splits it apart with electricity. NASA's MOXIE experiment on the Perseverance rover did exactly that.", true)
+	if _cancelled:
+		return
+	await _say("Air drains in about eight seconds without life support, and faster each day. The atmosphere here is 95 percent carbon dioxide, so the Oxygen Maker splits it apart with electricity. NASA's MOXIE experiment on the Perseverance rover did exactly that.", true)
+	if _cancelled:
+		return
 	await _say("Warmth drains too. Nights here fall to around minus 60 degrees Celsius. Without the heater running, the base freezes.", true)
-	await _say("If air or warmth hits zero, your health starts dropping, and if health hits zero, you're done for the day. While both are fine, you slowly recover.", true)
+	if _cancelled:
+		return
+	await _say("If air or warmth hits zero, your health starts dropping, and if health hits zero, you're done for the day. Health never recovers on its own. Use a med kit to heal.", true)
+	if _cancelled:
+		return
 
 func _chapter_failures() -> void:
 	await _say("Now the part nobody likes. Mars dust is finer than flour, and it works its way into everything. Your equipment will act up now and then.", true)
+	if _cancelled:
+		return
 	await _say("That's called a failure. A failed machine stops completely until it's repaired.", true)
+	if _cancelled:
+		return
 	await _say("A bar shows up above it. Stand close and hold E until the bar fills. It takes about four seconds.", false)
+	if _cancelled:
+		return
 	await _say("Failures get more frequent every day, so keep an eye on your equipment.", true)
+	if _cancelled:
+		return
 	await _say("There is one way to prevent them. Plug a machine directly into a solar panel, skipping the reactor, and it can never fail. It also uses no reactor power.", true)
+	if _cancelled:
+		return
 	await _say("The catch is that the panel then feeds only that machine. Use it on whatever you can't afford to lose, like the Oxygen Maker.", true)
+	if _cancelled:
+		return
 
 func _chapter_storm() -> void:
 	await _say("Two hazards can hit this base. The first is a dust storm.", true)
-	await _say("You can't stop one and you can't avoid one. When it hits, dust gets into every machine at once and they all fail.", true)
+	if _cancelled:
+		return
+	await _say("You can't stop one and you can't avoid one. When it hits, dust disconnects every cable, even direct solar links. You must reconnect them manually.", true)
+	if _cancelled:
+		return
 	await _say("It also coats your solar panels. Their output drops by half the moment the storm starts, so you lose half your power.", true)
+	if _cancelled:
+		return
 	await _say("And the storm itself hurts. You take 25 damage.", true)
+	if _cancelled:
+		return
 	await _say("Here's what one looks like.", false)
+	if _cancelled:
+		return
 	_lock(true)
 	await Hazards.demo("storm")
+	if _cancelled:
+		return
 	_lock(false)
 	await _say("A real one lasts about thirty seconds. They can also cover the whole planet. A dust storm in 2018 buried the Opportunity rover's panels and ended its mission.", true)
-	await _say("When one hits, check your health, repair what failed, and be glad you built more than one panel.", true)
+	if _cancelled:
+		return
+	await _say("When one hits, check your health and reconnect your cables. Solar output stays halved for the whole storm; it does not stack every frame.", true)
+	if _cancelled:
+		return
 
 func _chapter_flare() -> void:
 	await _say("The second hazard is a solar flare. It's what brought your lander down.", true)
+	if _cancelled:
+		return
 	await _say("Mars has no global magnetic field and a very thin atmosphere, so the charged particles from a flare reach the ground almost unblocked.", true)
+	if _cancelled:
+		return
 	await _say("A flare does 15 damage, and every machine that's running fails.", true)
+	if _cancelled:
+		return
 	await _say("The first defense is the storm shield. If it's powered when the flare hits, you take nothing and nothing fails. But it draws 40 kilowatts the whole time it runs.", true)
+	if _cancelled:
+		return
 	await _say("The second is cheaper. Unplug your machines before the flare arrives. Equipment that's not connected to power can't be damaged by the surge.", true)
+	if _cancelled:
+		return
 	await _say("How do you know a flare is coming? That's what the comms dish is for. While it's powered, it picks up a warning 15 seconds before impact.", true)
+	if _cancelled:
+		return
 	await _say("Fifteen seconds isn't long. How well it works depends on where you're standing, how fast you move, and some luck.", true)
+	if _cancelled:
+		return
 	await _say("Here's what a flare looks like.", false)
+	if _cancelled:
+		return
 	_lock(true)
 	await Hazards.demo("flare")
+	if _cancelled:
+		return
 	_lock(false)
 	await _say("No comms, no shield, and nothing unplugged? Then you take the full hit. Decide your plan before the rover leaves each morning.", true)
+	if _cancelled:
+		return
 
 func _chapter_finish() -> void:
 	await _say("One last item. Med kits. Press H anywhere on Mars to use one, and it restores 45 health. They weigh almost nothing, so take a couple every day.", false)
+	if _cancelled:
+		return
 	await _say("That's the essentials. Panels first, and stack them. Keep air and warmth running. Repair fast. Plan for hazards before the rover leaves.", true)
+	if _cancelled:
+		return
 	await _say("Five days. I'll be on this channel the whole time. Good luck out there.", true)
+	if _cancelled:
+		return
 	_done = true
 	SaveFlags.set_flag("tutorial_done")
 	_lock(true)
 	Transition.change_scene(GAME_SCENE)
 
 func _exit_tree() -> void:
+	_cancelled = true
+	if is_instance_valid(_dialogue_poll):
+		_dialogue_poll.timeout.emit()
+	_ev.emit("__cancelled__")
 	Dialogue.hide_dialogue()
 	Hazards.clear()
 	GameManager.inventory = _saved_inventory
@@ -11898,10 +12531,81 @@ func _toast(msg: String, col: Color) -> void:
 	tw.tween_callback(p.queue_free)
 
 ================================================================================
+FILE: scripts\polish\solar_gas.gd
+================================================================================
+
+# CHANGELOG (2026-11-15): Single cutscene/hazard corona shader source; no dependency on a running cutscene scene.
+class_name SolarGas
+extends RefCounted
+
+const SHADER := """
+shader_type canvas_item;
+render_mode blend_add;
+uniform float time = 0.0;
+uniform vec2 sun_aspect = vec2(1.0, 1.0);
+uniform float outer_uv = 1.95;
+uniform vec4 near_col : source_color = vec4(1.0, 0.78, 0.32, 1.0);
+uniform vec4 mid_col : source_color = vec4(1.0, 0.48, 0.12, 1.0);
+uniform vec4 far_col : source_color = vec4(0.95, 0.28, 0.06, 1.0);
+
+float hash(vec2 p) { return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
+float noise(vec2 p) {
+	vec2 i = floor(p);
+	vec2 f = fract(p);
+	vec2 u = f * f * (3.0 - 2.0 * f);
+	return mix(mix(hash(i), hash(i + vec2(1.0, 0.0)), u.x),
+	           mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), u.x), u.y);
+}
+float fbm(vec2 p) {
+	float v = 0.0;
+	float a = 0.5;
+	for (int i = 0; i < 5; i++) { v += a * noise(p); p *= 2.0; a *= 0.5; }
+	return v;
+}
+
+void fragment() {
+	vec2 uv = (UV - 0.5) * 2.0;
+	uv.x /= sun_aspect.x;
+	uv.y /= sun_aspect.y;
+	float dist = length(uv);
+	if (dist < 0.85 || dist > outer_uv) { discard; }
+
+	float angle = atan(-uv.y, -uv.x);
+	float t = clamp(dist / outer_uv, 0.0, 1.0);
+
+	float streak_a = fbm(vec2(angle * 7.0, t * 3.5 - time * 0.14));
+	float streak_b = fbm(vec2(angle * 22.0, t * 8.0 - time * 0.30));
+	float streak_c = fbm(vec2(angle * 48.0, t * 16.0 - time * 0.55));
+
+	float streaks = streak_a * 0.50 + streak_b * 0.32 + streak_c * 0.18;
+	streaks = smoothstep(0.25, 0.78, streaks);
+
+	float fade = smoothstep(0.85, 1.05, dist) * (1.0 - smoothstep(1.0, outer_uv, dist));
+	fade = pow(fade, 1.6);
+
+	float intensity = fade * (streaks * 2.0 + 0.22);
+
+	vec3 col;
+	if (t < 0.35) {
+		col = mix(near_col.rgb, mid_col.rgb, t / 0.35);
+	} else {
+		col = mix(mid_col.rgb, far_col.rgb, (t - 0.35) / 0.65);
+	}
+
+	float prom = fbm(vec2(angle * 2.5, t * 4.5 - time * 0.09));
+	float prom_mask = smoothstep(0.55, 0.86, prom);
+	float prom_band = smoothstep(1.1, 0.95, dist);
+	col += near_col.rgb * prom_mask * prom_band * 0.85;
+
+	COLOR = vec4(col * intensity * 1.6, 1.0);
+}
+"""
+
+================================================================================
 FILE: scripts\ui\dialogue.gd
 ================================================================================
 
-
+# CHANGELOG (2026-11-15): Place commander adjacent to actual spotlight bounds; side preferences and responsive screen fractions; missing-target full-dim fallback.
 extends CanvasLayer
 ## AUTOLOAD "Dialogue" (scenes/ui/dialogue.tscn).
 ##   await Dialogue.say("Text", anchor, "Commander", portrait, dim, spotlight)
@@ -11912,6 +12616,9 @@ extends CanvasLayer
 ## The font comes from GameFont automatically. No scroll bar: the box grows to fit the text.
 signal line_finished
 signal line_dismissed
+
+var preferred_screen_side := Vector2.ZERO
+var _cancel_serial := 0
 
 const SCREEN := &"__screen__"
 const SCREEN_TOP := &"__screen_top__"
@@ -12053,9 +12760,12 @@ func say(text: String, location: Variant = null, character: String = "", sprite:
 	_lock_player(true)
 	show_dialogue(text, location, character, sprite, true)
 	_set_dim(dim, spot)
-	await line_dismissed
-	_set_dim(false, null)
-	_lock_player(false)
+	var serial := _cancel_serial
+	while _line_visible and serial == _cancel_serial:
+		await get_tree().process_frame
+	if not _line_visible:
+		_set_dim(false, null)
+		_lock_player(false)
 
 func show_dialogue(text: String, location: Variant = null, character: String = "", sprite: Texture2D = null, dismissible: bool = false) -> void:
 	set_anchor(location)
@@ -12074,6 +12784,9 @@ func show_dialogue(text: String, location: Variant = null, character: String = "
 	_follow_anchor()
 
 func hide_dialogue() -> void:
+	_cancel_serial += 1
+	if is_instance_valid(dim_rect):
+		_set_dim(false, null)
 	_line_visible = false
 	if dialogue_box != null:
 		dialogue_box.hide()
@@ -12097,6 +12810,8 @@ func _lock_player(locked: bool) -> void:
 
 func _set_dim(on: bool, spot: Variant) -> void:
 	_spot = spot
+	if on and spot != null:
+		_screen_mode = true
 	if _dim_tween != null:
 		_dim_tween.kill()
 	var mat := dim_rect.material as ShaderMaterial
@@ -12179,7 +12894,7 @@ func _update_dim() -> void:
 		mat.set_shader_parameter("spot_rect", Vector4(r.position.x, r.position.y, r.size.x, r.size.y))
 	elif _spot is Node2D and is_instance_valid(_spot):
 		var n: Node2D = _spot
-		var sp: Vector2 = n.get_canvas_transform() * n.global_position
+		var sp: Vector2 = n.get_canvas_transform() * ((n as BaseModule).get_center() if n is BaseModule else n.global_position)
 		var radius := 90.0
 		if n is BaseModule:
 			radius = maxf(90.0, (n as BaseModule).get_footprint().size.length() * 0.55 * n.get_canvas_transform().get_scale().x)
@@ -12202,8 +12917,10 @@ func _follow_anchor() -> void:
 	var desired := _fit_size(box_size.min(available).max(Vector2.ONE), available)
 	if _screen_mode:
 		dialogue_box.show()
-		dialogue_box.position = Vector2((viewport_size.x - desired.x) * 0.5, 24.0 if _screen_top else viewport_size.y - desired.y - 70.0)
-		dialogue_box.size = desired
+		var protected := _spot_screen_rect()
+		var fit := _screen_clear_position(protected, desired, viewport_size, margin)
+		dialogue_box.position = fit.position
+		dialogue_box.size = fit.size
 		_layout_content()
 		return
 	if not is_instance_valid(_anchor) and not _has_world_position:
@@ -12265,10 +12982,59 @@ func _layout_content() -> void:
 	hint_label.position = Vector2(size.x - 120.0 - pad, size.y - 22.0 - 6.0)
 	hint_label.size = Vector2(120.0, 20.0)
 
+func _spot_screen_rect() -> Rect2:
+	if _spot is Rect2:
+		return _spot
+	if _spot is Node2D and is_instance_valid(_spot):
+		var node := _spot as Node2D
+		var center: Vector2 = node.get_canvas_transform() * (node.get_center() if node is BaseModule else node.global_position)
+		var radius := 90.0
+		if node is BaseModule:
+			radius = maxf(radius, node.get_footprint().size.length() * 0.55 * node.get_canvas_transform().get_scale().x)
+		return Rect2(center - Vector2.ONE * radius, Vector2.ONE * radius * 2.0)
+	return Rect2() # full-screen dim + visible commander tooltip when target is unavailable
+
+func _screen_clear_position(protected: Rect2, desired: Vector2, viewport_size: Vector2, margin: Vector2) -> Rect2:
+	var bounds := Rect2(margin, viewport_size - margin * 2.0)
+	if protected.size == Vector2.ZERO:
+		return Rect2(Vector2((viewport_size.x - desired.x) * 0.5, margin.y if _screen_top else viewport_size.y - desired.y - margin.y), desired)
+	var r := protected.grow(12.0).intersection(bounds)
+	var spaces: Array[Rect2] = [
+		Rect2(bounds.position, Vector2(bounds.size.x, maxf(0.0, r.position.y - bounds.position.y))),
+		Rect2(Vector2(bounds.position.x, r.end.y), Vector2(bounds.size.x, maxf(0.0, bounds.end.y - r.end.y))),
+		Rect2(bounds.position, Vector2(maxf(0.0, r.position.x - bounds.position.x), bounds.size.y)),
+		Rect2(Vector2(r.end.x, bounds.position.y), Vector2(maxf(0.0, bounds.end.x - r.end.x), bounds.size.y))]
+	var order := [0, 1, 2, 3]
+	if preferred_screen_side.y > 0: order = [1, 0, 3, 2]
+	elif preferred_screen_side.y < 0: order = [0, 1, 3, 2]
+	elif preferred_screen_side.x > 0: order = [3, 2, 1, 0]
+	elif preferred_screen_side.x < 0: order = [2, 3, 1, 0]
+	for index in order:
+		var area := spaces[index]
+		if area.size.x < 240.0 or area.size.y < 100.0:
+			continue
+		var fitted := _fit_size(desired.min(area.size), area.size)
+		var text_width := maxf(40.0, fitted.x - 118.0)
+		var text_height := _font.get_multiline_string_size(_full_text, HORIZONTAL_ALIGNMENT_LEFT, text_width, font_size).y + 81.0
+		if text_height > area.size.y:
+			continue
+		return Rect2(area.position + (area.size - fitted) * 0.5, fitted)
+	# Very small viewports: preserve guidance; hide portrait, place tooltip with the least overlap.
+	var best := Rect2(Vector2(margin.x, viewport_size.y - desired.y - margin.y), desired)
+	var overlap := best.intersection(r).get_area()
+	for area in spaces:
+		var candidate := Rect2(area.position.clamp(margin, viewport_size - desired - margin), desired)
+		var amount := candidate.intersection(r).get_area()
+		if amount < overlap:
+			best = candidate
+			overlap = amount
+	return best
+
 ================================================================================
 FILE: scripts\ui\GlassUI.gd
 ================================================================================
 
+# CHANGELOG (2026-11-15): Transparent keyboard-focus outline avoids stacking a second filled hover selection.
 class_name GlassUI
 ## Shared digital UI look: near-black panels, hard cyan edges, hard offset shadow, red highlight.
 const CYAN := Color(0.35, 0.9, 1.0)
@@ -12300,10 +13066,30 @@ static func style_button(b: Button, size: int = 22) -> void:
 	h.shadow_color = Color(0, 0, 0, 0.8)
 	b.add_theme_stylebox_override("normal", n)
 	b.add_theme_stylebox_override("hover", h)
-	b.add_theme_stylebox_override("focus", h)
+	var focus := panel(Color(0, 0, 0, 0), Color.WHITE)
+	focus.shadow_size = 0
+	b.add_theme_stylebox_override("focus", focus)
 	b.add_theme_stylebox_override("pressed", h)
 	b.add_theme_stylebox_override("disabled", n)
 	b.focus_mode = Control.FOCUS_ALL
+
+================================================================================
+FILE: scripts\mars_data.gd
+================================================================================
+
+# CHANGELOG (2026-11-15): Offline Mars constants feed calibrated solar output; retain requested nominal gravity and exact gameplay sol.
+# Source: https://nssdc.gsfc.nasa.gov/planetary/factsheet/marsfact.html
+class_name MarsData
+extends RefCounted
+
+const SOL_SECONDS: float = 88775.244
+const SOLAR_IRRADIANCE_W_M2: float = 586.2
+const EARTH_IRRADIANCE_W_M2: float = 1361.0
+# Requested nominal gravity. NASA currently lists mean surface gravity as 3.73 m/s2.
+const GRAVITY_M_S2: float = 3.71
+const PRESSURE_KPA: float = 0.636
+const AXIAL_TILT_DEG: float = 25.19
+const SOLAR_EFFICIENCY_VS_EARTH: float = SOLAR_IRRADIANCE_W_M2 / EARTH_IRRADIANCE_W_M2
 
 ================================================================================
 FILE: sprites\mars-outpost-kit-free\MarsOutpostKit_FreeSample\Godot\Effects\explosion_small_frames.tres
@@ -18262,6 +19048,82 @@ bus/2/volume_db = 0.0
 bus/2/send = &"Master"
 
 ================================================================================
+FILE: export_presets.cfg
+================================================================================
+
+[preset.0]
+
+name="Windows Desktop"
+platform="Windows Desktop"
+runnable=true
+dedicated_server=false
+custom_features=""
+export_filter="all_resources"
+include_filter=""
+exclude_filter=""
+export_path=""
+patches=PackedStringArray()
+patch_delta_encoding=false
+patch_delta_compression_level_zstd=19
+patch_delta_min_reduction=0.1
+patch_delta_include_filters="*"
+patch_delta_exclude_filters=""
+encryption_include_filters=""
+encryption_exclude_filters=""
+seed=0
+encrypt_pck=false
+encrypt_directory=false
+script_export_mode=2
+
+[preset.0.options]
+
+custom_template/debug=""
+custom_template/release=""
+debug/export_console_wrapper=1
+binary_format/embed_pck=false
+texture_format/s3tc_bptc=true
+texture_format/etc2_astc=false
+shader_baker/enabled=false
+binary_format/architecture="x86_64"
+codesign/enable=false
+codesign/timestamp=true
+codesign/timestamp_server_url=""
+codesign/digest_algorithm=1
+codesign/description=""
+codesign/custom_options=PackedStringArray()
+application/modify_resources=true
+application/icon=""
+application/console_wrapper_icon=""
+application/icon_interpolation=4
+application/file_version=""
+application/product_version=""
+application/company_name=""
+application/product_name=""
+application/file_description=""
+application/copyright=""
+application/trademarks=""
+application/export_angle=0
+application/export_d3d12=0
+application/d3d12_agility_sdk_multiarch=true
+ssh_remote_deploy/enabled=false
+ssh_remote_deploy/host="user@host_ip"
+ssh_remote_deploy/port="22"
+ssh_remote_deploy/extra_args_ssh=""
+ssh_remote_deploy/extra_args_scp=""
+ssh_remote_deploy/run_script="Expand-Archive -LiteralPath '{temp_dir}\\{archive_name}' -DestinationPath '{temp_dir}'
+$action = New-ScheduledTaskAction -Execute '{temp_dir}\\{exe_name}' -Argument '{cmd_args}'
+$trigger = New-ScheduledTaskTrigger -Once -At 00:00
+$settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries
+$task = New-ScheduledTask -Action $action -Trigger $trigger -Settings $settings
+Register-ScheduledTask godot_remote_debug -InputObject $task -Force:$true
+Start-ScheduledTask -TaskName godot_remote_debug
+while (Get-ScheduledTask -TaskName godot_remote_debug | ? State -eq running) { Start-Sleep -Milliseconds 100 }
+Unregister-ScheduledTask -TaskName godot_remote_debug -Confirm:$false -ErrorAction:SilentlyContinue"
+ssh_remote_deploy/cleanup_script="Stop-ScheduledTask -TaskName godot_remote_debug -ErrorAction:SilentlyContinue
+Unregister-ScheduledTask -TaskName godot_remote_debug -Confirm:$false -ErrorAction:SilentlyContinue
+Remove-Item -Recurse -Force '{temp_dir}'"
+
+================================================================================
 FILE: project.godot
 ================================================================================
 
@@ -18278,24 +19140,26 @@ config_version=5
 [application]
 
 config/name="Crashfall"
+config/description="You are stranded in hell , survive."
 run/main_scene="res://scenes/main scenes/main_menu.tscn"
 config/features=PackedStringArray("4.6", "GL Compatibility")
+boot_splash/bg_color=Color(0, 0, 0, 1)
+boot_splash/image="uid://7dl70lfjlwjc"
 config/icon="uid://o5q4o7ocx6td"
-
-[audio]
-
-buses/default_bus_layout="uid://cj08fvlsnbidg"
 
 [autoload]
 
 GameFont="*res://scripts/autoloads/GameFont.gd"
-Transition="*uid://biwie4aohk6df"
-EventBus="*uid://bl05nu4e54tqs"
-GameManager="*uid://ecq8du2oji08"
-BaseManager="*uid://ckvgjnnhg08wv"
-Polish="*uid://bn3mme6x63rk3"
-GameSettings="*uid://d27a8kthqk3d3"
+Transition="*res://scripts/autoloads/TransitionManager.gd"
+EventBus="*res://scripts/autoloads/EventBus.gd"
+GameManager="*res://scripts/autoloads/GameManager.gd"
+BaseManager="*res://scripts/autoloads/BaseManager.gd"
+Polish="*res://scripts/polish/polish.gd"
+GameSettings="*res://scripts/autoloads/GameSettings.gd"
 Dialogue="*res://scenes/ui/dialogue.tscn"
+GameAudio="*res://scripts/autoloads/GameAudio.gd"
+PauseMenu="*res://scripts/autoloads/PauseMenu.gd"
+MarsWeather="*res://scripts/autoloads/MarsWeather.gd"
 Hazards="*res://scripts/autoloads/Hazards.gd"
 
 [display]
@@ -18352,3 +19216,4 @@ interact={
 rendering_device/driver.windows="d3d12"
 renderer/rendering_method="gl_compatibility"
 renderer/rendering_method.mobile="gl_compatibility"
+environment/defaults/default_clear_color=Color(0, 0, 0, 1)

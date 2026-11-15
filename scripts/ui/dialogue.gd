@@ -1,4 +1,4 @@
-
+# CHANGELOG (2026-11-15): Place commander adjacent to actual spotlight bounds; side preferences and responsive screen fractions; missing-target full-dim fallback.
 extends CanvasLayer
 ## AUTOLOAD "Dialogue" (scenes/ui/dialogue.tscn).
 ##   await Dialogue.say("Text", anchor, "Commander", portrait, dim, spotlight)
@@ -9,6 +9,9 @@ extends CanvasLayer
 ## The font comes from GameFont automatically. No scroll bar: the box grows to fit the text.
 signal line_finished
 signal line_dismissed
+
+var preferred_screen_side := Vector2.ZERO
+var _cancel_serial := 0
 
 const SCREEN := &"__screen__"
 const SCREEN_TOP := &"__screen_top__"
@@ -150,9 +153,12 @@ func say(text: String, location: Variant = null, character: String = "", sprite:
 	_lock_player(true)
 	show_dialogue(text, location, character, sprite, true)
 	_set_dim(dim, spot)
-	await line_dismissed
-	_set_dim(false, null)
-	_lock_player(false)
+	var serial := _cancel_serial
+	while _line_visible and serial == _cancel_serial:
+		await get_tree().process_frame
+	if not _line_visible:
+		_set_dim(false, null)
+		_lock_player(false)
 
 func show_dialogue(text: String, location: Variant = null, character: String = "", sprite: Texture2D = null, dismissible: bool = false) -> void:
 	set_anchor(location)
@@ -171,6 +177,9 @@ func show_dialogue(text: String, location: Variant = null, character: String = "
 	_follow_anchor()
 
 func hide_dialogue() -> void:
+	_cancel_serial += 1
+	if is_instance_valid(dim_rect):
+		_set_dim(false, null)
 	_line_visible = false
 	if dialogue_box != null:
 		dialogue_box.hide()
@@ -194,6 +203,8 @@ func _lock_player(locked: bool) -> void:
 
 func _set_dim(on: bool, spot: Variant) -> void:
 	_spot = spot
+	if on and spot != null:
+		_screen_mode = true
 	if _dim_tween != null:
 		_dim_tween.kill()
 	var mat := dim_rect.material as ShaderMaterial
@@ -276,7 +287,7 @@ func _update_dim() -> void:
 		mat.set_shader_parameter("spot_rect", Vector4(r.position.x, r.position.y, r.size.x, r.size.y))
 	elif _spot is Node2D and is_instance_valid(_spot):
 		var n: Node2D = _spot
-		var sp: Vector2 = n.get_canvas_transform() * n.global_position
+		var sp: Vector2 = n.get_canvas_transform() * ((n as BaseModule).get_center() if n is BaseModule else n.global_position)
 		var radius := 90.0
 		if n is BaseModule:
 			radius = maxf(90.0, (n as BaseModule).get_footprint().size.length() * 0.55 * n.get_canvas_transform().get_scale().x)
@@ -299,8 +310,10 @@ func _follow_anchor() -> void:
 	var desired := _fit_size(box_size.min(available).max(Vector2.ONE), available)
 	if _screen_mode:
 		dialogue_box.show()
-		dialogue_box.position = Vector2((viewport_size.x - desired.x) * 0.5, 24.0 if _screen_top else viewport_size.y - desired.y - 70.0)
-		dialogue_box.size = desired
+		var protected := _spot_screen_rect()
+		var fit := _screen_clear_position(protected, desired, viewport_size, margin)
+		dialogue_box.position = fit.position
+		dialogue_box.size = fit.size
 		_layout_content()
 		return
 	if not is_instance_valid(_anchor) and not _has_world_position:
@@ -361,3 +374,51 @@ func _layout_content() -> void:
 	body.size = Vector2(maxf(1.0, size.x - left - pad), maxf(1.0, size.y - top - pad - 20.0))
 	hint_label.position = Vector2(size.x - 120.0 - pad, size.y - 22.0 - 6.0)
 	hint_label.size = Vector2(120.0, 20.0)
+
+func _spot_screen_rect() -> Rect2:
+	if _spot is Rect2:
+		return _spot
+	if _spot is Node2D and is_instance_valid(_spot):
+		var node := _spot as Node2D
+		var center: Vector2 = node.get_canvas_transform() * (node.get_center() if node is BaseModule else node.global_position)
+		var radius := 90.0
+		if node is BaseModule:
+			radius = maxf(radius, node.get_footprint().size.length() * 0.55 * node.get_canvas_transform().get_scale().x)
+		return Rect2(center - Vector2.ONE * radius, Vector2.ONE * radius * 2.0)
+	return Rect2() # full-screen dim + visible commander tooltip when target is unavailable
+
+func _screen_clear_position(protected: Rect2, desired: Vector2, viewport_size: Vector2, margin: Vector2) -> Rect2:
+	var bounds := Rect2(margin, viewport_size - margin * 2.0)
+	if protected.size == Vector2.ZERO:
+		return Rect2(Vector2((viewport_size.x - desired.x) * 0.5, margin.y if _screen_top else viewport_size.y - desired.y - margin.y), desired)
+	var r := protected.grow(12.0).intersection(bounds)
+	var spaces: Array[Rect2] = [
+		Rect2(bounds.position, Vector2(bounds.size.x, maxf(0.0, r.position.y - bounds.position.y))),
+		Rect2(Vector2(bounds.position.x, r.end.y), Vector2(bounds.size.x, maxf(0.0, bounds.end.y - r.end.y))),
+		Rect2(bounds.position, Vector2(maxf(0.0, r.position.x - bounds.position.x), bounds.size.y)),
+		Rect2(Vector2(r.end.x, bounds.position.y), Vector2(maxf(0.0, bounds.end.x - r.end.x), bounds.size.y))]
+	var order := [0, 1, 2, 3]
+	if preferred_screen_side.y > 0: order = [1, 0, 3, 2]
+	elif preferred_screen_side.y < 0: order = [0, 1, 3, 2]
+	elif preferred_screen_side.x > 0: order = [3, 2, 1, 0]
+	elif preferred_screen_side.x < 0: order = [2, 3, 1, 0]
+	for index in order:
+		var area := spaces[index]
+		if area.size.x < 240.0 or area.size.y < 100.0:
+			continue
+		var fitted := _fit_size(desired.min(area.size), area.size)
+		var text_width := maxf(40.0, fitted.x - 118.0)
+		var text_height := _font.get_multiline_string_size(_full_text, HORIZONTAL_ALIGNMENT_LEFT, text_width, font_size).y + 81.0
+		if text_height > area.size.y:
+			continue
+		return Rect2(area.position + (area.size - fitted) * 0.5, fitted)
+	# Very small viewports: preserve guidance; hide portrait, place tooltip with the least overlap.
+	var best := Rect2(Vector2(margin.x, viewport_size.y - desired.y - margin.y), desired)
+	var overlap := best.intersection(r).get_area()
+	for area in spaces:
+		var candidate := Rect2(area.position.clamp(margin, viewport_size - desired - margin), desired)
+		var amount := candidate.intersection(r).get_area()
+		if amount < overlap:
+			best = candidate
+			overlap = amount
+	return best

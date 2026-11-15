@@ -1,11 +1,11 @@
-
+# CHANGELOG (2026-11-15): Pause the survival clock with gameplay; persistent death/reload fade prevents default-grey flash; honest day text.
 extends CanvasLayer
 class_name DayLoop
 
 const TAGLINES := [
 	"Build the base and get the power on.",
 	"Machines fail more often today.",
-	"Dust storms can start today. Stay close to your equipment.",
+	"Conditions are worsening. Hazards strike more often.",
 	"Almost there. Keep everything running.",
 	"Last day. Hold on until the rescue team lands."
 ]
@@ -39,7 +39,7 @@ var _t: float = 0.0
 
 func _ready() -> void:
 	layer = 30
-	process_mode = Node.PROCESS_MODE_ALWAYS
+	process_mode = Node.PROCESS_MODE_PAUSABLE
 	font = GameFont.get_font()
 	_cover = ColorRect.new()
 	_cover.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -261,7 +261,7 @@ func _card(title: String, sub: String, col: Color, hold: float, solid: bool, dis
 	tw.tween_property(vb, "scale", Vector2(1.04, 1.04), build_t + hold + 0.5)   # slow push-in
 
 	# `hold` = how long everything stays fully readable AFTER the build-in finishes
-	await get_tree().create_timer(build_t + hold).timeout
+	await SceneDelay.timer(self, build_t + hold, false).timeout
 
 	if solid:
 		_intro_card = card
@@ -333,7 +333,7 @@ func reveal() -> void:
 		await get_tree().process_frame
 		await trans.shutter_open(0.85)       # blinds sweep open on the finished shop
 		return
-	await get_tree().create_timer(0.5).timeout
+	await SceneDelay.timer(self, 0.5, false).timeout
 	var tw := create_tween()
 	tw.tween_property(_cover, "modulate:a", 0.0, 0.9)
 	await tw.finished
@@ -437,7 +437,7 @@ func _on_failed(reason: String) -> void:
 			p.set_input_locked(true)
 	await _death_sequence(reason)
 	GameManager.restart_day()
-	get_tree().reload_current_scene()
+	await Transition.change_scene(get_tree().current_scene.scene_file_path, 0.5)
 
 func _death_shake(v: float, cam: Camera2D) -> void:
 	if is_instance_valid(cam):
@@ -447,7 +447,7 @@ func _death_shake(v: float, cam: Camera2D) -> void:
 func _death_sequence(reason: String) -> void:
 	var layer_fx := CanvasLayer.new()
 	layer_fx.layer = 95
-	layer_fx.process_mode = Node.PROCESS_MODE_ALWAYS
+	layer_fx.process_mode = Node.PROCESS_MODE_PAUSABLE
 	add_child(layer_fx)
 	var flash := ColorRect.new()
 	flash.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -492,7 +492,7 @@ func _reload(col: Color = CYAN) -> void:
 	var trans := get_node_or_null("/root/Transition")
 	if trans != null:
 		await trans.shutter_close(0.7, col)
-	get_tree().reload_current_scene()
+	await Transition.change_scene(get_tree().current_scene.scene_file_path, 0.5)
 
 func _play(stream: AudioStream, pitch: float = 1.0, extra_db: float = 0.0) -> void:
 	if stream == null:

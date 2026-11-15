@@ -1,3 +1,4 @@
+; CHANGELOG (2026-11-15): Portable path target replaces missing UID-only scene reference.
 [gd_scene format=3 uid="uid://bw7mjm563g20s"]
 
 [ext_resource type="Script" uid="uid://ymxcwnobphie" path="res://scripts/main scenes/cutscene.gd" id="1_vg5b8"]
@@ -20,4 +21,4 @@ gas_radius = 3.8
 lens_strength = 0.0
 sol_text = "mars"
 sol_color = Color(0, 1, 0.25490198, 1)
-next_scene = "uid://ddpefoc34vlx3"
+next_scene = "res://scenes/main scenes/crash.tscn"

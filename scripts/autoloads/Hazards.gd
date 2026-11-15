@@ -1,12 +1,16 @@
-
+# CHANGELOG (2026-11-15): Day-one storms; sever every cable without hidden immunity; reuse cutscene gas shader and exported flare audio; storm penalty lasts until storm end.
 extends Node
 ## AUTOLOAD (name it Hazards, put it LAST in the autoload list).
 ## Runs the two Mars hazards during the SURVIVE phase and reads BaseManager for shield / comms / power.
 ##
 ## SOLAR FLARE : Comms (powered) warns 15 s ahead. On impact: a powered Storm Shield blocks everything.
 ##               Without it: 15 damage, and every RUNNING module fails. Unplugged modules are safe.
-## DUST STORM  : cannot be avoided. Every module fails, solar output x0.5 for the storm, 25 damage.
+## DUST STORM  : cannot be avoided. Every cable disconnects, solar output x0.5 for the storm, 25 damage.
 ## Modules wired DIRECTLY to a solar panel are immune to both (BaseModule.has_failure_immunity()).
+@export_group("Hazard Audio")
+@export var solar_flare_sfx: AudioStream
+@export var solar_flare_volume_db: float = -8.0
+
 signal demo_finished
 
 const FLARE_WARNING_SECONDS := 15.0
@@ -15,7 +19,7 @@ const STORM_DAMAGE := 25.0
 const STORM_SOLAR_FACTOR := 0.5
 const STORM_SECONDS := 30.0
 const FLARE_FX_SECONDS := 3.0
-const STORM_FROM_DAY := 2            # day 1 only has flares so new players can learn
+const STORM_FROM_DAY := 1            # all hazards can occur from day one
 const STORM_CHANCE := 0.45
 const SHIELD := "Shield"
 const COMMS := "Comms"
@@ -75,15 +79,20 @@ func clear() -> void:
 
 ## Effects only, nothing breaks and nobody gets hurt. Used by the tutorial.
 func demo(kind: String) -> void:
+	var generation := _gen
 	if kind == "storm":
 		_fx.start_storm()
-		await get_tree().create_timer(7.0).timeout
+		await SceneDelay.timer(self, 7.0, false).timeout
+		if generation != _gen:
+			return
 		_fx.stop_storm()
-		await get_tree().create_timer(2.5).timeout
+		await SceneDelay.timer(self, 2.5, false).timeout
 	else:
 		_fx.play_flare(false)
-		await get_tree().create_timer(FLARE_FX_SECONDS + 0.4).timeout
-	demo_finished.emit()
+		GameAudio.play_flare(solar_flare_sfx, solar_flare_volume_db)
+		await SceneDelay.timer(self, FLARE_FX_SECONDS + 0.4, false).timeout
+	if generation == _gen:
+		demo_finished.emit()
 
 # ---------------------------------------------------------------- scheduling
 func _launch() -> void:
@@ -116,6 +125,7 @@ func _flare_hit() -> void:
 	_fx.show_warning(false)
 	var shielded := _module_running(SHIELD)
 	_fx.play_flare(shielded)
+	GameAudio.play_flare(solar_flare_sfx, solar_flare_volume_db)
 	if shielded:
 		_fx.toast("The storm shield held. The flare did no damage.", CYAN)
 	else:
@@ -125,7 +135,7 @@ func _flare_hit() -> void:
 			_fx.toast("Solar flare! -%d health and %d system(s) failed." % [int(FLARE_DAMAGE), broke], RED)
 		else:
 			_fx.toast("Solar flare! -%d health. Nothing was plugged in, so no equipment failed." % int(FLARE_DAMAGE), RED)
-	await get_tree().create_timer(FLARE_FX_SECONDS).timeout
+	await SceneDelay.timer(self, FLARE_FX_SECONDS, false).timeout
 	if gen != _gen:
 		return
 	_finish("Solar Flare")
@@ -136,17 +146,22 @@ func _start_storm() -> void:
 	_state = S.STORM
 	_storm_left = STORM_SECONDS
 	BaseManager.solar_efficiency = STORM_SOLAR_FACTOR
-	_break_modules(false)
+	# Snapshot all wires, including immune solar links and the cable in the player hand.
+	for cable in get_tree().get_nodes_in_group("wires"):
+		if is_instance_valid(cable) and cable.has_method("disconnect_wire"):
+			cable.disconnect_wire(cable.hand_pos)
+	for player in get_tree().get_nodes_in_group("player"):
+		player.current_wire = null
 	BaseManager.calculate_power()
 	_damage(STORM_DAMAGE, "CAUGHT IN THE DUST STORM")
 	_fx.start_storm()
-	_fx.toast("Dust storm! Dust got into everything. Equipment failed and solar power is cut in half.", ORANGE)
+	_fx.toast("Dust storm! All cables disconnected. Solar output is halved for the storm. Reconnect manually.", ORANGE)
 
 func _end_storm() -> void:
 	BaseManager.solar_efficiency = 1.0
 	BaseManager.calculate_power()
 	_fx.stop_storm()
-	_fx.toast("The dust storm has passed. Solar power is back to normal.", CYAN)
+	_fx.toast("The storm passed. Solar output is normal; cables stay disconnected until you reconnect them.", CYAN)
 	_finish("Dust Storm")
 
 # ---------------------------------------------------------------- helpers
@@ -270,6 +285,8 @@ void fragment(){
 """
 	var storm: ColorRect
 	var flare: ColorRect
+	var corona: ColorRect
+	var _flare_tween: Tween
 	var edge: ColorRect
 	var hurt: ColorRect
 	var warn_label: Label
@@ -304,6 +321,8 @@ void fragment(){
 		storm = _make_rect(STORM_SHADER)
 		(storm.material as ShaderMaterial).set_shader_parameter("intensity", 0.0)
 		storm.visible = false
+		corona = _make_rect(SolarGas.SHADER)
+		corona.visible = false
 		flare = _make_rect(FLARE_SHADER)
 		flare.visible = false
 		edge = _make_rect(EDGE_SHADER)
@@ -351,6 +370,8 @@ void fragment(){
 
 	func _process(delta: float) -> void:
 		_t += delta
+		if corona.visible:
+			(corona.material as ShaderMaterial).set_shader_parameter("time", _t)
 		var amount := _storm_level * 2.2 + _shake
 		_shake = maxf(0.0, _shake - delta * 22.0)
 		var cam := get_viewport().get_camera_2d()
@@ -391,6 +412,17 @@ void fragment(){
 
 	# ---------------- flare
 	func play_flare(shielded: bool) -> void:
+		if is_instance_valid(_flare_tween):
+			_flare_tween.kill()
+		corona.visible = true
+		corona.modulate.a = 0.0
+		var gas := corona.material as ShaderMaterial
+		gas.set_shader_parameter("sun_aspect", Vector2.ONE)
+		gas.set_shader_parameter("outer_uv", 1.95)
+		_flare_tween = create_tween()
+		_flare_tween.tween_property(corona, "modulate:a", 0.38 if shielded else 0.75, 0.35)
+		_flare_tween.tween_property(corona, "modulate:a", 0.0, 2.65)
+		_flare_tween.tween_callback(corona.hide)
 		var mat := flare.material as ShaderMaterial
 		if shielded:
 			mat.set_shader_parameter("strength", 0.35)
@@ -403,7 +435,7 @@ void fragment(){
 			mat.set_shader_parameter("mid_col", Color(1.0, 0.85, 0.40))
 			mat.set_shader_parameter("edge_col", Color(1.0, 0.58, 0.15))
 		flare.visible = true
-		sfx.play()
+		# The hazard owner plays its exported/fallback flare sound once.
 		_shake = 5.0 if shielded else 16.0
 		var tw := create_tween()
 		tw.tween_method(func(v: float) -> void: mat.set_shader_parameter("age", v), 0.0, 3.0, 3.0)
@@ -429,6 +461,9 @@ void fragment(){
 		hurt.color.a = 0.45
 
 	func stop_all() -> void:
+		if is_instance_valid(_flare_tween):
+			_flare_tween.kill()
+		corona.hide()
 		show_warning(false)
 		if _storm_tween != null:
 			_storm_tween.kill()

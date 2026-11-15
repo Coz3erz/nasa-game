@@ -1,7 +1,7 @@
+; CHANGELOG (2026-11-15): Menu owns music; remove options-local spatial player to avoid duplicate tracks.
 [gd_scene format=3 uid="uid://8l7a726gqrgy"]
 
 [ext_resource type="Script" uid="uid://cpeild6kfv5x1" path="res://scripts/main scenes/options.gd" id="1_84gng"]
-[ext_resource type="AudioStream" uid="uid://2amsf138kwlq" path="res://sounds/music/cozy-music-complete-lite/ogg/late-night-study.ogg" id="2_6vb07"]
 
 [node name="options" type="Control" unique_id=1598926747]
 layout_mode = 3
@@ -14,8 +14,3 @@ script = ExtResource("1_84gng")
 ring_color = Color(0.026789214, 0.22363332, 0.4552654, 1)
 secondary_ring_color = Color(0.09542095, 0.2607471, 0.38898093, 1)
 foam_color = Color(6.497651e-07, 0.19375122, 0.23164523, 0.8509804)
-
-[node name="music" type="AudioStreamPlayer2D" parent="." unique_id=658461057]
-stream = ExtResource("2_6vb07")
-autoplay = true
-parameters/looping = true

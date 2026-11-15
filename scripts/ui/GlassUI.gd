@@ -1,3 +1,4 @@
+# CHANGELOG (2026-11-15): Transparent keyboard-focus outline avoids stacking a second filled hover selection.
 class_name GlassUI
 ## Shared digital UI look: near-black panels, hard cyan edges, hard offset shadow, red highlight.
 const CYAN := Color(0.35, 0.9, 1.0)
@@ -29,7 +30,9 @@ static func style_button(b: Button, size: int = 22) -> void:
 	h.shadow_color = Color(0, 0, 0, 0.8)
 	b.add_theme_stylebox_override("normal", n)
 	b.add_theme_stylebox_override("hover", h)
-	b.add_theme_stylebox_override("focus", h)
+	var focus := panel(Color(0, 0, 0, 0), Color.WHITE)
+	focus.shadow_size = 0
+	b.add_theme_stylebox_override("focus", focus)
 	b.add_theme_stylebox_override("pressed", h)
 	b.add_theme_stylebox_override("disabled", n)
 	b.focus_mode = Control.FOCUS_ALL

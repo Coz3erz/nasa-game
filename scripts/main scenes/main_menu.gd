@@ -1,3 +1,4 @@
+# CHANGELOG (2026-11-15): Persistent nonspatial menu music including embedded options, with offline synthesized fallback.
 extends Control
 ## CRASHFALL title screen. Same space background as the options menu, floating text, digital look.
 ## PLAY and OPTIONS always show. HOW TO PLAY appears once the tutorial has been finished.
@@ -26,6 +27,7 @@ var _blip: AudioStreamPlayer
 var _font: Font
 
 func _ready() -> void:
+	GameAudio.set_menu_music(true)
 	set_meta("no_polish", true)
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_STOP
@@ -222,6 +224,7 @@ func _start(path: String) -> void:
 	if _busy:
 		return
 	_busy = true
+	GameAudio.set_menu_music(false)
 	GameManager.restart_all()
 	Transition.change_scene(path)
 
@@ -237,6 +240,7 @@ func _open_options() -> void:
 	queue_redraw()
 	_options = scene.instantiate() as Control
 	_options.set_meta("no_polish", true)
+	_options.set_meta("embedded_options", true)
 	_options.tree_exited.connect(_on_options_closed)
 	add_child(_options)
 	_options.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)

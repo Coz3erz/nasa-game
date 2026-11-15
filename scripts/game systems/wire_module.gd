@@ -1,3 +1,4 @@
+# CHANGELOG (2026-11-15): Route disconnects through atomic endpoint cleanup, including direct receiver removals.
 @tool
 extends StaticBody2D
 
@@ -96,7 +97,10 @@ func spawn_wire() -> Node2D:
 		return null
 
 	var new_wire: Node2D = wire_scene.instantiate() as Node2D
-	get_tree().current_scene.add_child(new_wire)
+	var scene := get_tree().current_scene
+	if scene == null:
+		scene = get_parent()
+	scene.add_child(new_wire)
 	if new_wire.has_method("register_ignored_rid"):
 		new_wire.register_ignored_rid(get_rid())
 		if parent_module != null:

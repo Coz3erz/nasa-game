@@ -1,7 +1,8 @@
-
+# CHANGELOG (2026-11-15): Remove passive healing; 8s oxygen / 20s warmth with unbounded daily scaling; NASA-calibrated panels and frequency curve.
 extends Node
 
-const BASE_REACTOR_POWER: float = 50.0
+const EARTH_PANEL_RATING_KW: float = 116.086660
+const BASE_REACTOR_POWER: float = EARTH_PANEL_RATING_KW * MarsData.SOLAR_EFFICIENCY_VS_EARTH
 
 var active_modules: Array = []
 var total_power: float = 0.0
@@ -12,8 +13,8 @@ var temp_level: float = 100.0
 
 var health: float = 100.0
 var health_drain: float = 4.0
-var o2_drain: float = 0.6
-var temp_drain: float = 0.5
+var o2_drain: float = 12.5
+var temp_drain: float = 5.0
 var reactor_drain_mult: float = 0.4
 var hazard_interval: float = 75.0
 var day_failed_sent: bool = false
@@ -60,7 +61,7 @@ func calculate_power() -> void:
 			continue
 
 		if mod.is_fed_by_solar():
-			mod.is_powered = true
+			mod.is_powered = solar_efficiency >= 1.0 or mod.power_draw <= BASE_REACTOR_POWER * solar_efficiency
 		elif mod.is_fed_by_reactor() and (current_power_draw + mod.power_draw <= total_power):
 			mod.is_powered = true
 			current_power_draw += mod.power_draw
@@ -110,8 +111,7 @@ func _tick_power_and_systems(delta: float) -> void:
 		if health <= 0.0 and not day_failed_sent:
 			day_failed_sent = true
 			GameManager.day_failed.emit(reason)
-	elif health < 100.0 and oxygen_level > 30.0 and temp_level > 30.0:
-		health = minf(100.0, health + 1.5 * delta)
+
 
 func _tick_random_failures(delta: float) -> void:
 	_failure_timer += delta
@@ -138,12 +138,12 @@ func _tick_random_failures(delta: float) -> void:
 			break
 
 func apply_day(day: int) -> void:
-	var k := float(clampi(day, 1, 5) - 1)
+	var k := float(maxi(day, 1) - 1)
 	failure_roll_interval = maxf(6.0, 24.0 - 4.5 * k)
 	failure_chance = 0.10 + 0.05 * k
-	hazard_interval = maxf(25.0, 75.0 - 12.0 * k)
-	o2_drain = 0.6 + 0.15 * k
-	temp_drain = 0.5 + 0.12 * k
+	hazard_interval = maxf(50.0, 120.0 * pow(0.75, k))
+	o2_drain = 12.5 * (1.0 + 0.15 * k)
+	temp_drain = 5.0 * (1.0 + 0.15 * k)
 	reactor_drain_mult = 0.4 + 0.1 * k
 	health_drain = 4.0 + 1.0 * k
 
