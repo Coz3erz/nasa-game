@@ -49,7 +49,7 @@ func _ready() -> void:
 		set_process(false)
 		return
 	kind = host.module_name
-	ghost = host.has_meta("is_ghost")
+	ghost = bool(host.get_meta("is_ghost", false))
 	_phase = randf() * 10.0
 	t = _phase
 	box.anti_aliasing = true

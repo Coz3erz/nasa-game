@@ -4,6 +4,9 @@ extends Control
 @export_file("*.tscn") var target_scene: String = "res://scenes/main scenes/game.tscn"
 @export var fade_out_duration: float = 1.5
 
+@export_group("Timing")
+@export var start_delay: float = 3.0
+
 @export_group("Audio (Optional Overrides - Auto-Synth Used If Empty)")
 @export var crash_sfx: AudioStream
 @export var typing_sfx: AudioStream
@@ -48,6 +51,7 @@ var transitioning_out: bool = false
 var time_elapsed: float = 0.0
 var shake_strength: float = 0.0
 var base_label_pos: Vector2 = Vector2(72, 64)
+var is_waiting_for_start: bool = false
 
 func _ready() -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -108,7 +112,19 @@ func _ready() -> void:
 	_on_viewport_resized()
 
 	_setup_audio()
-	_run_crash_sequence()
+	
+	is_waiting_for_start = true
+	_wait_and_start_crash()
+
+func _wait_and_start_crash() -> void:
+	var time_remaining = start_delay
+	while time_remaining > 0.0 and is_waiting_for_start and is_inside_tree():
+		await get_tree().process_frame
+		time_remaining -= get_process_delta_time()
+	
+	if is_waiting_for_start and is_inside_tree():
+		is_waiting_for_start = false
+		_run_crash_sequence()
 
 func _on_viewport_resized() -> void:
 	var vp_size: Vector2 = get_viewport_rect().size
@@ -118,7 +134,7 @@ func _on_viewport_resized() -> void:
 		skip_warn_label.position = vp_size - skip_warn_label.size - Vector2(36, 28)
 
 func _input(event: InputEvent) -> void:
-	if transitioning_out or time_elapsed < 0.15 or skip_cooldown > 0.0:
+	if transitioning_out or skip_cooldown > 0.0:
 		return
 
 	var pressed: bool = false
@@ -134,6 +150,11 @@ func _input(event: InputEvent) -> void:
 		return
 
 	get_viewport().set_input_as_handled()
+
+	if is_waiting_for_start:
+		is_waiting_for_start = false
+		_run_crash_sequence()
+		return
 
 	if ready_to_continue:
 		_proceed_to_target_scene()
@@ -216,6 +237,7 @@ func _setup_audio() -> void:
 	add_child(typing_player)
 
 func _run_crash_sequence() -> void:
+	skip_cooldown = 0.18
 	crash_player.play()
 	shake_strength = 22.0
 	flash_rect.color = Color(1.0, 0.3, 0.1, 0.55)

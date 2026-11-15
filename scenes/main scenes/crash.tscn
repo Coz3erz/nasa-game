@@ -13,5 +13,6 @@ grow_horizontal = 2
 grow_vertical = 2
 script = ExtResource("1_8c4bi")
 target_scene = "uid://65xbkmaftctv"
+start_delay = 1.2
 crash_sfx = ExtResource("2_r14ux")
 typing_sfx = ExtResource("3_hr3i7")

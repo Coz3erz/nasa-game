@@ -11,7 +11,7 @@ signal rotated(new_side: int)
 
 const DIRS := [Vector2.RIGHT, Vector2.DOWN, Vector2.LEFT, Vector2.UP]
 const SLOT_SPACING := 56.0
-const RING_R := 42.0                       # highlight size on screen, in pixels
+const RING_R := 42.0
 const TAG_TEXT := "Click to rotate"
 
 static var hover_count: int = 0
@@ -28,7 +28,6 @@ var _tween: Tween
 var _tag_style: StyleBoxFlat
 
 func _ready() -> void:
-	# a (-1,-1) scale is just a 180 degree turn - convert it so "side" is always right
 	if not Engine.is_editor_hint() and scale.x < 0.0 and scale.y < 0.0:
 		rotation += PI
 		scale = Vector2(absf(scale.x), absf(scale.y))
@@ -67,7 +66,6 @@ func _edge_position(s: int, slot: float) -> Vector2:
 	var tangent := Vector2(-d.y, d.x)
 	return _center + d * (edge + edge_margin) + tangent * slot * SLOT_SPACING
 
-## At the start, put every plug exactly on its module's edge (no leftover scene positions).
 func _snap_to_edge() -> void:
 	if not is_inside_tree():
 		return
@@ -100,7 +98,6 @@ func _build_mode_on() -> bool:
 		return false
 	return pl.get("is_build_mode") == true
 
-## Plugs can ONLY be turned while the player is in build mode.
 func _interactive() -> bool:
 	if not rotatable:
 		return false
@@ -139,8 +136,6 @@ func _unhandled_input(event: InputEvent) -> void:
 			rotate_side(-1)
 			get_viewport().set_input_as_handled()
 
-## Turn to the next side. If another plug already sits there we swap places with it,
-## so two plugs can never end up in the same spot.
 func rotate_side(step: int) -> void:
 	var old_side := side
 	var new_side := posmod(side + step, 4)
@@ -161,7 +156,6 @@ func _apply_side(new_side: int, step: int) -> void:
 	flash = 1.0
 	rotated.emit(side)
 
-## Small highlight + a little "Click to rotate" tag. (No big overlay.)
 func _draw_port_fx(_rad: float) -> void:
 	if Engine.is_editor_hint():
 		return
@@ -201,6 +195,7 @@ func _draw_tag() -> void:
 	draw_style_box(_tag_style, Rect2(-tw * 0.5 - 10.0, -fs - 4.0, tw + 20.0, fs + 14.0))
 	draw_string(f, Vector2(-tw * 0.5, 0.0), TAG_TEXT, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, Color(1, 1, 1, 1))
 	draw_set_transform_matrix(Transform2D.IDENTITY)
+
 static func is_player_in_build_mode(tree: SceneTree) -> bool:
 	if tree == null:
 		return false

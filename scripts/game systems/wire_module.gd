@@ -60,7 +60,7 @@ func _process(delta: float) -> void:
 
 func _update_hover_state() -> void:
 	var can_rot := WirePort.can_rotate_port(self)
-	var mouse_ close := false
+	var mouse_close = false
 	if can_rot:
 		var local_m := to_local(get_global_mouse_position())
 		mouse_close = Rect2(-10, -14, 22, 28).has_point(local_m)

@@ -24,11 +24,21 @@ var flash_time: float = 0.0
 @onready var visual_rect: ColorRect = get_node_or_null("Visual")
 
 func _ready() -> void:
+	var old_sprite := get_node_or_null("Sprite2D") as CanvasItem
+	if old_sprite != null:
+		old_sprite.visible = false
+	if visual_rect != null:
+		visual_rect.visible = false
+	var art := ModuleArt.new()
+	art.name = "ModuleArt"
+	add_child(art)
+	move_child(art, 0)
 	if visual_rect != null:
 		base_visual_color = visual_rect.color
 	if has_meta("is_ghost") and bool(get_meta("is_ghost")):
 		return
 	add_to_group("modules")
+	face_reactor.call_deferred()
 	if not is_constructing and get_node_or_null("/root/BaseManager") != null:
 		if not BaseManager.active_modules.has(self):
 			BaseManager.active_modules.append(self)
@@ -108,15 +118,20 @@ func _process(delta: float) -> void:
 		else:
 			fix_progress = maxf(0.0, fix_progress - 40.0 * delta)
 
-func is_fed_by_solar() -> bool:
+func get_connected_solar_count() -> int:
 	if is_broken or is_constructing:
-		return false
+		return 0
+	var solar_panels: Array[BaseModule] = []
 	for w in connected_wires:
 		if is_instance_valid(w) and "source_module" in w and is_instance_valid(w.source_module):
 			var src: BaseModule = w.source_module
 			if src.module_name == "Solar Panel" and not src.is_broken and not src.is_constructing:
-				return true
-	return false
+				if not solar_panels.has(src):
+					solar_panels.append(src)
+	return solar_panels.size()
+
+func is_fed_by_solar() -> bool:
+	return get_connected_solar_count() > 0
 
 func is_fed_by_reactor() -> bool:
 	if is_broken or is_constructing:
@@ -155,15 +170,6 @@ func break_module() -> void:
 	is_powered = false
 	fix_progress = 0.0
 
-	var wires_to_drop: Array = connected_wires.duplicate()
-	connected_wires.clear()
-	for w in wires_to_drop:
-		if is_instance_valid(w):
-			if is_instance_valid(w.plugged_receiver) and w.plugged_receiver.has_method("remove_wire"):
-				w.plugged_receiver.remove_wire(w)
-			if w.has_method("drop"):
-				w.drop(w.hand_pos)
-
 	if get_node_or_null("/root/BaseManager") != null:
 		BaseManager.calculate_power()
 	if get_node_or_null("/root/EventBus") != null:
@@ -189,3 +195,34 @@ func _update_visual_state(delta: float) -> void:
 		visual_rect.color = base_visual_color.lightened(glow)
 	else:
 		visual_rect.color = base_visual_color.darkened(0.55)
+
+func face_reactor() -> void:
+	if module_name == "Reactor" or module_name == "Solar Panel":
+		return
+	var reactor: BaseModule = null
+	for m in get_tree().get_nodes_in_group("modules"):
+		if m is BaseModule and (m as BaseModule).module_name == "Reactor":
+			reactor = m as BaseModule
+			break
+	if reactor == null:
+		return
+	var d := reactor.get_center() - get_center()
+	var s := 0
+	if absf(d.x) > absf(d.y):
+		s = 0 if d.x > 0.0 else 2
+	else:
+		s = 1 if d.y > 0.0 else 3
+	var dirs: Array[Vector2] = [Vector2.RIGHT, Vector2.DOWN, Vector2.LEFT, Vector2.UP]
+	var dir: Vector2 = dirs[s]
+	var half := get_half_size()
+	var edge := half.x if dir.x != 0.0 else half.y
+	var col := get_node_or_null("CollisionShape2D") as CollisionShape2D
+	var ctr := col.position if col != null else half
+	var target_rot := float(s) * PI * 0.5
+	for c in get_children():
+		if c is WireReceiver:
+			var r := c as Node2D
+			var rot := r.rotation + angle_difference(r.rotation, target_rot)
+			var tw := create_tween().set_parallel(true)
+			tw.tween_property(r, "position", ctr + dir * edge, 0.4).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+			tw.tween_property(r, "rotation", rot, 0.4).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)

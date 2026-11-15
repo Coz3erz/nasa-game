@@ -6,11 +6,13 @@ class_name WireReceiver
 	set(value):
 		standby_color = value
 		queue_redraw()
-@export var accepted_sources: Array[String] = []
+@export var accepted_sources: PackedStringArray = PackedStringArray()
+@export var capacity: int = 1
+@export var target_module: BaseModule
 
 var receiver_point: Marker2D = null
-var target_module: BaseModule = null
 var connected_wire: Node2D = null
+var connected_wires: Array[Node2D] = []
 var pulse_time: float = 0.0
 var _is_hovered: bool = false
 
@@ -32,7 +34,7 @@ func _ready() -> void:
 
 	if not Engine.is_editor_hint():
 		add_to_group("wire_receivers")
-		if get_parent() is BaseModule:
+		if target_module == null and get_parent() is BaseModule:
 			target_module = get_parent() as BaseModule
 
 func _exit_tree() -> void:
@@ -88,6 +90,12 @@ func _input(event: InputEvent) -> void:
 			get_viewport().set_input_as_handled()
 			queue_redraw()
 
+func _clean_wires() -> void:
+	for i in range(connected_wires.size() - 1, -1, -1):
+		if not is_instance_valid(connected_wires[i]):
+			connected_wires.remove_at(i)
+	connected_wire = connected_wires.back() if not connected_wires.is_empty() else null
+
 func get_receiver_position() -> Vector2:
 	if receiver_point != null:
 		return receiver_point.global_position
@@ -109,32 +117,41 @@ func accepts_wire(wire_node: Node2D = null) -> bool:
 	return true
 
 func can_accept_wire(wire_node: Node2D = null) -> bool:
-	if connected_wire != null and is_instance_valid(connected_wire):
-		return false
+	_clean_wires()
 	if target_module == null and get_parent() is BaseModule:
 		target_module = get_parent() as BaseModule
 	if target_module == null:
 		return false
 	if target_module.is_constructing or target_module.is_broken or not target_module.can_accept_wires:
 		return false
+
+	# Reactor has infinite capacity for Solar Panel wires; other modules obey capacity
+	var is_reactor: bool = (target_module.module_name == "Reactor")
+	if not is_reactor and connected_wires.size() >= maxi(1, capacity):
+		return false
+
 	return accepts_wire(wire_node)
 
 func accept_wire(wire_node: Node2D) -> void:
+	_clean_wires()
 	if target_module == null and get_parent() is BaseModule:
 		target_module = get_parent() as BaseModule
+	if not connected_wires.has(wire_node):
+		connected_wires.append(wire_node)
 	connected_wire = wire_node
 	if target_module != null:
 		target_module.accept_wire(wire_node)
 	queue_redraw()
 
 func remove_wire(wire_node: Node2D) -> void:
-	if connected_wire == wire_node:
-		connected_wire = null
+	connected_wires.erase(wire_node)
+	_clean_wires()
 	if target_module != null:
 		target_module.remove_wire(wire_node)
 	queue_redraw()
 
 func _get_active_color() -> Color:
+	_clean_wires()
 	if connected_wire != null and is_instance_valid(connected_wire) and "wire_color" in connected_wire:
 		return connected_wire.wire_color
 	if target_module != null and target_module.is_broken:
@@ -145,7 +162,8 @@ func _draw() -> void:
 	if housing_style == null:
 		_init_styles()
 
-	var is_plugged_in: bool = connected_wire != null and is_instance_valid(connected_wire)
+	_clean_wires()
+	var is_plugged_in: bool = not connected_wires.is_empty()
 	var active_col: Color = _get_active_color()
 	var pulse: float = 0.7 + 0.3 * sin(pulse_time * (6.0 if is_plugged_in else 3.0))
 

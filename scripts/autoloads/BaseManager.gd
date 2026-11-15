@@ -1,5 +1,7 @@
 extends Node
 
+const BASE_REACTOR_POWER: float = 50.0
+
 var active_modules: Array = []
 var total_power: float = 0.0
 var current_power_draw: float = 0.0
@@ -7,8 +9,15 @@ var reactor_energy: float = 100.0
 var oxygen_level: float = 100.0
 var temp_level: float = 100.0
 
-var failure_roll_interval: float = 6.0
-var failure_chance: float = 0.18
+var health: float = 100.0
+var health_drain: float = 4.0
+var o2_drain: float = 0.6
+var temp_drain: float = 0.5
+var reactor_drain_mult: float = 0.4
+var hazard_interval: float = 75.0
+var day_failed_sent: bool = false
+var failure_roll_interval: float = 24.0
+var failure_chance: float = 0.10
 var _failure_timer: float = 0.0
 
 func _process(delta: float) -> void:
@@ -27,21 +36,19 @@ func calculate_power() -> void:
 	current_power_draw = 0.0
 	total_power = 0.0
 
-	# Pass 1: Solar Panels are self-powered once built
 	for mod in active_modules:
 		if mod.module_name == "Solar Panel":
 			mod.is_powered = not mod.is_broken and not mod.is_constructing
 
-	# Pass 2: Reactor is ONLY powered if a Solar Panel is wired into it
 	for mod in active_modules:
 		if mod.module_name == "Reactor":
-			if not mod.is_broken and not mod.is_constructing and mod.is_fed_by_solar() and reactor_energy > 0.0:
+			var solar_count: int = mod.get_connected_solar_count()
+			if not mod.is_broken and not mod.is_constructing and solar_count > 0 and reactor_energy > 0.0:
 				mod.is_powered = true
-				total_power += 100.0
+				total_power += BASE_REACTOR_POWER * pow(2.0, float(solar_count - 1))
 			else:
 				mod.is_powered = false
 
-	# Pass 3: Modules powered directly by Solar (free + failure-immune) or by an active Reactor
 	for mod in active_modules:
 		if mod.module_name == "Solar Panel" or mod.module_name == "Reactor":
 			continue
@@ -63,7 +70,7 @@ func calculate_power() -> void:
 
 func _tick_power_and_systems(delta: float) -> void:
 	if current_power_draw > 0.0 and total_power > 0.0 and reactor_energy > 0.0:
-		var drain_rate: float = (current_power_draw / 100.0) * 1.2
+		var drain_rate: float = (current_power_draw / 100.0) * reactor_drain_mult
 		reactor_energy = maxf(0.0, reactor_energy - drain_rate * delta)
 		if reactor_energy <= 0.0:
 			calculate_power()
@@ -80,19 +87,29 @@ func _tick_power_and_systems(delta: float) -> void:
 			thermal_active = true
 
 	if life_support_active:
-		oxygen_level = minf(100.0, oxygen_level + 3.5 * delta)
+		oxygen_level = minf(100.0, oxygen_level + 2.5 * delta)
 	else:
-		oxygen_level = maxf(0.0, oxygen_level - 2.2 * delta)
+		oxygen_level = maxf(0.0, oxygen_level - o2_drain * delta)
 
 	if thermal_active:
-		temp_level = minf(100.0, temp_level + 3.0 * delta)
+		temp_level = minf(100.0, temp_level + 2.0 * delta)
 	else:
-		temp_level = maxf(0.0, temp_level - 1.8 * delta)
+		temp_level = maxf(0.0, temp_level - temp_drain * delta)
 
-	if oxygen_level <= 0.0 and get_node_or_null("/root/EventBus") != null:
-		EventBus.game_over.emit("OXYGEN DEPLETED")
-	elif temp_level <= 0.0 and get_node_or_null("/root/EventBus") != null:
-		EventBus.game_over.emit("HYPOTHERMIA - THERMAL FAILURE")
+	var reason := ""
+	if oxygen_level <= 0.0:
+		reason = "OUT OF AIR!"
+	elif temp_level <= 0.0:
+		reason = "TOO COLD!"
+	if reason != "":
+		health = maxf(0.0, health - health_drain * delta)
+		if get_node_or_null("/root/EventBus") != null:
+			EventBus.game_over.emit(reason)
+		if health <= 0.0 and not day_failed_sent:
+			day_failed_sent = true
+			GameManager.day_failed.emit(reason)
+	elif health < 100.0 and oxygen_level > 30.0 and temp_level > 30.0:
+		health = minf(100.0, health + 1.5 * delta)
 
 func _tick_failure_dice(delta: float) -> void:
 	_failure_timer += delta
@@ -117,3 +134,25 @@ func _tick_failure_dice(delta: float) -> void:
 		if randf() < failure_chance:
 			mod.break_module()
 			break
+
+func apply_day(day: int) -> void:
+	var k := float(clampi(day, 1, 5) - 1)
+	failure_roll_interval = maxf(6.0, 24.0 - 4.5 * k)
+	failure_chance = 0.10 + 0.05 * k
+	hazard_interval = maxf(25.0, 75.0 - 12.0 * k)
+	o2_drain = 0.6 + 0.15 * k
+	temp_drain = 0.5 + 0.12 * k
+	reactor_drain_mult = 0.4 + 0.1 * k
+	health_drain = 4.0 + 1.0 * k
+
+func reset_for_day(day: int) -> void:
+	active_modules.clear()
+	total_power = 0.0
+	current_power_draw = 0.0
+	reactor_energy = 100.0
+	oxygen_level = 100.0
+	temp_level = 100.0
+	health = 100.0
+	_failure_timer = 0.0
+	day_failed_sent = false
+	apply_day(day)

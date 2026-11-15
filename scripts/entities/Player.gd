@@ -481,7 +481,7 @@ func _refresh_build_options() -> void:
 	for item_data in GameManager.catalog:
 		var item_id = item_data["id"]
 		if GameManager.get_item_count(item_id) > 0:
-			var scene = load(item_data["scene_path"])
+			var scene = null if not item_data.has("scene_path") or str(item_data["scene_path"]) == "" else load(item_data["scene_path"])
 			if scene != null:
 				build_options.append({"id": item_id, "scene": scene})
 				if item_id == prev_id:
@@ -625,7 +625,7 @@ func _attempt_place() -> void:
 
 	var parent_node := get_parent()
 	var m = option["scene"].instantiate()
-	m.set("is_constructing", true)           # BaseManager registration happens in _finish_build()
+	m.set("is_constructing", true)
 	var p2d := parent_node as Node2D
 	m.position = p2d.to_local(_ghost_origin) if p2d != null else _ghost_origin
 	parent_node.add_child(m)
@@ -635,7 +635,6 @@ func _attempt_place() -> void:
 	fx.setup(m, self, _ghost_center_off, _ghost_half, _font)
 	parent_node.add_child(fx)
 
-	# juice
 	var c := _ghost_origin + _ghost_center_off
 	Fx.burst(parent_node, c, Color(0.75, 0.78, 0.85, 0.55), 22, 40.0, 150.0, 0.9, 0.3, 0.7)
 	Fx.burst(parent_node, c, Color(1.6, 1.2, 0.5, 1.0), 16, 80.0, 220.0, 0.5, 0.04, 0.09, true, Vector2(0, 260))
@@ -645,11 +644,7 @@ func _attempt_place() -> void:
 	_flash_hint("Building %s - stay inside the circle!" % item_name, C_GREEN)
 
 	_refresh_build_options()
-	if build_options.is_empty():
-		_exit_build_mode()
-	else:
-		_spawn_ghost()
-
+	_exit_build_mode()
 # - build HUD -
 func _box(border: Color) -> StyleBoxFlat:
 	var s := StyleBoxFlat.new()
@@ -767,6 +762,15 @@ func _try_interact() -> void:
 
 	if current_wire != null:
 		var receiver: Node2D = _find_nearby_receiver(current_wire)
+		if receiver != null and _reactor_full(current_wire, receiver):
+			var pct := BaseManager.current_power_draw / maxf(BaseManager.total_power, 1.0) * 100.0
+			if pct >= 99.5:
+				_flash_hint("Reactor is already at 100% power!", C_RED)
+			else:
+				_flash_hint("Not enough power left for that!", C_RED)
+			_sq_vel.x += 3.0 * (1.0 if randf() > 0.5 else -1.0)
+			shake(0.15)
+			return
 		if receiver != null:
 			receiver.accept_wire(current_wire)
 			current_wire.plug_in(receiver)
@@ -891,12 +895,22 @@ func _find_nearby_receiver(w: Node2D = null) -> Node2D:
 # - effect helpers -
 func _has_buildables() -> bool:
 	for item in GameManager.catalog:
-		if GameManager.get_item_count(item["id"]) > 0:
+		if item.has("scene_path") and str(item["scene_path"]) != "" and GameManager.get_item_count(item["id"]) > 0:
 			return true
 	return false
 
 func _ghost_reach() -> float:
 	return minf(build_radius, _ghost_zone - 40.0)
+
+func _reactor_full(w: Node2D, r: Node2D) -> bool:
+	var src: Variant = w.get("source_module")
+	if not (src is BaseModule) or (src as BaseModule).module_name != "Reactor":
+		return false
+	if BaseManager.total_power <= 0.0:
+		return false
+	var tm: Variant = r.get("target_module")
+	var need: float = (tm as BaseModule).power_draw if tm is BaseModule else 0.0
+	return BaseManager.current_power_draw + need > BaseManager.total_power + 0.01
 
 func _wrong_receiver_near(w: Node2D) -> Node2D:
 	for node in get_tree().get_nodes_in_group("wire_receivers"):

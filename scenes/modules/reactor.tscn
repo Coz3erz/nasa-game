@@ -40,37 +40,22 @@ position = Vector2(180, -5.9999924)
 scale = Vector2(5, 5)
 wire_color = Color(1.732707e-06, 0.5217645, 0.64275795, 1)
 module_texture = ExtResource("3_0noln")
-rotatable = null
-click_radius = null
-reach = null
-edge_margin = null
 
 [node name="WireSource2" parent="." unique_id=1203439808 instance=ExtResource("2_tll7k")]
 z_index = 100
-position = Vector2(64, 190)
-rotation = 1.5707964
+position = Vector2(-53.999992, 132)
+rotation = 3.1415927
 scale = Vector2(5, 5)
 wire_color = Color(0.49411765, 1, 0.15686275, 1)
-rotatable = null
-click_radius = null
-reach = null
-edge_margin = null
 
 [node name="WireSource3" parent="." unique_id=1569734716 instance=ExtResource("2_tll7k")]
 z_index = 100
-position = Vector2(64, -64)
-rotation = -1.5707964
+position = Vector2(-54, -6.0000005)
+rotation = -3.1415927
 scale = Vector2(5, 5)
 module_texture = ExtResource("4_5wc5p")
-rotatable = null
-click_radius = null
-reach = null
-edge_margin = null
 
 [node name="WireReciever" parent="." unique_id=1806018912 instance=ExtResource("6_0qorl")]
 position = Vector2(181, 129)
-scale = Vector2(-1.5, -1.5)
-rotatable = null
-click_radius = null
-reach = null
-edge_margin = null
+scale = Vector2(1.5, 1.5)
+accepted_sources = PackedStringArray()

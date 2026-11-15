@@ -24,6 +24,7 @@ const C_AMBER   := Color(1.00, 0.85, 0.30)
 const C_RED     := Color(1.00, 0.25, 0.20)
 
 var font: SystemFont
+var mono: SystemFont
 var ui_theme: Theme
 var soft_tex: GradientTexture2D
 var ring_tex: GradientTexture2D
@@ -63,6 +64,8 @@ func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	font = SystemFont.new()
 	font.font_names = PackedStringArray(FONT_NAMES)
+	mono = SystemFont.new()
+	mono.font_names = PackedStringArray(["Courier New", "monospace"])
 	soft_tex = _radial_tex(256, 0.0)
 	ring_tex = _radial_tex(64, 0.0)
 	ui_theme = _build_theme()
@@ -704,22 +707,48 @@ func _setup_hud() -> void:
 	var panel := PanelContainer.new()
 	panel.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
 	panel.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
-	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	panel.mouse_filter = Control.MOUSE_FILTER_PASS
+	var ps := _box(Color(0.03, 0.05, 0.08, 0.9), Color(0.35, 0.85, 1.0, 0.8), 2, 3, 0)
+	ps.border_width_left = 5
+	ps.content_margin_left = 14
+	ps.content_margin_right = 14
+	ps.content_margin_top = 10
+	ps.content_margin_bottom = 12
+	panel.add_theme_stylebox_override("panel", ps)
 	root.add_child(panel)
 	var vb := VBoxContainer.new()
-	vb.add_theme_constant_override("separation", 8)
+	vb.add_theme_constant_override("separation", 6)
 	panel.add_child(vb)
+	var head_row := HBoxContainer.new()
+	vb.add_child(head_row)
 	var head := Label.new()
-	head.text = "Base health"
-	head.add_theme_font_size_override("font_size", 14)
-	head.add_theme_color_override("font_color", C_GREEN)
-	head.modulate = Color(GLOW, GLOW, GLOW)
-	vb.add_child(head)
-	vb.add_child(HSeparator.new())
-	_add_bar(vb, "Air    ", "o2", C_CYAN)
-	_add_bar(vb, "Warmth ", "temp", Color(1.0, 0.55, 0.25))
-	_add_bar(vb, "Power  ", "core", C_GREEN)
-	_add_bar(vb, "Load   ", "load", C_AMBER)
+	head.text = "BASE STATUS"
+	head.add_theme_font_override("font", mono)
+	head.add_theme_font_size_override("font_size", 17)
+	head.add_theme_color_override("font_color", C_CYAN)
+	head.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	head_row.add_child(head)
+	var tog := Button.new()
+	tog.text = "-"
+	tog.flat = true
+	tog.focus_mode = Control.FOCUS_NONE
+	tog.custom_minimum_size = Vector2(28, 22)
+	tog.add_theme_font_override("font", mono)
+	tog.add_theme_font_size_override("font_size", 20)
+	tog.add_theme_color_override("font_color", C_CYAN)
+	head_row.add_child(tog)
+	var body := VBoxContainer.new()
+	body.add_theme_constant_override("separation", 8)
+	vb.add_child(body)
+	body.add_child(HSeparator.new())
+	_add_bar(body, "AIR   ", "o2", C_CYAN)
+	_add_bar(body, "WARMTH", "temp", Color(1.0, 0.55, 0.25))
+	_add_bar(body, "HEALTH", "hp", Color(1.0, 0.4, 0.45))
+	_add_bar(body, "POWER ", "core", C_GREEN)
+	_add_bar(body, "LOAD  ", "load", C_AMBER)
+	tog.pressed.connect(func() -> void:
+		body.visible = not body.visible
+		tog.text = "-" if body.visible else "+")
 	_hud_panel = panel
 
 	_alert_box = VBoxContainer.new()
@@ -751,6 +780,7 @@ func _add_bar(parent: Node, text: String, key: String, col: Color) -> void:
 	parent.add_child(row)
 	var l := Label.new()
 	l.text = text
+	l.add_theme_font_override("font", mono)
 	l.add_theme_font_size_override("font_size", 16)
 	l.add_theme_color_override("font_color", col)
 	row.add_child(l)
@@ -764,6 +794,7 @@ func _add_bar(parent: Node, text: String, key: String, col: Color) -> void:
 	var v := Label.new()
 	v.custom_minimum_size = Vector2(52, 0)
 	v.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	v.add_theme_font_override("font", mono)
 	v.add_theme_font_size_override("font_size", 16)
 	row.add_child(v)
 	_bars[key] = {"bar": pb, "val": v, "col": col}
@@ -778,6 +809,7 @@ func _update_hud(delta: float) -> void:
 	var vals := {
 		"o2": BaseManager.oxygen_level,
 		"temp": BaseManager.temp_level,
+		"hp": BaseManager.health,
 		"core": BaseManager.reactor_energy,
 		"load": clampf(BaseManager.current_power_draw / maxf(BaseManager.total_power, 1.0) * 100.0, 0.0, 100.0)}
 	for k in vals.keys():
