@@ -20,8 +20,6 @@ Every mechanic is diegetic:
   - Drives the in-game day cycle and calibrated solar panel output.
 - **NASA Sounds of Mars** — `https://mars.nasa.gov/sounds/`
   - Mars surface audio used in the crash cutscene.
-- **NASA DONKI (Solar Flare) API** — `https://api.nasa.gov/`
-  - Optional informational overlay; disabled by default for offline launches. Does **not** determine game balance and is **not** a Mars surface radiation forecast.
 
 ## Run it
 
