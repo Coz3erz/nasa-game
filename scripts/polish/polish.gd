@@ -1,4 +1,3 @@
-
 extends Node
 ## POLISH - drop-in visual layer for the Game scene (autoload).
 ## Adds: bloom, ambient lighting + shadows, module glow, dust/spark particles,
@@ -76,16 +75,20 @@ func _process(delta: float) -> void:
 		_scene = cs
 		_installed = false
 		_teardown()
-		if cs != null and cs.scene_file_path.get_file() == GAME_SCENE:
+		if cs != null and cs.scene_file_path.get_file() in [GAME_SCENE, "tutorial.tscn"]:
 			_install(cs)
-	if not _installed:
+	if not _installed or get_tree().paused:
 		return
+	if _post_mat != null:
+		_post_mat.set_shader_parameter("bloom_amount", 0.55 if bool(GameSettings.settings.get("glow", true)) else 0.0)
 	_update_lighting(delta)
 	_update_particles()
 	_update_shop(delta)
 	_update_hud(delta)
 
 func _teardown() -> void:
+	# The root viewport outlives scenes. Reset before another scene draws.
+	get_viewport().use_hdr_2d = false
 	_module_lights.clear()
 	_shop_labels.clear()
 	_shop_seen = null
@@ -134,19 +137,17 @@ func _bloom_wire(l: Line2D) -> void:
 
 # - environment/bloom -
 func _setup_environment() -> void:
-	get_viewport().use_hdr_2d = true
+	get_viewport().use_hdr_2d = RenderingServer.get_current_rendering_method() != "gl_compatibility"
 	var we := _game.get_node_or_null("WorldEnvironment") as WorldEnvironment
 	if we == null:
 		we = WorldEnvironment.new()
 		we.name = "WorldEnvironment"
 		_game.add_child(we)
-	var env := we.environment
-	if env == null:
-		env = Environment.new()
-		we.environment = env
+	var env := we.environment.duplicate() as Environment if we.environment != null else Environment.new()
+	we.environment = env
 	env.background_mode = Environment.BG_CANVAS      # required for 2D glow
 	env.tonemap_mode = Environment.TONE_MAPPER_LINEAR   # keep your original colours
-	env.glow_enabled = true
+	env.glow_enabled = bool(GameSettings.settings.get("glow", true))
 	env.glow_intensity = 0.45
 	env.glow_strength = 0.45
 	env.glow_bloom = 0.02
@@ -199,7 +200,7 @@ func _make_light(col: Color, energy: float, scl: float, shadows: bool) -> PointL
 	l.texture_scale = scl
 	l.color = col
 	l.energy = energy
-	l.shadow_enabled = shadows
+	l.shadow_enabled = shadows and not bool(GameSettings.settings.get("low_detail", false))
 	if shadows:
 		l.shadow_filter = Light2D.SHADOW_FILTER_PCF5
 		l.shadow_filter_smooth = 2.0
@@ -314,7 +315,7 @@ func _emitter(amount: int, life: float, add_mat: Material) -> CPUParticles2D:
 	var p := CPUParticles2D.new()
 	p.texture = ring_tex
 	p.material = add_mat
-	p.amount = amount
+	p.amount = maxi(8, int(amount * 0.5)) if bool(GameSettings.settings.get("low_detail", false)) else amount
 	p.lifetime = life
 	p.preprocess = life
 	p.emission_shape = CPUParticles2D.EMISSION_SHAPE_RECTANGLE
@@ -332,7 +333,7 @@ func _world_motes(parent: Node, pts: PackedVector2Array, amount: int, life: floa
 	var e := CPUParticles2D.new()
 	e.texture = ring_tex
 	e.material = mat
-	e.amount = amount
+	e.amount = maxi(8, int(amount * 0.5)) if bool(GameSettings.settings.get("low_detail", false)) else amount
 	e.lifetime = life
 	e.preprocess = life
 	e.local_coords = true                       # they move WITH the station, not with the screen
@@ -400,7 +401,7 @@ func _setup_particles() -> void:
 
 func _update_particles() -> void:
 	if _sparks != null and is_instance_valid(_sparks):
-		_sparks.emitting = BaseManager.reactor_energy > 0.0
+		_sparks.emitting = BaseManager.reactor_energy > 0.0 and bool(GameSettings.settings.get("particles", true))
 
 # - post-process -
 const POST_SHADER := """
@@ -411,6 +412,7 @@ uniform float aberration = 0.0;
 uniform float scan = 0.0;
 uniform float grain = 0.0;
 uniform float danger = 0.0;
+uniform float bloom_amount = 0.0;
 float hash(vec2 p){ return fract(sin(dot(p, vec2(12.9898,78.233))) * 43758.5453); }
 void fragment(){
 	vec2 uv = SCREEN_UV;
@@ -421,6 +423,16 @@ void fragment(){
 	col.r = texture(screen_tex, uv + off).r;
 	col.g = texture(screen_tex, uv).g;
 	col.b = texture(screen_tex, uv - off).b;
+	// Small fixed tap count; works on WebGL 2 without HDR framebuffer support.
+	if (bloom_amount > 0.0) {
+		vec2 px = SCREEN_PIXEL_SIZE * 5.0;
+		vec3 glow = texture(screen_tex, uv + vec2(px.x, 0.0)).rgb;
+		glow += texture(screen_tex, uv - vec2(px.x, 0.0)).rgb;
+		glow += texture(screen_tex, uv + vec2(0.0, px.y)).rgb;
+		glow += texture(screen_tex, uv - vec2(0.0, px.y)).rgb;
+		glow *= 0.25;
+		col += max(glow - vec3(0.62), vec3(0.0)) * bloom_amount;
+	}
 	float line = sin(uv.y * 900.0) * 0.5 + 0.5;
 	col *= 1.0 - scan * line;
 	col += (hash(uv * 900.0 + fract(TIME)) - 0.5) * grain;

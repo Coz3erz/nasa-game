@@ -78,6 +78,7 @@ class SupplyCrate extends Node2D:
 		z_index = 18
 		_init_styles()
 		pickup_sfx = AudioStreamPlayer.new()
+		pickup_sfx.bus = &"SFX"
 		pickup_sfx.volume_db = -6.0
 		if AudioServer.get_bus_index("SFX") != -1:
 			pickup_sfx.bus = &"SFX"
@@ -85,6 +86,7 @@ class SupplyCrate extends Node2D:
 		add_child(pickup_sfx)
 
 		thud_sfx = AudioStreamPlayer.new()
+		thud_sfx.bus = &"SFX"
 		thud_sfx.volume_db = -5.0
 		if AudioServer.get_bus_index("SFX") != -1:
 			thud_sfx.bus = &"SFX"
@@ -305,7 +307,7 @@ class SupplyCrate extends Node2D:
 
 		if is_landed and not is_collected:
 			var f := ThemeDB.fallback_font
-			var msg := "PRESS [ E ] TO GRAB CARGO" if player_in_range else "WALK HERE (WASD)"
+			var msg := ("%s TO GRAB CARGO" % InputSupport.label("interact")) if player_in_range else ("WALK HERE (%s)" % InputSupport.movement_label())
 			var font_sz := 16 if player_in_range else 14
 			var w := f.get_string_size(msg, HORIZONTAL_ALIGNMENT_LEFT, -1, font_sz).x
 			var tag_y := -38.0 + z_height - pulse * 4.0
@@ -538,6 +540,7 @@ void fragment() {
 		add_child(glow_layer)
 
 		sfx_player = AudioStreamPlayer.new()
+		sfx_player.bus = &"SFX"
 		sfx_player.volume_db = -10.0
 		sfx_player.stream = _make_beep_wav()
 		add_child(sfx_player)
@@ -781,7 +784,7 @@ void fragment() {
 		draw_string(font, Vector2(b2_rect.position.x + 10.0, b_text_y), badge_2, HORIZONTAL_ALIGNMENT_LEFT, -1, body_size, soft_sky)
 
 		ty += badge_h + 32.0
-		var wrapped := _wrap_line(str(item["desc"]), card_rect.size.x - pad * 2.0, body_size)
+		var wrapped := _wrap_line(InputSupport.expand(str(item["desc"])), card_rect.size.x - pad * 2.0, body_size)
 		for line in wrapped:
 			if ty > card_rect.end.y - pad:
 				break
@@ -861,6 +864,7 @@ void fragment() {
 	func _input(event: InputEvent) -> void:
 		if not visible or is_closing:
 			return
+		event = InputSupport.menu_event(event)
 
 		if event is InputEventMouseMotion:
 			var m_pos: Vector2 = event.position
@@ -1104,11 +1108,16 @@ func _ready() -> void:
 	_setup_mars_zones_and_walls()
 	_setup_wind_effects()
 	await day_loop.play_intro()
+	if day_loop._leaving:
+		return
 	_build_shop_ui()
 	await day_loop.reveal()
+	if day_loop._leaving:
+		return
 
 func _setup_background_music() -> void:
 	music_player = AudioStreamPlayer.new()
+	music_player.bus = &"Music"
 	music_player.name = "BackgroundMusicPlayer"
 	music_player.volume_db = music_volume_db
 	if AudioServer.get_bus_index("Music") != -1:
@@ -1238,6 +1247,7 @@ func _setup_wind_effects() -> void:
 	add_child(wind_particles)
 
 	wind_player = AudioStreamPlayer.new()
+	wind_player.bus = &"Ambient"
 	wind_player.volume_db = -60.0
 	wind_player.stream = wind_sfx if wind_sfx != null else _generate_wind_loop_wav()
 	add_child(wind_player)

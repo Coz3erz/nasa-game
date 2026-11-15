@@ -21,6 +21,7 @@ config/icon="uid://o5q4o7ocx6td"
 [autoload]
 
 GameFont="*res://scripts/autoloads/GameFont.gd"
+InputSupport="*res://scripts/autoloads/InputSupport.gd"
 Transition="*res://scripts/autoloads/TransitionManager.gd"
 EventBus="*res://scripts/autoloads/EventBus.gd"
 GameManager="*res://scripts/autoloads/GameManager.gd"
@@ -35,8 +36,13 @@ Hazards="*res://scripts/autoloads/Hazards.gd"
 
 [display]
 
+window/size/viewport_width=1280
+window/size/viewport_height=720
+window/size/window_width_override=1280
+window/size/window_height_override=720
 window/stretch/mode="canvas_items"
 window/stretch/aspect="expand"
+window/handheld/orientation=6
 
 [input]
 
@@ -87,4 +93,5 @@ interact={
 rendering_device/driver.windows="d3d12"
 renderer/rendering_method="gl_compatibility"
 renderer/rendering_method.mobile="gl_compatibility"
+textures/vram_compression/import_etc2_astc=true
 environment/defaults/default_clear_color=Color(0, 0, 0, 1)

@@ -1,4 +1,3 @@
-
 extends Node
 
 enum Phase { INTRO, BUILD, ROVER, SURVIVE, DEBRIEF }
@@ -81,7 +80,7 @@ var catalog: Array[Dictionary] = [
 		"power": 0.0,
 		"scene_path": "",
 		"consumable": true,
-		"desc": "WHAT IT DOES:\nRestores 45 health. Press H to use one once the rover has left. Weighs almost nothing.\n\nWHY IT MATTERS:\nThe nearest hospital is millions of kilometers away, so every astronaut is trained in first aid.",
+		"desc": "WHAT IT DOES:\nRestores 45 health. Use {use_medkit} to use one once the rover has left. Weighs almost nothing.\n\nWHY IT MATTERS:\nThe nearest hospital is millions of kilometers away, so every astronaut is trained in first aid.",
 		"color": Color(1.0, 0.45, 0.5)
 	}
 ]

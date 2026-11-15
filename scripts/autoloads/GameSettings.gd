@@ -47,6 +47,8 @@ func _ready() -> void:
 	_ensure_audio_buses()
 	_cache_default_inputs()
 	_setup_brightness_overlay()
+	if InputSupport.has_touch():
+		default_settings["low_detail"] = true
 	settings = default_settings.duplicate(true)
 	load_settings()
 	load_player_input_map()
@@ -54,16 +56,12 @@ func _ready() -> void:
 	get_tree().node_added.connect(_on_node_added)
 
 func _ensure_audio_buses() -> void:
-	if AudioServer.get_bus_index("SFX") == -1:
-		var idx := AudioServer.bus_count
-		AudioServer.add_bus(idx)
-		AudioServer.set_bus_name(idx, "SFX")
-		AudioServer.set_bus_send(idx, "Master")
-	if AudioServer.get_bus_index("Music") == -1:
-		var idx := AudioServer.bus_count
-		AudioServer.add_bus(idx)
-		AudioServer.set_bus_name(idx, "Music")
-		AudioServer.set_bus_send(idx, "Master")
+	for bus_name in ["SFX", "Music", "Ambient"]:
+		if AudioServer.get_bus_index(bus_name) < 0:
+			var idx := AudioServer.bus_count
+			AudioServer.add_bus(idx)
+			AudioServer.set_bus_name(idx, bus_name)
+			AudioServer.set_bus_send(idx, "SFX" if bus_name == "Ambient" else "Master")
 
 func _setup_brightness_overlay() -> void:
 	_brightness_layer = CanvasLayer.new()
@@ -83,21 +81,21 @@ func _setup_brightness_overlay() -> void:
 func _cache_default_inputs() -> void:
 	for action in InputMap.get_actions():
 		var act_str := str(action)
-		if act_str.begins_with("ui_"):
+		if act_str.begins_with("ui_") and act_str not in ["ui_left", "ui_right", "ui_up", "ui_down"]:
 			continue
 		_default_input_map[act_str] = InputMap.action_get_events(action).duplicate()
 
 func _on_node_added(node: Node) -> void:
-	if node is AudioStreamPlayer:
-		var p := node as AudioStreamPlayer
+	if node is AudioStreamPlayer or node is AudioStreamPlayer2D or node is AudioStreamPlayer3D:
+		var p: Node = node
 		if p.bus == &"Master":
 			var nm := p.name.to_lower()
 			if nm.contains("music") or nm.contains("ambient") or nm.contains("audio_player"):
 				p.bus = &"Music"
 			else:
 				p.bus = &"SFX"
-	elif node is CPUParticles2D:
-		(node as CPUParticles2D).visible = bool(settings.get("particles", true))
+	elif node is CPUParticles2D or node is GPUParticles2D:
+		_apply_particle(node, bool(settings.get("particles", true)))
 	elif node is WorldEnvironment:
 		var we := node as WorldEnvironment
 		if we.environment != null:
@@ -128,29 +126,16 @@ func _apply_display() -> void:
 		_brightness_mat.set_shader_parameter("brightness", b_val)
 		_brightness_rect.visible = not is_equal_approx(b_val, 1.0)
 
-	var vsync_on: bool = bool(settings.get("vsync", true))
-	DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_ENABLED if vsync_on else DisplayServer.VSYNC_DISABLED)
-
-	var fps: int = int(settings.get("max_fps", 0))
-	Engine.max_fps = fps
-
-	var w_mode: String = str(settings.get("window_mode", "Windowed"))
-	match w_mode:
-		"Fullscreen":
-			DisplayServer.window_set_flag(DisplayServer.WINDOW_FLAG_BORDERLESS, false)
-			DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN)
-		"Borderless":
-			DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN)
-			DisplayServer.window_set_flag(DisplayServer.WINDOW_FLAG_BORDERLESS, true)
-		_:
-			DisplayServer.window_set_flag(DisplayServer.WINDOW_FLAG_BORDERLESS, false)
-			DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_WINDOWED)
-			var res_str: String = str(settings.get("resolution", "1920x1080"))
-			var parts := res_str.split("x")
-			if parts.size() == 2:
-				var target_size := Vector2i(int(parts[0]), int(parts[1]))
-				if target_size.x > 0 and target_size.y > 0:
-					DisplayServer.window_set_size(target_size)
+	if InputSupport.desktop_window_controls():
+		var vsync_on: bool = bool(settings.get("vsync", true))
+		DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_ENABLED if vsync_on else DisplayServer.VSYNC_DISABLED)
+		Engine.max_fps = int(settings.get("max_fps", 0))
+		var w_mode: String = str(settings.get("window_mode", "Windowed"))
+		var fullscreen := w_mode in ["Fullscreen", "Borderless"]
+		var target_mode := DisplayServer.WINDOW_MODE_FULLSCREEN if fullscreen else DisplayServer.WINDOW_MODE_WINDOWED
+		if DisplayServer.window_get_mode() != target_mode:
+			DisplayServer.window_set_mode(target_mode)
+		DisplayServer.window_set_flag(DisplayServer.WINDOW_FLAG_BORDERLESS, w_mode == "Borderless")
 
 	var msaa_str: String = str(settings.get("msaa", "Off"))
 	var vp := get_viewport()
@@ -169,13 +154,13 @@ func _apply_graphics_and_gameplay() -> void:
 		_apply_recursive(root, particles_on, glow_on)
 
 func _apply_recursive(n: Node, particles_on: bool, glow_on: bool) -> void:
-	if n is CPUParticles2D:
-		(n as CPUParticles2D).visible = particles_on
+	if n is CPUParticles2D or n is GPUParticles2D:
+		_apply_particle(n, particles_on)
 	elif n is WorldEnvironment:
 		var we := n as WorldEnvironment
 		if we.environment != null:
 			we.environment.glow_enabled = glow_on
-	elif n is AudioStreamPlayer:
+	elif n is AudioStreamPlayer or n is AudioStreamPlayer2D or n is AudioStreamPlayer3D:
 		var p := n as AudioStreamPlayer
 		if p.bus == &"Master":
 			var nm := p.name.to_lower()
@@ -224,7 +209,7 @@ func save_player_input_map() -> void:
 		cfg.erase_section("inputs")
 	for action in InputMap.get_actions():
 		var act_str := str(action)
-		if act_str.begins_with("ui_"):
+		if act_str.begins_with("ui_") and act_str not in ["ui_left", "ui_right", "ui_up", "ui_down"]:
 			continue
 		var serialized: Array = []
 		for ev in InputMap.action_get_events(action):
@@ -245,3 +230,13 @@ func load_player_input_map() -> void:
 			var ev = str_to_var(str(s))
 			if ev is InputEvent:
 				InputMap.action_add_event(act_str, ev)
+
+func _apply_particle(particle: Node, enabled: bool) -> void:
+	particle.visible = enabled
+	if not enabled:
+		if not particle.has_meta("settings_emitting"):
+			particle.set_meta("settings_emitting", particle.emitting)
+		particle.emitting = false
+	elif particle.has_meta("settings_emitting"):
+		particle.emitting = bool(particle.get_meta("settings_emitting"))
+		particle.remove_meta("settings_emitting")

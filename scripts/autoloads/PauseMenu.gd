@@ -46,9 +46,25 @@ func _ready() -> void:
 	menu.hide()
 
 func _input(event: InputEvent) -> void:
+	if event.is_action_pressed("pause_game") and not event.is_echo():
+		if opened:
+			if is_instance_valid(options):
+				options._exit_action()
+			else:
+				resume()
+		else:
+			var scene := get_tree().current_scene
+			if scene != null and scene.scene_file_path.get_file() in ["game.tscn", "tutorial.tscn"] and not Transition.transitioning and not _quitting:
+				pause_game()
+			else:
+				return
+		get_viewport().set_input_as_handled()
+		return
 	if not (event is InputEventKey and event.pressed and not event.echo):
 		return
 	if event.keycode == KEY_F11 or event.physical_keycode == KEY_F11:
+		if not InputSupport.desktop_window_controls():
+			return
 		if not _fullscreen_down:
 			toggle_fullscreen()
 		_fullscreen_down = true
@@ -118,6 +134,8 @@ func quit_to_menu() -> void:
 	_quitting = false
 
 func toggle_fullscreen() -> void:
+	if not InputSupport.desktop_window_controls():
+		return
 	var fullscreen := DisplayServer.window_get_mode() in [DisplayServer.WINDOW_MODE_FULLSCREEN, DisplayServer.WINDOW_MODE_EXCLUSIVE_FULLSCREEN]
 	var mode := "Windowed" if fullscreen else "Fullscreen"
 	GameSettings.settings["window_mode"] = mode
@@ -125,6 +143,8 @@ func toggle_fullscreen() -> void:
 	GameSettings.save_settings()
 
 func _process(_delta: float) -> void:
+	if not InputSupport.desktop_window_controls():
+		return
 	# Polling fallback survives any scene/custom UI consuming the original key event.
 	var down := Input.is_physical_key_pressed(KEY_F11) or Input.is_key_pressed(KEY_F11)
 	if down and not _fullscreen_down:

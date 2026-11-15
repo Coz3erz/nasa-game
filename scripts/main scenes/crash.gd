@@ -233,11 +233,13 @@ func _process(delta: float) -> void:
 
 func _setup_audio() -> void:
 	crash_player = AudioStreamPlayer.new()
+	crash_player.bus = &"SFX"
 	crash_player.volume_db = crash_volume_db
 	crash_player.stream = crash_sfx if crash_sfx != null else _generate_crash_wav()
 	add_child(crash_player)
 
 	typing_player = AudioStreamPlayer.new()
+	typing_player.bus = &"SFX"
 	typing_player.volume_db = typing_volume_db
 	typing_player.stream = typing_sfx if typing_sfx != null else _generate_type_click_wav()
 	add_child(typing_player)
@@ -305,7 +307,7 @@ func _show_choice() -> void:
 	yes.pressed.connect(_choose.bind(tutorial_scene))
 	no.pressed.connect(_choose.bind(target_scene))
 	choice_hint = Label.new()
-	choice_hint.text = "A / D or arrow keys to choose  -  ENTER or click to confirm"
+	choice_hint.text = "%s to choose  -  %s to confirm" % [InputSupport.movement_label(), InputSupport.label("ui_accept")]
 	choice_hint.add_theme_font_override("font", font)
 	choice_hint.add_theme_font_size_override("font_size", 14)
 	choice_hint.add_theme_color_override("font_color", Color(0.5, 0.75, 0.7))

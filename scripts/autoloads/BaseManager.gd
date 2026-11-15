@@ -13,8 +13,8 @@ var temp_level: float = 100.0
 
 var health: float = 100.0
 var health_drain: float = 4.0
-var o2_drain: float = 12.5
-var temp_drain: float = 5.0
+var o2_drain: float = 6.25
+var temp_drain: float = 2.5
 var reactor_drain_mult: float = 0.4
 var hazard_interval: float = 75.0
 var day_failed_sent: bool = false
@@ -22,6 +22,14 @@ var solar_efficiency: float = 1.0      ## dust storms drop this to 0.5
 var failure_roll_interval: float = 24.0
 var failure_chance: float = 0.10
 var _failure_timer: float = 0.0
+var _life_support_commissioned := false
+var _thermal_commissioned := false
+
+func has_module(module_name: String) -> bool:
+	for module in active_modules:
+		if is_instance_valid(module) and module.module_name == module_name and not module.is_constructing:
+			return true
+	return false
 
 func _process(delta: float) -> void:
 	if get_node_or_null("/root/GameManager") != null:
@@ -78,6 +86,8 @@ func _tick_power_and_systems(delta: float) -> void:
 		if reactor_energy <= 0.0:
 			calculate_power()
 
+	_life_support_commissioned = _life_support_commissioned or has_module("Life Support")
+	_thermal_commissioned = _thermal_commissioned or has_module("Thermal Control")
 	var life_support_active: bool = false
 	var thermal_active: bool = false
 
@@ -92,12 +102,12 @@ func _tick_power_and_systems(delta: float) -> void:
 	if life_support_active:
 		oxygen_level = minf(100.0, oxygen_level + 2.5 * delta)
 	else:
-		oxygen_level = maxf(0.0, oxygen_level - o2_drain * delta)
+		oxygen_level = maxf(0.0, oxygen_level - o2_drain * (1.0 if _life_support_commissioned else 1.0 / 3.0) * delta)
 
 	if thermal_active:
 		temp_level = minf(100.0, temp_level + 2.0 * delta)
 	else:
-		temp_level = maxf(0.0, temp_level - temp_drain * delta)
+		temp_level = maxf(0.0, temp_level - temp_drain * (1.0 if _thermal_commissioned else 1.0 / 3.0) * delta)
 
 	var reason := ""
 	if oxygen_level <= 0.0:
@@ -140,15 +150,17 @@ func _tick_random_failures(delta: float) -> void:
 func apply_day(day: int) -> void:
 	var k := float(maxi(day, 1) - 1)
 	failure_roll_interval = maxf(6.0, 24.0 - 4.5 * k)
-	failure_chance = 0.10 + 0.05 * k
+	failure_chance = clampf(0.10 + 0.05 * k, 0.0, 1.0)
 	hazard_interval = maxf(50.0, 120.0 * pow(0.75, k))
-	o2_drain = 12.5 * (1.0 + 0.15 * k)
-	temp_drain = 5.0 * (1.0 + 0.15 * k)
+	o2_drain = 6.25 * (1.0 + 0.15 * k)
+	temp_drain = 2.5 * (1.0 + 0.15 * k)
 	reactor_drain_mult = 0.4 + 0.1 * k
 	health_drain = 4.0 + 1.0 * k
 
 func reset_for_day(day: int) -> void:
 	active_modules.clear()
+	_life_support_commissioned = false
+	_thermal_commissioned = false
 	total_power = 0.0
 	current_power_draw = 0.0
 	reactor_energy = 100.0

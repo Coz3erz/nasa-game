@@ -18,7 +18,8 @@ const FLARE_DAMAGE := 15.0
 const STORM_DAMAGE := 25.0
 const STORM_SOLAR_FACTOR := 0.5
 const STORM_SECONDS := 30.0
-const FLARE_FX_SECONDS := 3.0
+const FLARE_RISE_SECONDS := 1.75
+const FLARE_FX_SECONDS := 5.25
 const STORM_FROM_DAY := 1            # all hazards can occur from day one
 const STORM_CHANCE := 0.45
 const SHIELD := "Shield"
@@ -125,6 +126,11 @@ func _flare_hit() -> void:
 	_fx.show_warning(false)
 	var shielded := _module_running(SHIELD)
 	_fx.play_flare(shielded)
+	# Resolve gameplay impact at the visual peak, not at an invisible first frame.
+	await SceneDelay.timer(self, FLARE_RISE_SECONDS, false).timeout
+	if gen != _gen:
+		return
+	shielded = _module_running(SHIELD)
 	GameAudio.play_flare(solar_flare_sfx, solar_flare_volume_db)
 	if shielded:
 		_fx.toast("The storm shield held. The flare did no damage.", CYAN)
@@ -135,7 +141,7 @@ func _flare_hit() -> void:
 			_fx.toast("Solar flare! -%d health and %d system(s) failed." % [int(FLARE_DAMAGE), broke], RED)
 		else:
 			_fx.toast("Solar flare! -%d health. Nothing was plugged in, so no equipment failed." % int(FLARE_DAMAGE), RED)
-	await SceneDelay.timer(self, FLARE_FX_SECONDS, false).timeout
+	await SceneDelay.timer(self, FLARE_FX_SECONDS - FLARE_RISE_SECONDS, false).timeout
 	if gen != _gen:
 		return
 	_finish("Solar Flare")
@@ -143,6 +149,12 @@ func _flare_hit() -> void:
 # ---------------------------------------------------------------- dust storm
 func _start_storm() -> void:
 	EventBus.hazard_started.emit("Dust Storm")
+	var generation := _gen
+	_state = S.BUSY
+	_fx.start_storm()
+	await SceneDelay.timer(self, 2.5, false).timeout
+	if generation != _gen:
+		return
 	_state = S.STORM
 	_storm_left = STORM_SECONDS
 	BaseManager.solar_efficiency = STORM_SOLAR_FACTOR
@@ -154,7 +166,6 @@ func _start_storm() -> void:
 		player.current_wire = null
 	BaseManager.calculate_power()
 	_damage(STORM_DAMAGE, "CAUGHT IN THE DUST STORM")
-	_fx.start_storm()
 	_fx.toast("Dust storm! All cables disconnected. Solar output is halved for the storm. Reconnect manually.", ORANGE)
 
 func _end_storm() -> void:
@@ -219,10 +230,11 @@ void fragment(){
 		vec2 q = vec2(p.x * (0.25 + fi * 0.08) - t * sp * g, p.y * (7.0 + fi * 9.0) + fi * 13.0);
 		st += smoothstep(0.52, 0.85, fbm(q)) * (0.55 - fi * 0.12);
 	}
-	vec2 gq = floor(vec2(p.x * 60.0 - t * 220.0 * g, p.y * 140.0));
-	float grit = step(0.992, h21(gq)) * (0.6 + 0.4 * h21(gq + 3.0));
+	// Continuous, anti-aliased, slowly drifting motes, not square random cells.
+	vec2 mote_uv = vec2(p.x * 34.0 - t * 0.75, p.y * 48.0 + t * 0.16);
+	float grit = smoothstep(0.79, 0.94, vn(mote_uv)) * 0.12;
 	float e = smoothstep(0.25, 1.0, length((uv - 0.5) * vec2(1.0, 1.15)));
-	float a = intensity * (0.26 + 0.34 * haze + 0.36 * e);
+	float a = intensity * (0.10 + 0.20 * haze + 0.16 * e);
 	a += intensity * st * 0.30 + intensity * grit * 0.5;
 	vec3 dust = mix(vec3(0.42, 0.17, 0.06), vec3(0.95, 0.52, 0.20), haze);
 	dust = mix(dust, vec3(1.0, 0.72, 0.38), clamp(st * 0.6 + grit, 0.0, 1.0));
@@ -236,6 +248,7 @@ shader_type canvas_item;
 render_mode blend_add;
 uniform float age = -1.0;
 uniform float strength = 1.0;
+uniform float opacity = 0.0;
 uniform vec4 core_col : source_color = vec4(1.0, 1.0, 0.98, 1.0);
 uniform vec4 mid_col : source_color = vec4(1.0, 0.85, 0.40, 1.0);
 uniform vec4 edge_col : source_color = vec4(1.0, 0.58, 0.15, 1.0);
@@ -271,7 +284,7 @@ void fragment(){
 	vec3 c1 = mix(edge_col.rgb * vec3(0.55, 0.12, 0.05), edge_col.rgb, smoothstep(0.0, 0.55, x));
 	c1 = mix(c1, mid_col.rgb, smoothstep(0.50, 1.15, x));
 	c1 = mix(c1, core_col.rgb, smoothstep(1.05, 1.90, x));
-	COLOR = (age < 0.0) ? vec4(0.0) : vec4(c1 * clamp(x, 0.0, 1.4), 1.0);
+	COLOR = (age < 0.0) ? vec4(0.0) : vec4(c1 * clamp(x, 0.0, 1.4), opacity);
 }
 """
 	const EDGE_SHADER := """
@@ -287,6 +300,7 @@ void fragment(){
 	var flare: ColorRect
 	var corona: ColorRect
 	var _flare_tween: Tween
+	var _flare_age_tween: Tween
 	var edge: ColorRect
 	var hurt: ColorRect
 	var warn_label: Label
@@ -353,14 +367,17 @@ void fragment(){
 		add_child(toasts)
 
 		wind = AudioStreamPlayer.new()
+		wind.bus = &"Ambient"
 		wind.stream = SynthSfx.wind_wav()
 		wind.volume_db = -60.0
 		add_child(wind)
 		sfx = AudioStreamPlayer.new()
+		sfx.bus = &"SFX"
 		sfx.stream = SynthSfx.flare_wav()
 		sfx.volume_db = -3.0
 		add_child(sfx)
 		beep = AudioStreamPlayer.new()
+		beep.bus = &"SFX"
 		beep.stream = SynthSfx.beep_wav()
 		beep.volume_db = -8.0
 		add_child(beep)
@@ -372,7 +389,7 @@ void fragment(){
 		_t += delta
 		if corona.visible:
 			(corona.material as ShaderMaterial).set_shader_parameter("time", _t)
-		var amount := _storm_level * 2.2 + _shake
+		var amount := (_storm_level * 2.2 + _shake) if bool(GameSettings.settings.get("screen_shake", true)) else 0.0
 		_shake = maxf(0.0, _shake - delta * 22.0)
 		var cam := get_viewport().get_camera_2d()
 		if cam != null:
@@ -415,13 +432,20 @@ void fragment(){
 		if is_instance_valid(_flare_tween):
 			_flare_tween.kill()
 		corona.visible = true
-		corona.modulate.a = 0.0
+		(corona.material as ShaderMaterial).set_shader_parameter("opacity", 0.0)
 		var gas := corona.material as ShaderMaterial
 		gas.set_shader_parameter("sun_aspect", Vector2.ONE)
 		gas.set_shader_parameter("outer_uv", 1.95)
+		gas.set_shader_parameter("time", 0.0)
+		gas.set_shader_parameter("near_col", Color(1.0, 0.78, 0.32))
+		gas.set_shader_parameter("mid_col", Color(1.0, 0.48, 0.12))
+		gas.set_shader_parameter("far_col", Color(0.95, 0.28, 0.06))
+		_t = 0.0
 		_flare_tween = create_tween()
-		_flare_tween.tween_property(corona, "modulate:a", 0.38 if shielded else 0.75, 0.35)
-		_flare_tween.tween_property(corona, "modulate:a", 0.0, 2.65)
+		_flare_tween.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+		_flare_tween.tween_method(_set_flare_opacity, 0.0, 0.38 if shielded else 0.75, 1.75)
+		_flare_tween.tween_interval(1.75)
+		_flare_tween.tween_method(_set_flare_opacity, 0.38 if shielded else 0.75, 0.0, 1.75)
 		_flare_tween.tween_callback(corona.hide)
 		var mat := flare.material as ShaderMaterial
 		if shielded:
@@ -437,11 +461,18 @@ void fragment(){
 		flare.visible = true
 		# The hazard owner plays its exported/fallback flare sound once.
 		_shake = 5.0 if shielded else 16.0
-		var tw := create_tween()
-		tw.tween_method(func(v: float) -> void: mat.set_shader_parameter("age", v), 0.0, 3.0, 3.0)
-		tw.tween_callback(func() -> void:
+		if is_instance_valid(_flare_age_tween):
+			_flare_age_tween.kill()
+		mat.set_shader_parameter("age", 0.0)
+		_flare_age_tween = create_tween()
+		_flare_age_tween.tween_method(func(v: float) -> void: mat.set_shader_parameter("age", v), 0.0, 1.5, 5.25)
+		_flare_age_tween.tween_callback(func() -> void:
 			mat.set_shader_parameter("age", -1.0)
 			flare.visible = false)
+
+	func _set_flare_opacity(value: float) -> void:
+		(corona.material as ShaderMaterial).set_shader_parameter("opacity", value)
+		(flare.material as ShaderMaterial).set_shader_parameter("opacity", value)
 
 	func show_warning(on: bool) -> void:
 		_warn_on = on
@@ -461,9 +492,15 @@ void fragment(){
 		hurt.color.a = 0.45
 
 	func stop_all() -> void:
+		if is_instance_valid(_flare_age_tween):
+			_flare_age_tween.kill()
+		_set_flare_opacity(0.0)
 		if is_instance_valid(_flare_tween):
 			_flare_tween.kill()
 		corona.hide()
+		hurt.color.a = 0.0
+		for toast_panel in toasts.get_children():
+			toast_panel.queue_free()
 		show_warning(false)
 		if _storm_tween != null:
 			_storm_tween.kill()
@@ -492,6 +529,8 @@ void fragment(){
 		p.add_theme_stylebox_override("panel", sb)
 		var l := Label.new()
 		l.text = msg
+		l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		l.custom_minimum_size.x = minf(680.0, get_viewport().get_visible_rect().size.x - 84.0)
 		l.add_theme_font_override("font", GameFont.get_font())
 		l.add_theme_font_size_override("font_size", 18)
 		l.add_theme_color_override("font_color", col)

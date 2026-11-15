@@ -3,9 +3,20 @@
 [ext_resource type="PackedScene" uid="uid://65xbkmaftctv" path="res://scenes/main scenes/game.tscn" id="1_world"]
 [ext_resource type="Script" uid="uid://c7rxmnwjo4yyr" path="res://scripts/main scenes/tutorial.gd" id="2_tutorial"]
 [ext_resource type="Texture2D" uid="uid://cr2sc6vym31xe" path="res://sprites/space station tileset/commander.png" id="3_b207k"]
+[ext_resource type="AudioStream" uid="uid://2amsf138kwlq" path="res://sounds/music/cozy-music-complete-lite/ogg/late-night-study.ogg" id="4_c2b23"]
 
 [node name="Tutorial" unique_id=1348475781 instance=ExtResource("1_world")]
 script = ExtResource("2_tutorial")
+enable_tutorial_dim = true
+enable_region_spotlights = true
+commander_step_offsets = {
+0: Vector2(0, 1),
+1: Vector2(1, 0),
+2: Vector2(0, 1),
+3: Vector2(-1, 0),
+4: Vector2(0, -1),
+5: Vector2(1, 0)
+}
 commander_sprite = ExtResource("3_b207k")
 commander_name = "COMMANDER"
 shop_top = Rect2(0.03, 0.02, 0.94, 0.13)
@@ -13,3 +24,8 @@ shop_list = Rect2(0.03, 0.16, 0.56, 0.68)
 shop_info = Rect2(0.6, 0.16, 0.37, 0.68)
 shop_buttons = Rect2(0.03, 0.85, 0.94, 0.13)
 hud_area = Rect2(0, 0, 0.3, 0.34)
+
+[node name="AudioStreamPlayer2D" type="AudioStreamPlayer2D" parent="." index="10" unique_id=1002498907]
+stream = ExtResource("4_c2b23")
+autoplay = true
+parameters/looping = true

@@ -28,6 +28,7 @@ var _intro_card: Control
 var time_left: float = 0.0
 var running: bool = false
 var ended: bool = false
+var _leaving := false
 
 var font: Font
 var panel: PanelContainer
@@ -53,6 +54,11 @@ func _ready() -> void:
 func _exit_tree() -> void:
 	if GameManager.day_failed.is_connected(_on_failed):
 		GameManager.day_failed.disconnect(_on_failed)
+	_leaving = true
+	for child in get_children():
+		if child is Timer:
+			child.stop()
+			child.timeout.emit()
 
 func _lbl(size: int, col: Color) -> Label:
 	var l := Label.new()
@@ -228,6 +234,8 @@ func _card(title: String, sub: String, col: Color, hold: float, solid: bool, dis
 		create_tween().tween_property(card, "modulate:a", 1.0, 0.25)
 
 	await get_tree().process_frame
+	if _leaving:
+		return
 	for l in letters:
 		l.pivot_offset = l.size * 0.5
 		l.scale = Vector2(2.4, 2.4)
@@ -250,18 +258,14 @@ func _card(title: String, sub: String, col: Color, hold: float, solid: bool, dis
 	tw.tween_property(s, "visible_ratio", 1.0, type_t).set_delay(0.35 + t_end)
 	if sfx_type != null:
 		var last := [0]
-		tw.tween_method(func(v: float):
-			var n := int(v * sub.length())
-			if n != last[0]:
-				last[0] = n
-				if n > 0 and n <= sub.length() and sub[n - 1] != " ":
-					_play(sfx_type, randf_range(0.95, 1.08), -6.0)
-		, 0.0, 1.0, type_t).set_delay(0.35 + t_end)
+		tw.tween_method(_card_type_tick.bind(sub, last), 0.0, 1.0, type_t).set_delay(0.35 + t_end)
 	tw.tween_property(pips, "modulate:a", 1.0, 0.4).set_delay(0.5 + t_end)
 	tw.tween_property(vb, "scale", Vector2(1.04, 1.04), build_t + hold + 0.5)   # slow push-in
 
 	# `hold` = how long everything stays fully readable AFTER the build-in finishes
 	await SceneDelay.timer(self, build_t + hold, false).timeout
+	if _leaving:
+		return
 
 	if solid:
 		_intro_card = card
@@ -269,6 +273,8 @@ func _card(title: String, sub: String, col: Color, hold: float, solid: bool, dis
 			var out := create_tween()
 			out.tween_property(card, "modulate:a", 0.0, 0.7)
 			await out.finished
+			if _leaving:
+				return
 		return
 	if dismiss:
 		_play(sfx_card_out)
@@ -279,7 +285,17 @@ func _card(title: String, sub: String, col: Color, hold: float, solid: bool, dis
 		ex.tween_property(bars[0], "offset_bottom", 0.0, 0.4).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN)
 		ex.tween_property(bars[1], "offset_top", 0.0, 0.4).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN)
 		await ex.finished
+		if _leaving:
+			return
 		card.queue_free()
+
+# Named callback avoids an anonymous closure retaining the suspended card frame on quit.
+func _card_type_tick(value: float, text: String, last: Array) -> void:
+	var n := int(value * text.length())
+	if n != last[0]:
+		last[0] = n
+		if n > 0 and n <= text.length() and text[n - 1] != " ":
+			_play(sfx_type, randf_range(0.95, 1.08), -6.0)
 
 ## row of day pips: finished days filled, today pulsing, future dim
 func _pips(col: Color) -> HBoxContainer:
@@ -307,6 +323,8 @@ func _pips(col: Color) -> HBoxContainer:
 ## cinematic title that plays over the game and then clears itself
 func banner(title: String, sub: String, col: Color, hold: float = 2.0) -> void:
 	await _card(title, sub, col, hold, false, true)
+	if _leaving:
+		return
 
 func survive_sub() -> String:
 	return "Keep air, heat and power running until sunrise"
@@ -321,8 +339,12 @@ func play_intro() -> void:
 	var day := GameManager.current_sol
 	var tag: String = TAGLINES[clampi(day - 1, 0, TAGLINES.size() - 1)]
 	await _card("DAY %d" % day, tag, CYAN, 2.4, true)
+	if _leaving:
+		return
 	if trans != null:
 		await trans.shutter_close(0.55)      # card -> blinds slam shut; shop is built behind them
+		if _leaving:
+			return
 
 func reveal() -> void:
 	var trans := get_node_or_null("/root/Transition")
@@ -331,12 +353,20 @@ func reveal() -> void:
 			_intro_card.queue_free()
 		_cover.queue_free()
 		await get_tree().process_frame
+		if _leaving:
+			return
 		await trans.shutter_open(0.85)       # blinds sweep open on the finished shop
+		if _leaving:
+			return
 		return
 	await SceneDelay.timer(self, 0.5, false).timeout
+	if _leaving:
+		return
 	var tw := create_tween()
 	tw.tween_property(_cover, "modulate:a", 0.0, 0.9)
 	await tw.finished
+	if _leaving:
+		return
 	_cover.queue_free()
 	if is_instance_valid(_intro_card):
 		_intro_card.queue_free()
@@ -347,6 +377,8 @@ func start_timer() -> void:
 	panel.visible = true
 	panel.modulate = Color(2.2, 2.2, 2.2, 0.0)
 	await get_tree().process_frame
+	if _leaving:
+		return
 	panel.pivot_offset = Vector2(panel.size.x, 0.0)
 	panel.scale = Vector2(0.7, 0.7)
 	var tw := create_tween().set_parallel(true)
@@ -380,7 +412,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 	if ended or GameManager.current_phase != GameManager.Phase.SURVIVE:
 		return
-	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_H:
+	if event.is_action_pressed("use_medkit") and not event.is_echo():
 		if GameManager.get_item_count("Med Kit") <= 0:
 			return
 		if BaseManager.health >= 99.0:
@@ -412,18 +444,26 @@ func _end_day() -> void:
 	var trans := get_node_or_null("/root/Transition")
 	if day >= GameManager.total_days:
 		await _card("RESCUE TEAM LANDED", "You held the base for all %d days" % day, AMBER, 3.2, false)
+		if _leaving:
+			return
 		GameManager.restart_all()
 		var path := win_scene
 		if path == "" or not ResourceLoader.exists(path):
 			path = "res://scenes/main scenes/cutscene.tscn"
 		if trans != null:
 			await trans.change_scene(path, 1.2)
+			if _leaving:
+				return
 		else:
 			get_tree().change_scene_to_file(path)
 		return
 	await _card("DAY %d CLEAR" % day, "Nice work! Tomorrow is harder.", CYAN, 2.4, false)
+	if _leaving:
+		return
 	GameManager.advance_day()
 	await _reload()
+	if _leaving:
+		return
 
 func _on_failed(reason: String) -> void:
 	if ended:
@@ -436,8 +476,12 @@ func _on_failed(reason: String) -> void:
 		if p.has_method("set_input_locked"):
 			p.set_input_locked(true)
 	await _death_sequence(reason)
+	if _leaving:
+		return
 	GameManager.restart_day()
 	await Transition.change_scene(get_tree().current_scene.scene_file_path, 0.5)
+	if _leaving:
+		return
 
 func _death_shake(v: float, cam: Camera2D) -> void:
 	if is_instance_valid(cam):
@@ -470,6 +514,7 @@ func _death_sequence(reason: String) -> void:
 	msg.modulate.a = 0.0
 	layer_fx.add_child(msg)
 	var snd := AudioStreamPlayer.new()
+	snd.bus = &"SFX"
 	snd.stream = SynthSfx.crash_wav()
 	snd.volume_db = -1.0
 	if AudioServer.get_bus_index("SFX") != -1:
@@ -485,6 +530,8 @@ func _death_sequence(reason: String) -> void:
 	tw.tween_property(msg, "modulate:a", 1.0, 0.6)
 	tw.tween_interval(2.0)
 	await tw.finished
+	if _leaving:
+		return
 	if is_instance_valid(cam):
 		cam.offset = Vector2.ZERO
 
@@ -492,12 +539,17 @@ func _reload(col: Color = CYAN) -> void:
 	var trans := get_node_or_null("/root/Transition")
 	if trans != null:
 		await trans.shutter_close(0.7, col)
+		if _leaving:
+			return
 	await Transition.change_scene(get_tree().current_scene.scene_file_path, 0.5)
+	if _leaving:
+		return
 
 func _play(stream: AudioStream, pitch: float = 1.0, extra_db: float = 0.0) -> void:
 	if stream == null:
 		return
 	var pl := AudioStreamPlayer.new()
+	pl.bus = &"SFX"
 	pl.stream = stream
 	pl.pitch_scale = pitch
 	pl.volume_db = sfx_volume_db + extra_db

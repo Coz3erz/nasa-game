@@ -8,6 +8,7 @@ extends Node2D
 @export var enable_region_spotlights: bool = true
 @export var commander_step_offsets: Dictionary = {0: Vector2(0, 1), 1: Vector2(1, 0), 2: Vector2(0, 1), 3: Vector2(-1, 0), 4: Vector2(0, -1), 5: Vector2(1, 0)}
 var _shop_step := 0
+var _objective_source := ""
 var _pending_events: Array[String] = []
 
 @export_group("Commander")
@@ -112,7 +113,8 @@ func _build_objective_label() -> void:
 func _objective(text: String) -> void:
 	var panel: Control = _objective_label.get_meta("panel")
 	panel.visible = text != ""
-	_objective_label.text = text
+	_objective_source = text
+	_objective_label.text = InputSupport.expand(text)
 
 func _lock(locked: bool) -> void:
 	($Player as Node).call("set_input_locked", locked)
@@ -241,10 +243,10 @@ func _chapter_crew() -> void:
 		return
 
 func _chapter_walk() -> void:
-	await _say("First, get a feel for the base. Move around with WASD or the arrow keys.")
+	await _say("First, get a feel for the base. Move around with {move}.")
 	if _cancelled:
 		return
-	_objective("Walk around  (WASD / arrow keys)")
+	_objective("Walk around  ({move})")
 	await _wait("moved")
 	if _cancelled:
 		return
@@ -323,10 +325,10 @@ func _say_shop(text: String, spot: Variant) -> void:
 	_shop.process_mode = Node.PROCESS_MODE_INHERIT
 
 func _chapter_build() -> void:
-	await _say("Press SPACE to enter build mode and aim with your mouse. Click or press E to place the Oxygen Maker. Leave some space around the reactor, it needs clearance.")
+	await _say("Press {build_mode} to enter build mode and aim with your mouse, right stick or touch aim pad. Use {interact} to place the Oxygen Maker. Leave some space around the reactor, it needs clearance.")
 	if _cancelled:
 		return
-	_objective("Place the Oxygen Maker  (SPACE, aim, E or click)")
+	_objective("Place the Oxygen Maker  ({build_mode}, aim, {interact})")
 	await _wait("placed:Life Support")
 	if _cancelled:
 		return
@@ -357,10 +359,10 @@ func _chapter_reactor() -> void:
 	await _say("Mars is about one and a half times farther from the Sun than Earth, so sunlight here is less than half as strong. Panels are the only practical option, and we need plenty of them.", true)
 	if _cancelled:
 		return
-	await _say("To connect equipment, walk up to a reactor output and press E to pick up its cable. Carry it to the socket and press E again to plug it in.", false, reactor)
+	await _say("To connect equipment, walk up to a reactor output and press {interact} to pick up its cable. Carry it to the socket and press {interact} again to plug it in.", false, reactor)
 	if _cancelled:
 		return
-	_objective("Plug the reactor into the Oxygen Maker  (E to grab, E to connect)")
+	_objective("Plug the reactor into the Oxygen Maker  ({interact} to grab, {interact} to connect)")
 	await _wait("wire:Reactor>Life Support")
 	if _cancelled:
 		return
@@ -426,7 +428,7 @@ func _chapter_bars() -> void:
 	await _say("These bars are what keep you alive. Air, warmth, and health.", true, Dialogue.SCREEN, _frac(hud_area))
 	if _cancelled:
 		return
-	await _say("Air drains in about eight seconds without life support, and faster each day. The atmosphere here is 95 percent carbon dioxide, so the Oxygen Maker splits it apart with electricity. NASA's MOXIE experiment on the Perseverance rover did exactly that.", true)
+	await _say("Air lasts about 48 seconds before your first Oxygen Maker is built, or 16 seconds after it is built but unpowered, on day one. Later days drain faster. The atmosphere here is 95 percent carbon dioxide, so the Oxygen Maker splits it apart with electricity. NASA's MOXIE experiment on the Perseverance rover did exactly that.", true)
 	if _cancelled:
 		return
 	await _say("Warmth drains too. Nights here fall to around minus 60 degrees Celsius. Without the heater running, the base freezes.", true)
@@ -443,7 +445,7 @@ func _chapter_failures() -> void:
 	await _say("That's called a failure. A failed machine stops completely until it's repaired.", true)
 	if _cancelled:
 		return
-	await _say("A bar shows up above it. Stand close and hold E until the bar fills. It takes about four seconds.", false)
+	await _say("A bar shows up above it. Stand close and hold {interact} until the bar fills. It takes about four seconds.", false)
 	if _cancelled:
 		return
 	await _say("Failures get more frequent every day, so keep an eye on your equipment.", true)
@@ -549,3 +551,7 @@ func _exit_tree() -> void:
 		if not is_instance_valid(module) or is_ancestor_of(module):
 			BaseManager.active_modules.remove_at(i)
 	BaseManager.calculate_power()
+
+func _process(_delta: float) -> void:
+	if is_instance_valid(_objective_label) and _objective_source != "":
+		_objective_label.text = InputSupport.expand(_objective_source)

@@ -73,6 +73,7 @@ var _finished := false
 var _dismissible := false
 var _line_visible := false
 var _full_text := ""
+var _source_text := ""
 var _spot: Variant = null
 var _dim_tween: Tween
 var _t := 0.0
@@ -128,7 +129,7 @@ func _ready() -> void:
 	dialogue_box.add_child(body)
 
 	hint_label = Label.new()
-	hint_label.text = "SPACE  >"
+	hint_label.text = InputSupport.label("ui_accept") + "  >"
 	hint_label.add_theme_font_override("font", _font)
 	hint_label.add_theme_font_size_override("font_size", maxi(8, font_size - 8))
 	hint_label.add_theme_color_override("font_color", Color(0.55, 0.62, 0.72))
@@ -137,6 +138,7 @@ func _ready() -> void:
 	dialogue_box.add_child(hint_label)
 
 	type_player = AudioStreamPlayer.new()
+	type_player.bus = &"SFX"
 	type_player.volume_db = -16.0
 	if ResourceLoader.exists("res://sounds/cutscene/key_type.mp3"):
 		type_player.stream = load("res://sounds/cutscene/key_type.mp3")
@@ -164,8 +166,9 @@ func show_dialogue(text: String, location: Variant = null, character: String = "
 	set_anchor(location)
 	name_label.text = speaker_name if character.is_empty() else character
 	portrait.texture = sprite if sprite != null else character_sprite
-	_full_text = text
-	body.text = text
+	_source_text = text
+	_full_text = InputSupport.expand(text)
+	body.text = _full_text
 	body.visible_characters = 0
 	_reveal = 0.0
 	_last_tick = 0
@@ -228,6 +231,13 @@ func _on_legacy_dialogue(sprite: Texture2D, text: String, location: String) -> v
 
 # ------------------------------------------------------------------ loop
 func _process(delta: float) -> void:
+	if _line_visible:
+		var expanded := InputSupport.expand(_source_text)
+		if expanded != _full_text:
+			_full_text = expanded
+			body.text = expanded
+	if is_instance_valid(hint_label):
+		hint_label.text = InputSupport.label("ui_accept") + "  >"
 	_t += delta
 	if not _line_visible:
 		return

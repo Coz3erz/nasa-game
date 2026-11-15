@@ -203,6 +203,7 @@ func set_outside_mode(outside: bool, bounds: Rect2) -> void:
 
 func _setup_footstep_audio() -> void:
 	_footstep_player = AudioStreamPlayer.new()
+	_footstep_player.bus = &"SFX"
 	_footstep_player.volume_db = footstep_volume_db
 	add_child(_footstep_player)
 	_default_metal_stream = _generate_metal_step_wav()
@@ -445,6 +446,8 @@ func _make_dust() -> void:
 func _unhandled_input(event: InputEvent) -> void:
 	if not is_active or input_locked:
 		return
+	if InputSupport.device_kind == "touch" and event is InputEventMouseButton and event.device == -1:
+		return # Touch controls own placement; an emulated UI tap must not place a second module.
 	if event.is_action_pressed(BUILD_ACTION):
 		_toggle_build_mode()
 		get_viewport().set_input_as_handled()
@@ -456,6 +459,14 @@ func _unhandled_input(event: InputEvent) -> void:
 			_try_interact()
 		return
 	if is_build_mode:
+		if event.is_action_pressed("cycle_module"):
+			_cycle_ghost(1)
+			get_viewport().set_input_as_handled()
+			return
+		if event.is_action_pressed("rotate_port"):
+			_rotate_aimed_port()
+			get_viewport().set_input_as_handled()
+			return
 		if event is InputEventMouseButton and event.pressed:
 			if event.button_index == MOUSE_BUTTON_WHEEL_UP:
 				_cycle_ghost(-1)
@@ -463,10 +474,24 @@ func _unhandled_input(event: InputEvent) -> void:
 				_cycle_ghost(1)
 			elif event.button_index == MOUSE_BUTTON_LEFT and WirePort.hover_count == 0:
 				_attempt_place()
-		elif event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_TAB:
-			_cycle_ghost(1)
 
 # - build mode -
+func _rotate_aimed_port() -> void:
+	var target: Node2D = null
+	var distance := 90.0
+	var aim := global_position + InputSupport.aim_direction * 230.0 if InputSupport.device_kind in ["gamepad", "touch"] else get_global_mouse_position()
+	for module in BaseManager.active_modules:
+		if not is_instance_valid(module):
+			continue
+		for child in module.get_children():
+			if child is WirePort and child._interactive():
+				var d: float = child.global_position.distance_to(aim)
+				if d < distance:
+					distance = d
+					target = child
+	if target != null:
+		target.rotate_side(1)
+
 func _toggle_build_mode() -> void:
 	if is_build_mode:
 		_exit_build_mode()
@@ -583,6 +608,8 @@ func _update_build_ghost(delta: float, snap_now: bool = false) -> void:
 	if not is_instance_valid(ghost_module):
 		return
 	var to_mouse := get_global_mouse_position() - global_position
+	if InputSupport.device_kind in ["gamepad", "touch"]:
+		to_mouse = InputSupport.aim_direction * _ghost_reach()
 	var reach := _ghost_reach()
 	if to_mouse.length() > reach:
 		to_mouse = to_mouse.normalized() * reach
@@ -753,7 +780,7 @@ func _make_build_hud() -> void:
 	vb.add_theme_constant_override("separation", 4)
 	_build_title = _lbl(20, C_CYAN)
 	_build_hint = _lbl(14, Color(0.75, 0.82, 0.88))
-	_build_hint.text = "E place     SPACE stop     TAB swap"
+	_build_hint.text = InputSupport.expand("{interact} place     {build_mode} stop     {cycle_module} swap     {rotate_port} rotate")
 	vb.add_child(_build_title)
 	vb.add_child(_build_hint)
 	_build_panel.add_child(vb)
@@ -778,6 +805,8 @@ func _set_build_hud(on: bool) -> void:
 	_hud_key = ""
 
 func _update_hud_text() -> void:
+	if _build_hint != null:
+		_build_hint.text = InputSupport.expand("{interact} place     {build_mode} stop     {cycle_module} swap     {rotate_port} rotate")
 	if _build_title == null or build_options.is_empty() or selected_module_index >= build_options.size():
 		return
 	var id: String = build_options[selected_module_index]["id"]
@@ -1058,13 +1087,13 @@ func _set_hint_rows(rows: Array) -> void:
 func _compute_hint_rows() -> Array:
 	var rows: Array = []
 	if is_build_mode:
-		rows.append(["E or CLICK", "Place it"])
+		rows.append([InputSupport.label("interact"), "Place it"])
 		if build_options.size() > 1:
-			rows.append(["TAB or SCROLL", "Pick another"])
-		rows.append(["CLICK a plug", "Turn it"])
-		rows.append(["SPACE", "Stop building"])
+			rows.append([InputSupport.label("cycle_module"), "Pick another"])
+		rows.append([InputSupport.label("rotate_port"), "Turn it"])
+		rows.append([InputSupport.label("build_mode"), "Stop building"])
 		return rows
-	rows.append(["WASD", "Walk"])
+	rows.append([InputSupport.movement_label(), "Walk"])
 	var e_text := "Grab a wire"
 	match _hint_kind:
 		"plug":
@@ -1075,12 +1104,14 @@ func _compute_hint_rows() -> Array:
 			e_text = "Hold to fix it"
 		"grab":
 			e_text = "Grab the wire"
-	rows.append(["E", e_text])
+	rows.append([InputSupport.label("interact"), e_text])
 	if _has_buildables() and not is_outside:
-		rows.append(["SPACE", "Build stuff"])
+		rows.append([InputSupport.label("build_mode"), "Build stuff"])
 	return rows
 
 func _update_hints() -> void:
+	if _hint_panel != null:
+		_hint_panel.offset_bottom = -250 if InputSupport.device_kind == "touch" else -20
 	if _hint_panel != null and (not is_active or input_locked or get_tree().get_nodes_in_group("shop_ui").any(func(n): return n.is_visible_in_tree())):
 		_hint_panel.hide()
 		_hint_marks.clear()
@@ -1095,7 +1126,7 @@ func _update_hints() -> void:
 			if r != null:
 				_hint_kind = "plug"
 				var rp: Vector2 = r.get_receiver_position() if r.has_method("get_receiver_position") else r.global_position
-				_hint_marks.append({"pos": rp, "col": C_GREEN, "text": "E  plug in"})
+				_hint_marks.append({"pos": rp, "col": C_GREEN, "text": InputSupport.label("interact") + "  plug in"})
 			else:
 				_hint_kind = "drop"
 				var bad := _wrong_receiver_near(current_wire)
@@ -1106,25 +1137,25 @@ func _update_hints() -> void:
 			var broken := _nearest_broken_module()
 			if broken != null:
 				_hint_kind = "fix"
-				_hint_marks.append({"pos": broken.get_center(), "col": C_AMBER, "text": "hold E  fix"})
+				_hint_marks.append({"pos": broken.get_center(), "col": C_AMBER, "text": "hold " + InputSupport.label("interact") + "  fix"})
 			else:
 				var dw := _find_closest_dropped_wire()
 				if dw != null:
 					_hint_kind = "grab"
-					_hint_marks.append({"pos": dw.hand_pos, "col": C_CYAN, "text": "E  grab"})
+					_hint_marks.append({"pos": dw.hand_pos, "col": C_CYAN, "text": InputSupport.label("interact") + "  grab"})
 				else:
 					var pw := _find_closest_plugged_wire()
 					if pw != null:
 						_hint_kind = "grab"
-						_hint_marks.append({"pos": pw.hand_pos, "col": C_CYAN, "text": "E  unplug"})
+						_hint_marks.append({"pos": pw.hand_pos, "col": C_CYAN, "text": InputSupport.label("interact") + "  unplug"})
 					else:
 						var src := _find_closest_wire_source()
 						if src != null:
 							_hint_kind = "grab"
-							_hint_marks.append({"pos": src.global_position, "col": C_CYAN, "text": "E  grab wire"})
+							_hint_marks.append({"pos": src.global_position, "col": C_CYAN, "text": InputSupport.label("interact") + "  grab wire"})
 	var show_build := _has_buildables() and not is_outside and not input_locked and (GameManager.current_phase in [GameManager.Phase.BUILD, GameManager.Phase.SURVIVE])
-	_hint_panel.visible = show_build
-	_set_hint_rows([["SPACE", "build"]] if show_build else [])
+	_hint_panel.visible = show_build or _hint_kind != "" or is_build_mode
+	_set_hint_rows(_compute_hint_rows())
 
 ## Drawn by the Hints node (world space, always on top): the build circle in build mode.
 func _overlay_draw(c: Node2D) -> void:

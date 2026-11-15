@@ -16,10 +16,17 @@ var alarm: AudioStreamPlayer
 var _plug: AudioStream
 var _unplug: AudioStream
 var _flare: AudioStream
+var _web_audio_unlocked := false
+var _menu_requested := false
+var _audio_gate: CanvasLayer
 
 func _ready() -> void:
+	process_mode = Node.PROCESS_MODE_PAUSABLE
+	_web_audio_unlocked = not OS.has_feature("web")
+	if not _web_audio_unlocked:
+		_make_audio_gate.call_deferred()
 	music = _player("Music", -12.0)
-	hum = _player("SFX", -27.0)
+	hum = _player("Ambient", -27.0)
 	alarm = _player("SFX", -13.0)
 	_plug = plug_sfx if plug_sfx != null else load("res://sounds/sfx/plug.wav")
 	_unplug = unplug_sfx if unplug_sfx != null else load("res://sounds/sfx/unplug.wav")
@@ -53,6 +60,9 @@ func _loop(source: AudioStream) -> AudioStream:
 	return stream
 
 func set_menu_music(enabled: bool) -> void:
+	_menu_requested = enabled
+	if not _web_audio_unlocked:
+		return
 	if enabled and not music.playing:
 		music.play()
 	elif not enabled:
@@ -100,3 +110,39 @@ func _process(_delta: float) -> void:
 			alarm.play()
 	else:
 		alarm.stop()
+
+func _make_audio_gate() -> void:
+	_audio_gate = CanvasLayer.new()
+	_audio_gate.layer = 240
+	add_child(_audio_gate)
+	var cover := ColorRect.new()
+	cover.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	cover.color = Color(0.01, 0.02, 0.04, 1.0)
+	cover.mouse_filter = Control.MOUSE_FILTER_STOP
+	_audio_gate.add_child(cover)
+	var label := Label.new()
+	label.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	label.text = "CRASHFALL\n\nTap, click or press a button to start"
+	label.add_theme_font_size_override("font_size", 28)
+	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	cover.add_child(label)
+
+func _input(event: InputEvent) -> void:
+	if _web_audio_unlocked:
+		return
+	var gesture: bool = (event is InputEventScreenTouch and event.pressed) or (event is InputEventMouseButton and event.pressed) or (event is InputEventKey and event.pressed and not event.echo) or (event is InputEventJoypadButton and event.pressed)
+	if not gesture:
+		return
+	_web_audio_unlocked = true
+	if is_instance_valid(_audio_gate):
+		_audio_gate.queue_free()
+	set_menu_music(_menu_requested)
+	get_viewport().set_input_as_handled()
+
+func _exit_tree() -> void:
+	for player in [music, hum, alarm]:
+		if is_instance_valid(player):
+			player.stop()
+			player.stream = null

@@ -25,6 +25,7 @@ var _glitch := 0.0
 var _glitch_next := 2.5
 var _blip: AudioStreamPlayer
 var _font: Font
+var _logo_font: Font
 
 func _ready() -> void:
 	GameAudio.set_menu_music(true)
@@ -32,6 +33,7 @@ func _ready() -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	_font = GameFont.get_font()
+	_logo_font = load("res://resources/fonts/Cynatar.otf")
 	_bg = ColorRect.new()
 	_bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -50,6 +52,7 @@ func _ready() -> void:
 	_glow.material = mat
 	add_child(_glow)
 	_blip = AudioStreamPlayer.new()
+	_blip.bus = &"SFX"
 	_blip.stream = SynthSfx.beep_wav()
 	_blip.volume_db = -14.0
 	add_child(_blip)
@@ -128,14 +131,15 @@ func _draw() -> void:
 
 	# title
 	var tf := _float(0.0) * 1.8
-	var tsize := _font.get_string_size(game_title, HORIZONTAL_ALIGNMENT_LEFT, -1, tfs)
+	tfs = mini(tfs, int((vs.x - lx * 2.0) / maxf(_logo_font.get_string_size(game_title, HORIZONTAL_ALIGNMENT_LEFT, -1, 1).x, 0.01)))
+	var tsize := _logo_font.get_string_size(game_title, HORIZONTAL_ALIGNMENT_LEFT, -1, tfs)
 	var tpos := Vector2(lx, vs.y * 0.37) + tf
 	var g := _glitch / 0.22
 	var jitter := Vector2(randf_range(-9.0, 9.0) * g, 0.0)
-	draw_string(_font, tpos + Vector2(6, 5), game_title, HORIZONTAL_ALIGNMENT_LEFT, -1, tfs, Color(0, 0, 0, 0.75))
-	draw_string(_font, tpos + Vector2(-5.0 - 8.0 * g, 2.0), game_title, HORIZONTAL_ALIGNMENT_LEFT, -1, tfs, Color(RED, 0.8))
-	draw_string(_font, tpos + Vector2(5.0 + 8.0 * g, -2.0), game_title, HORIZONTAL_ALIGNMENT_LEFT, -1, tfs, Color(CYAN, 0.8))
-	draw_string(_font, tpos + jitter, game_title, HORIZONTAL_ALIGNMENT_LEFT, -1, tfs, Color(0.97, 0.99, 1.0))
+	draw_string(_logo_font, tpos + Vector2(6, 5), game_title, HORIZONTAL_ALIGNMENT_LEFT, -1, tfs, Color(0, 0, 0, 0.75))
+	draw_string(_logo_font, tpos + Vector2(-5.0 - 8.0 * g, 2.0), game_title, HORIZONTAL_ALIGNMENT_LEFT, -1, tfs, Color(RED, 0.8))
+	draw_string(_logo_font, tpos + Vector2(5.0 + 8.0 * g, -2.0), game_title, HORIZONTAL_ALIGNMENT_LEFT, -1, tfs, Color(CYAN, 0.8))
+	draw_string(_logo_font, tpos + jitter, game_title, HORIZONTAL_ALIGNMENT_LEFT, -1, tfs, Color(0.97, 0.99, 1.0))
 	if g > 0.0:
 		for i in 3:
 			var sy := tpos.y - tsize.y * randf_range(0.2, 0.9)
@@ -183,8 +187,9 @@ func _draw() -> void:
 
 # ------------------------------------------------------------------ input
 func _input(event: InputEvent) -> void:
-	if _busy or _in_options:
+	if _busy or _in_options or not GameAudio._web_audio_unlocked:
 		return
+	event = InputSupport.menu_event(event)
 	if event is InputEventMouseMotion:
 		for i in _rects.size():
 			if _rects[i].has_point(event.position) and i != _sel:
@@ -201,7 +206,7 @@ func _input(event: InputEvent) -> void:
 				_select((_sel - 1 + _items.size()) % _items.size())
 			KEY_DOWN, KEY_S:
 				_select((_sel + 1) % _items.size())
-			KEY_ENTER, KEY_KP_ENTER, KEY_SPACE, KEY_E:
+			KEY_ENTER, KEY_KP_ENTER, KEY_SPACE:
 				_activate()
 
 func _select(i: int) -> void:

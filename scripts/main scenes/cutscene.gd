@@ -262,6 +262,7 @@ const SUN_INNER_SHADER := """
 shader_type canvas_item;
 uniform float time = 0.0;
 uniform float rotation_speed = 0.012;
+uniform bool low_detail = false;
 uniform vec2 sun_aspect = vec2(1.0, 1.0);
 uniform vec4 core_col : source_color = vec4(1.0, 1.0, 0.98, 1.0);
 uniform vec4 mid_col : source_color = vec4(1.0, 0.85, 0.40, 1.0);
@@ -368,7 +369,8 @@ void fragment() {
 	vec2 w2 = vec2(noise(Sw * 30.0 + t * 0.15), noise(Sw * 30.0 + 17.0 - t * 0.15)) - 0.5;
 	vec3 g1 = voro(Sw * 4.0 + w2 * 0.25, t * 0.22);
 	vec3 g2 = voro(Sw * 15.0 + 3.3 + w2 * 0.45, t * 0.45);
-	vec3 g3 = voro(Sw * 44.0 + 9.1 + w2 * 0.8, t * 0.90);
+	vec3 g3 = vec3(0.3, 0.6, 0.5);
+	if (!low_detail) { g3 = voro(Sw * 44.0 + 9.1 + w2 * 0.8, t * 0.90); }
 	float lane1 = smoothstep(0.0, 0.45, g1.y - g1.x);
 	float lane2 = pow(smoothstep(0.0, 0.34, g2.y - g2.x), 0.8);
 	float lane3 = smoothstep(0.0, 0.30, g3.y - g3.x);
@@ -490,6 +492,8 @@ void fragment() {
 
 	float lum = dot(col, vec3(0.30, 0.59, 0.11));
 	col = mix(col, col * vec3(0.90, 0.97, 1.10), 1.0 - smoothstep(0.0, 0.30, lum));
+	// Cubic grading is defined only on [0,1]; HDR inputs used to invert channels.
+	col = clamp(col, vec3(0.0), vec3(1.0));
 	col = mix(col, col * col * (3.0 - 2.0 * col), 0.30);
 	col *= 1.0 + 0.05 * (breath - 0.5);
 
@@ -758,6 +762,12 @@ var sol_flash: float = 0.0
 var sol_base_pos: Vector2 = Vector2.ZERO
 
 func _ready() -> void:
+	# Cinematics own their render baseline; gameplay must not leak HDR into replay.
+	get_viewport().use_hdr_2d = false
+	time = 0.0
+	breath = 0.0
+	breath_phase = 0.0
+	tension = 0.0
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	_started_ms = Time.get_ticks_msec()
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -785,6 +795,8 @@ func _ready() -> void:
 	_build_post()
 	_build_audio()
 	_layout()
+	_apply_sun_uniforms()
+	_update_post()
 
 	var trans = get_node_or_null("/root/Transition")
 	if trans:
@@ -799,6 +811,8 @@ func _make_mat(code: String) -> ShaderMaterial:
 	sh.code = code
 	var m := ShaderMaterial.new()
 	m.shader = sh
+	m.resource_local_to_scene = true
+	m.set_shader_parameter("time", 0.0)
 	return m
 
 func _build_background() -> void:
@@ -874,7 +888,7 @@ func _build_sol_text() -> void:
 	sls.font_color = sol_color
 	sls.font_size = 16
 	skip_label.label_settings = sls
-	skip_label.text = "[ CLICK / SPACE / ENTER TO SKIP ]"
+	skip_label.text = "[ %s TO SKIP ]" % InputSupport.label("ui_accept")
 	skip_label.modulate.a = 0.7
 	add_child(skip_label)
 
@@ -889,6 +903,7 @@ func _build_post() -> void:
 
 func _build_audio() -> void:
 	audio_player = AudioStreamPlayer.new()
+	audio_player.bus = &"Music"
 	audio_player.volume_db = audio_volume_db
 	add_child(audio_player)
 	if ambient_audio:
@@ -899,6 +914,7 @@ func _build_audio() -> void:
 		audio_player.play()
 
 	typing_player = AudioStreamPlayer.new()
+	typing_player.bus = &"SFX"
 	typing_player.volume_db = typing_sfx_volume_db
 	add_child(typing_player)
 	if typing_sfx:
@@ -942,8 +958,9 @@ func _layout() -> void:
 			ship_placed = true
 
 	if embers:
-		if embers.pos.size() != ember_count:
-			embers.setup(ember_count, view_size)
+		var count := maxi(24, int(ember_count * 0.5)) if bool(GameSettings.settings.get("low_detail", false)) else ember_count
+		if embers.pos.size() != count:
+			embers.setup(count, view_size)
 		embers.view_size = view_size
 
 	var sol_fs := clampi(int(min(view_size.x, view_size.y) * sol_font_size_ratio), 28, 80)
@@ -1034,6 +1051,7 @@ func _apply_sun_uniforms() -> void:
 	sun_inner_mat.set_shader_parameter("time", time)
 	sun_inner_mat.set_shader_parameter("sun_aspect", Vector2(sun_radius_a, sun_radius_b))
 	sun_inner_mat.set_shader_parameter("rotation_speed", sun_rotation_speed)
+	sun_inner_mat.set_shader_parameter("low_detail", bool(GameSettings.settings.get("low_detail", false)))
 	sun_inner_mat.set_shader_parameter("core_col", sun_core_color)
 	sun_inner_mat.set_shader_parameter("mid_col", sun_mid_color)
 	sun_inner_mat.set_shader_parameter("edge_col", sun_edge_color)
@@ -1163,6 +1181,8 @@ func _update_audio() -> void:
 		audio_player.volume_db = audio_volume_db + (breath - 0.5) * 3.0 + tension * 2.0
 
 func _process(delta: float) -> void:
+	if is_instance_valid(skip_label):
+		skip_label.text = "[ %s TO SKIP ]" % InputSupport.label("ui_accept")
 	if not scene_ending and float(Time.get_ticks_msec() - _started_ms) / 1000.0 > maxf(total_duration, 0.1) + 5.0:
 		_end_cutscene()
 	time += delta

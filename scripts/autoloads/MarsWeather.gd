@@ -3,7 +3,7 @@
 extends Node
 
 signal updated
-@export var fetch_live_data: bool = true
+@export var fetch_live_data: bool = false
 @export var api_key: String = "DEMO_KEY"
 var status_text := "NASA FACT: Mars receives about 43% of Earth's sunlight."
 var last_flare_class := ""

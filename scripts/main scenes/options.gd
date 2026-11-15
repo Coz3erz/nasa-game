@@ -180,6 +180,7 @@ var entries: Array[Dictionary] = []
 
 var awaiting_input: bool = false
 var rebinding_action: String = ""
+var _display_mode_seen := ""
 var binding_mode: bool = false
 
 var confirming_exit: bool = false
@@ -255,6 +256,7 @@ func _ready() -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	focus_mode = Control.FOCUS_ALL
+	InputSupport.device_changed.connect(_on_input_device_changed)
 	clip_contents = false
 
 	_gs()
@@ -295,6 +297,11 @@ func _create_glow_layer() -> void:
 	add_child(glow_layer)
 
 func _process(delta: float) -> void:
+	var actual := str(_get_setting("window_mode", "Windowed"))
+	if actual != _display_mode_seen:
+		_display_mode_seen = actual
+		if current_page == "graphics" and not dropdown_open:
+			_build_graphics_page()
 	time += delta
 	if animate_reveal and reveal < 1.0:
 		reveal = minf(reveal + delta * reveal_speed, 1.0)
@@ -567,6 +574,7 @@ func _build_gameplay_page() -> void:
 	current_page = "gameplay"
 	entries.clear()
 	entries.append({"text": _bool_text("Particles", _get_setting("particles", true)), "action": "toggle", "param": "particles"})
+	entries.append({"text": _bool_text("Low Detail", _get_setting("low_detail", false)), "action": "toggle", "param": "low_detail"})
 	scroll_offset = 0
 	_update_scroll_range()
 	queue_redraw()
@@ -584,11 +592,13 @@ func _build_audio_page() -> void:
 func _build_graphics_page() -> void:
 	current_page = "graphics"
 	entries.clear()
-	entries.append(_cycle_entry("Resolution", "resolution", ["1280x720", "1600x900", "1920x1080", "2560x1440"]))
-	entries.append({"text": _bool_text("VSync", _get_setting("vsync", true)), "action": "toggle", "param": "vsync"})
-	entries.append(_cycle_entry("Max FPS", "max_fps", [0, 30, 60, 120, 144, 240]))
+	if InputSupport.desktop_window_controls():
+		entries.append({"text": _bool_text("VSync", _get_setting("vsync", true)), "action": "toggle", "param": "vsync"})
+	if InputSupport.desktop_window_controls():
+		entries.append(_cycle_entry("Max FPS", "max_fps", [0, 30, 60, 120, 144, 240]))
 	entries.append(_cycle_entry("MSAA", "msaa", ["Off", "2x", "4x", "8x"]))
-	entries.append(_cycle_entry("Window Mode", "window_mode", ["Windowed", "Fullscreen", "Borderless"]))
+	if InputSupport.desktop_window_controls():
+		entries.append(_cycle_entry("Window Mode", "window_mode", ["Windowed", "Fullscreen", "Borderless"]))
 	entries.append(_slider_entry("Brightness", "brightness", 20, 200))
 	scroll_offset = 0
 	_update_scroll_range()
@@ -630,7 +640,12 @@ func _get_event_display(event: InputEvent) -> String:
 	if event is InputEventKey:
 		var kc = event.keycode
 		if kc == KEY_NONE and event.physical_keycode != KEY_NONE:
-			kc = DisplayServer.keyboard_get_keycode_from_physical(event.physical_keycode)
+			# keyboard_get_keycode_from_physical is NOT implemented on Web or headless.
+			var ds := DisplayServer.get_name()
+			if ds == "headless" or ds == "web" or OS.has_feature("web"):
+				kc = event.physical_keycode
+			else:
+				kc = DisplayServer.keyboard_get_keycode_from_physical(event.physical_keycode)
 		return OS.get_keycode_string(kc)
 	elif event is InputEventMouseButton:
 		match event.button_index:
@@ -645,7 +660,6 @@ func _get_event_display(event: InputEvent) -> String:
 		var sgn := " +" if event.axis_value > 0 else " -"
 		return "%s%s" % [axis_name, sgn]
 	return ""
-
 func _get_joypad_button_name(button: int) -> String:
 	match button:
 		0: return "A"
@@ -785,6 +799,8 @@ func _bottom_action_index(pos: Vector2) -> int:
 func _input(event: InputEvent) -> void:
 	if event is InputEventKey and event.keycode == KEY_F11:
 		return # reserved global shortcut, never bind it as a gameplay key
+	if not binding_mode and not awaiting_input:
+		event = InputSupport.menu_event(event)
 	if confirming_exit:
 		_input_confirm(event)
 		return
@@ -1175,13 +1191,19 @@ func _input_rebind(event: InputEvent) -> void:
 		_assign_action_event(rebinding_action, event)
 	elif event is InputEventMouseButton and event.pressed:
 		_assign_action_event(rebinding_action, event)
+	elif event is InputEventJoypadButton and event.pressed:
+		_assign_action_event(rebinding_action, event)
+	elif event is InputEventJoypadMotion and absf(event.axis_value) > 0.65:
+		_assign_action_event(rebinding_action, event)
 
 func _assign_action_event(action: String, event: InputEvent) -> void:
 	var events := InputMap.action_get_events(action)
 	InputMap.action_erase_events(action)
 	InputMap.action_add_event(action, event)
-	for i in range(1, events.size()):
-		InputMap.action_add_event(action, events[i])
+	for previous in events:
+		var same_family := (event is InputEventKey and previous is InputEventKey) or (event is InputEventMouseButton and previous is InputEventMouseButton) or (event is InputEventJoypadButton and previous is InputEventJoypadButton) or (event is InputEventJoypadMotion and previous is InputEventJoypadMotion)
+		if not same_family:
+			InputMap.action_add_event(action, previous)
 	_set_dirty(true)
 	awaiting_input = false
 	_rebuild_current_page()
@@ -1246,7 +1268,7 @@ func _exit_to_main_menu() -> void:
 func _get_custom_actions() -> Array[String]:
 	var result: Array[String] = []
 	for action in InputMap.get_actions():
-		if not str(action).begins_with("ui_"):
+		if not str(action).begins_with("ui_") or str(action) in ["ui_left", "ui_right", "ui_up", "ui_down"]:
 			result.append(str(action))
 	return result
 
@@ -1275,3 +1297,8 @@ func _slider_bar(value: float, min_val: float, max_val: float, width: int = 20) 
 	var ratio := (value - min_val) / maxf(max_val - min_val, 1.0)
 	var filled := int(ratio * width)
 	return "=".repeat(clampi(filled, 0, width)) + "-".repeat(width - clampi(filled, 0, width))
+
+func _on_input_device_changed() -> void:
+	if current_page == "controls" and not binding_mode and not awaiting_input:
+		_build_controls_page()
+	queue_redraw()

@@ -6,6 +6,7 @@ const SHADER := """
 shader_type canvas_item;
 render_mode blend_add;
 uniform float time = 0.0;
+uniform float opacity = 1.0;
 uniform vec2 sun_aspect = vec2(1.0, 1.0);
 uniform float outer_uv = 1.95;
 uniform vec4 near_col : source_color = vec4(1.0, 0.78, 0.32, 1.0);
@@ -58,9 +59,9 @@ void fragment() {
 
 	float prom = fbm(vec2(angle * 2.5, t * 4.5 - time * 0.09));
 	float prom_mask = smoothstep(0.55, 0.86, prom);
-	float prom_band = smoothstep(1.1, 0.95, dist);
+	float prom_band = (1.0 - smoothstep(0.95, 1.1, dist));
 	col += near_col.rgb * prom_mask * prom_band * 0.85;
 
-	COLOR = vec4(col * intensity * 1.6, 1.0);
+	COLOR = vec4(col * intensity * 1.6, opacity);
 }
 """
