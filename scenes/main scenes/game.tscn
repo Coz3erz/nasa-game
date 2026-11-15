@@ -36,7 +36,6 @@ wind_sfx = ExtResource("3_243y7")
 shutter_close_sfx = ExtResource("3_rg686")
 shutter_open_sfx = ExtResource("4_hxrxh")
 card_type_sfx = ExtResource("5_kcxwd")
-debug_mode = true
 
 [node name="spacestation" type="TileMapLayer" parent="." unique_id=1627280537]
 z_index = -2
