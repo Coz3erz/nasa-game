@@ -1,3 +1,4 @@
+
 extends Control
 
 @export_group("Assets")
@@ -772,7 +773,7 @@ class EmberField extends Node2D:
 
 var time: float = 0.0
 var view_size: Vector2
-var font: SystemFont
+var font: Font
 var world: Control
 var bg_layer: ColorRect
 var sun_container: Control
@@ -823,8 +824,7 @@ func _ready() -> void:
 	get_viewport().size_changed.connect(_on_resize)
 	rng.randomize()
 
-	font = SystemFont.new()
-	font.font_names = PackedStringArray(["Courier New", "monospace"])
+	font = GameFont.get_font()
 
 	world = Control.new()
 	world.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -1233,3 +1233,4 @@ func _process(delta: float) -> void:
 	_update_post()
 	_update_text(delta)
 	_update_audio()
+

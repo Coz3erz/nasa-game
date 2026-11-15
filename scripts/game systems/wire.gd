@@ -2,11 +2,14 @@ extends Node2D
 
 @export var rope_segments: int = 24
 @export var damping: float = 0.85
-@export var max_length: float = 320.0
+@export var max_length: float = 320.0 ## Unstretched resting length, NOT a reach cap.
+@export var recoil_speed: float = 10.0
 @export var stretch_limit: float = 110.0
 @export var pull_strength: float = 14.0
 @export var solver_iterations: int = 18
 @export var collision_radius: float = 6.0
+
+var _elastic_length: float = 320.0
 
 var is_held: bool = false
 var is_plugged: bool = false
@@ -92,6 +95,7 @@ func register_ignored_rid(rid: RID) -> void:
 		ignored_rids.append(rid)
 
 func setup(start_pos: Vector2, custom_color: Color = Color(0.85, 0.15, 0.15), origin_source: Node2D = null) -> void:
+	_elastic_length = max_length
 	socket_pos = start_pos
 	hand_pos = start_pos
 	wire_color = custom_color
@@ -136,6 +140,7 @@ func drop(drop_pos: Vector2) -> void:
 		wire.default_color = wire_color
 
 func plug_in(receiver_node: Node2D) -> void:
+	var already_connected := is_plugged and plugged_receiver == receiver_node
 	is_held = false
 	is_plugged = true
 	is_dropped = false
@@ -153,6 +158,8 @@ func plug_in(receiver_node: Node2D) -> void:
 		hand_pos = receiver_node.global_position
 	if wire != null:
 		wire.default_color = wire_color
+	if not already_connected:
+		EventBus.wire_connected.emit(self, receiver_node)
 
 func get_total_rope_length() -> float:
 	if rope_points.size() < 2:
@@ -162,27 +169,11 @@ func get_total_rope_length() -> float:
 		total += rope_points[i].distance_to(rope_points[i + 1])
 	return total
 
-func apply_tension_to_player(player: CharacterBody2D, delta: float) -> bool:
-	if rope_points.size() < 2:
-		return false
-
-	var total_len: float = get_total_rope_length()
-	if total_len <= max_length:
-		current_stretch_ratio = 0.0
-		return false
-
-	var over_stretch: float = total_len - max_length
-	current_stretch_ratio = clampf(over_stretch / stretch_limit, 0.0, 1.0)
-
-	var anchor_pt: Vector2 = rope_points[max(0, rope_segments - 2)]
-	var pull_dir: Vector2 = (anchor_pt - player.global_position).normalized()
-
-	player.velocity += pull_dir * (over_stretch * pull_strength)
-	player.global_position += pull_dir * (over_stretch * 0.35 * delta * 60.0)
-
-	if over_stretch > stretch_limit * 1.15:
-		return true
-
+func apply_tension_to_player(_player: CharacterBody2D, _delta: float) -> bool:
+	# Unlimited elastic reach: never drag/teleport the player or auto-drop the cable.
+	# The resting length stays fixed, so releasing a stretched end makes it recoil.
+	var length_now := maxf(get_total_rope_length(), socket_pos.distance_to(hand_pos))
+	current_stretch_ratio = clampf(1.0 - max_length / maxf(length_now, max_length), 0.0, 1.0)
 	return false
 
 func _process(delta: float) -> void:
@@ -206,13 +197,19 @@ func _process(delta: float) -> void:
 	_simulate_rope(delta)
 	queue_redraw()
 
-func _simulate_rope(_delta: float) -> void:
+func _simulate_rope(delta: float) -> void:
 	if rope_points.is_empty():
 		return
 
 	var last_idx: int = rope_segments
 	var end_locked: bool = is_held or is_plugged
-	var rest_seg_len: float = max_length / float(rope_segments)
+	# Only the working constraint length stretches, never max_length (rest length).
+	# Fixed point count keeps cost independent of how far the player stretches it.
+	if end_locked:
+		_elastic_length = maxf(max_length, socket_pos.distance_to(hand_pos))
+	else:
+		_elastic_length = lerpf(_elastic_length, max_length, 1.0 - exp(-recoil_speed * delta))
+	var rest_seg_len: float = _elastic_length / float(rope_segments)
 
 	for i in range(1, last_idx + 1):
 		if i == last_idx and end_locked:
@@ -256,10 +253,10 @@ func _simulate_rope(_delta: float) -> void:
 
 	if is_dropped:
 		hand_pos = rope_points[last_idx]
-		current_stretch_ratio = 0.0
+		current_stretch_ratio = clampf(1.0 - max_length / maxf(_elastic_length, max_length), 0.0, 1.0)
 	else:
 		var total_len: float = get_total_rope_length()
-		current_stretch_ratio = clampf((total_len - max_length) / stretch_limit, 0.0, 1.0)
+		current_stretch_ratio = clampf(1.0 - max_length / maxf(total_len, max_length), 0.0, 1.0)
 
 	wire.width = lerpf(12.0, 7.5, current_stretch_ratio)
 	shadow.width = lerpf(16.0, 10.5, current_stretch_ratio)

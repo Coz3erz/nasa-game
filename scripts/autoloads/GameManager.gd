@@ -1,3 +1,4 @@
+
 extends Node
 
 enum Phase { INTRO, BUILD, ROVER, SURVIVE, DEBRIEF }
@@ -34,7 +35,7 @@ var catalog: Array[Dictionary] = [
 		"mass": 350.0,
 		"power": 0.0,
 		"scene_path": "res://scenes/modules/solar_panel.tscn",
-		"desc": "WHAT IT DOES:\nMakes free power from the sun. If you wire it directly to a module, that module will NEVER randomly break!\n\nNASA FACT:\nMars is much further from the Sun than Earth, so solar panels must be huge. But they are very vulnerable to Martian dust storms which block 99% of sunlight.",
+		"desc": "WHAT IT DOES:\nTurns sunlight into power. Each panel you plug into the reactor doubles what it gives you: 50 kilowatts, then 100, then 200. Plug a panel straight into a machine and that machine can never fail.\n\nWHY IT MATTERS:\nMars is about 1.5 times farther from the Sun than Earth, so sunlight here is less than half as strong. Dust storms can cover panels and cut their output badly.",
 		"color": Color(1.0, 0.8, 0.25)
 	},
 	{
@@ -43,7 +44,7 @@ var catalog: Array[Dictionary] = [
 		"mass": 900.0,
 		"power": 30.0,
 		"scene_path": "res://scenes/modules/life_support.tscn",
-		"desc": "WHAT IT DOES:\nPumps fresh air into your base so you can breathe! Wire it to the Reactor to keep your Oxygen bar full.\n\nNASA FACT:\nMars air is 95% carbon dioxide. NASA's MOXIE machine zaps Mars air with electricity to turn it into real breathable oxygen - just like a mechanical tree!",
+		"desc": "WHAT IT DOES:\nMakes breathable air for the base. Uses 30 kilowatts. Keep it running or your air bar drains.\n\nWHY IT MATTERS:\nMars air is 95% carbon dioxide. NASA's MOXIE experiment on the Perseverance rover split that carbon dioxide with electricity and made real oxygen.",
 		"color": Color(0.35, 0.85, 1.0)
 	},
 	{
@@ -52,16 +53,16 @@ var catalog: Array[Dictionary] = [
 		"mass": 700.0,
 		"power": 20.0,
 		"scene_path": "res://scenes/modules/thermal.tscn",
-		"desc": "WHAT IT DOES:\nKeeps your base warm and cozy! Without power, the base freezes and your Temperature bar drops fast.\n\nNASA FACT:\nAt night, Mars drops to -60 degrees C (-80 degrees F) - colder than Antarctica! Astronauts use heated fluid loops to stop their equipment from freezing solid.",
+		"desc": "WHAT IT DOES:\nKeeps the base warm. Uses 20 kilowatts. Without it your warmth bar falls and you start losing health.\n\nWHY IT MATTERS:\nNights on Mars drop to around -60 degrees C. That is colder than most of Antarctica, and the thin air barely holds any heat.",
 		"color": Color(1.0, 0.55, 0.3)
 	},
 	{
 		"id": "Shield",
 		"title": "RADIATION SHIELD",
 		"mass": 600.0,
-		"power": 25.0,
+		"power": 40.0,
 		"scene_path": "res://scenes/modules/shield.tscn",
-		"desc": "WHAT IT DOES:\nProtects the base from deadly space storms (solar flares). Keep it powered during a storm or it's game over!\n\nNASA FACT:\nEarth has a magnetic field that blocks radiation, but Mars doesn't. A single solar flare can deliver a lethal dose of radiation to astronauts on the surface in minutes.",
+		"desc": "WHAT IT DOES:\nBlocks solar flares completely while it has power. No damage and nothing fails. It uses 40 kilowatts the whole time it runs, so it is expensive.\n\nWHY IT MATTERS:\nEarth's magnetic field deflects flare particles. Mars lost its field billions of years ago, so the radiation reaches the ground almost unblocked.",
 		"color": Color(0.7, 0.55, 1.0)
 	},
 	{
@@ -70,7 +71,7 @@ var catalog: Array[Dictionary] = [
 		"mass": 450.0,
 		"power": 15.0,
 		"scene_path": "res://scenes/modules/comms.tscn",
-		"desc": "WHAT IT DOES:\nA big dish to call home and get early weather warnings. If it loses power, you won't see storms coming.\n\nNASA FACT:\nIt takes up to 24 minutes for a signal to travel between Mars and Earth. Because of this delay, astronauts must handle emergencies on their own without Mission Control.",
+		"desc": "WHAT IT DOES:\nPicks up a warning 15 seconds before a solar flare hits, which gives you time to unplug your machines. Uses 15 kilowatts. It will not warn you about dust storms.\n\nWHY IT MATTERS:\nA message between Mars and Earth takes 3 to 22 minutes each way, so crews on Mars have to handle emergencies themselves.",
 		"color": Color(0.45, 1.0, 0.6)
 	},
 	{
@@ -80,7 +81,7 @@ var catalog: Array[Dictionary] = [
 		"power": 0.0,
 		"scene_path": "",
 		"consumable": true,
-		"desc": "WHAT IT DOES:\nHeals you when you get hurt. Press H to use one while you are on Mars.\n\nNASA FACT:\nAstronauts on the Space Station train as medics, because the nearest hospital is hundreds of miles below them!",
+		"desc": "WHAT IT DOES:\nRestores 45 health. Press H to use one once the rover has left. Weighs almost nothing.\n\nWHY IT MATTERS:\nThe nearest hospital is millions of kilometers away, so every astronaut is trained in first aid.",
 		"color": Color(1.0, 0.45, 0.5)
 	}
 ]
@@ -134,3 +135,4 @@ func restart_day() -> void:
 func restart_all() -> void:
 	current_sol = 1
 	begin_day()
+

@@ -1,3 +1,4 @@
+
 extends CharacterBody2D
 ## PLAYER
 ##   SPACE           toggle build mode (you can still walk around in it)
@@ -26,6 +27,10 @@ extends CharacterBody2D
 @export var build_grid: float = 32.0       ## placement grid
 @export var player_radius: float = 18.0
 @export var ghost_glide: float = 22.0
+@export var reactor_block_radius: float = 340.0 ## no building inside this circle around the reactor
+@export var exit_block_margin: float = 64.0     ## no building this close to the exit area
+@export var wire_crawl_speed: float = 30.0      ## speed when the wire is pulled as far as it goes
+@export var wire_stretch_range: float = 260.0   ## extra pixels of stretch to reach full slowdown
 @export var build_radius: float = 300.0    ## higher = ghost snaps faster
 
 @export_group("Juice")
@@ -66,7 +71,7 @@ var can_place: bool = false
 var _last_vertical := "down"
 var _move_vel := Vector2.ZERO
 var _t := 0.0
-var _font: SystemFont
+var _font: Font
 
 var _footstep_timer: float = 0.0
 var _footstep_player: AudioStreamPlayer
@@ -113,8 +118,7 @@ func _ready() -> void:
 	add_to_group("player")
 	visible = false
 	set_physics_process(false)
-	_font = SystemFont.new()
-	_font.font_names = PackedStringArray(["Trebuchet MS", "Verdana", "sans-serif"])
+	_font = GameFont.get_font()
 	_ensure_build_action()
 	if sprite != null:
 		_sprite_base_scale = sprite.scale
@@ -284,6 +288,17 @@ func _physics_process(delta: float) -> void:
 	var rate := acceleration if input_dir != Vector2.ZERO else friction
 	_move_vel = _move_vel.move_toward(input_dir * speed, rate * delta)
 	velocity = _move_vel
+	# rubber band: the further the wire is stretched, the slower you can move away from its anchor
+	if current_wire != null and is_instance_valid(current_wire) and "socket_pos" in current_wire:
+		var away: Vector2 = global_position - current_wire.socket_pos
+		var over: float = maxf(current_wire.get_total_rope_length(), away.length()) - current_wire.max_length
+		if over > 0.0 and away.length() > 1.0:
+			var k := 1.0 - exp(-over / wire_stretch_range * 2.2)
+			var f := lerpf(1.0, wire_crawl_speed / speed, k)
+			var dir := away.normalized()
+			var comp := velocity.dot(dir)
+			if comp > 0.0:
+				velocity -= dir * comp * (1.0 - f)
 
 	if current_wire != null and is_instance_valid(current_wire) and current_wire.has_method("apply_tension_to_player"):
 		var did_snap: bool = current_wire.apply_tension_to_player(self, delta)
@@ -293,7 +308,10 @@ func _physics_process(delta: float) -> void:
 			_pop(-0.18)
 			shake(0.25)
 
+	var before_move := global_position
 	move_and_slide()
+	if global_position.distance_squared_to(before_move) > 0.01:
+		EventBus.player_moved.emit(self)
 	_update_animation(input_dir)
 	_update_footsteps(delta, input_dir)
 
@@ -587,6 +605,8 @@ func _update_build_ghost(delta: float, snap_now: bool = false) -> void:
 				can_place = false
 				break
 	if can_place:
+		can_place = _reactor_clearance_ok(center)
+	if can_place:
 		var rc := Rect2(center - _ghost_half, _ghost_half * 2.0)
 		var cp := Vector2(clampf(global_position.x, rc.position.x, rc.end.x), clampf(global_position.y, rc.position.y, rc.end.y))
 		if cp.distance_to(global_position) < player_radius + 6.0:
@@ -611,10 +631,42 @@ func _deny() -> void:
 	shake(0.18)
 	_flash_hint("Can't build there - something's in the way!", C_RED)
 
+func _reactor_node() -> BaseModule:
+	for candidate in get_tree().get_nodes_in_group("modules"):
+		if candidate is BaseModule and candidate.module_name == "Reactor":
+			return candidate
+	return null
+
+func _exit_rect() -> Rect2:
+	var area := get_tree().current_scene.find_child("outside", true, false) as Area2D
+	if area == null:
+		return Rect2()
+	var cs := area.get_node_or_null("CollisionShape2D") as CollisionShape2D
+	if cs == null or cs.shape == null:
+		return Rect2()
+	var sz: Vector2 = cs.shape.get_rect().size * cs.global_scale.abs()
+	return Rect2(cs.global_position - sz * 0.5, sz)
+
+## Two rules only: not near the reactor (circle) and not near the exit.
+func _reactor_clearance_ok(center: Vector2) -> bool:
+	var footprint := Rect2(center - _ghost_half, _ghost_half * 2.0)
+	var r := _reactor_node()
+	if r != null:
+		var rc := r.get_center()
+		var cp := Vector2(clampf(rc.x, footprint.position.x, footprint.end.x), clampf(rc.y, footprint.position.y, footprint.end.y))
+		if cp.distance_to(rc) < reactor_block_radius:
+			return false
+	var ex := _exit_rect()
+	if ex.size != Vector2.ZERO and footprint.intersects(ex.grow(exit_block_margin), true):
+		return false
+	return true
+
 func _attempt_place() -> void:
 	if is_outside or not is_instance_valid(ghost_module) or build_options.is_empty():
 		return
-	if not can_place:
+	# Revalidate at commit time as well as when tinting the preview.
+	_update_build_ghost(0.0)
+	if not can_place or not _reactor_clearance_ok(_ghost_origin + _ghost_center_off):
 		_deny()
 		return
 	var option: Dictionary = build_options[selected_module_index]
@@ -630,6 +682,7 @@ func _attempt_place() -> void:
 	m.position = p2d.to_local(_ghost_origin) if p2d != null else _ghost_origin
 	parent_node.add_child(m)
 	m.start_construction()
+	EventBus.module_placed.emit(m)
 
 	var fx := ConstructionFX.new()
 	fx.setup(m, self, _ghost_center_off, _ghost_half, _font)
@@ -1060,6 +1113,15 @@ func _overlay_draw(c: Node2D) -> void:
 		return
 	var pulse := 0.5 + 0.5 * sin(_t * 3.0)
 	var col := Color(0.45, 1.0, 0.6) if can_place else Color(1.0, 0.4, 0.35)
+	var rx := _reactor_node()
+	if rx != null:
+		c.draw_circle(rx.get_center(), reactor_block_radius, Color(1.0, 0.3, 0.25, 0.07))
+		c.draw_arc(rx.get_center(), reactor_block_radius, 0.0, TAU, 96, Color(1.0, 0.35, 0.3, 0.55 + 0.2 * pulse), 3.0, true)
+	var ex := _exit_rect()
+	if ex.size != Vector2.ZERO:
+		var eg := ex.grow(exit_block_margin)
+		c.draw_rect(eg, Color(1.0, 0.3, 0.25, 0.07))
+		c.draw_rect(eg, Color(1.0, 0.35, 0.3, 0.55 + 0.2 * pulse), false, 3.0)
 	c.draw_arc(global_position, _ghost_reach(), 0.0, TAU, 96, Color(1, 1, 1, 0.12 + 0.06 * pulse), 2.0, true)
 	var ctr := _ghost_origin + _ghost_center_off
 	c.draw_circle(ctr, _ghost_zone, Color(col.r, col.g, col.b, 0.05))
@@ -1183,7 +1245,7 @@ class ConstructionFX extends Node2D:
 	var player: Node2D
 	var half := Vector2(64, 64)
 	var center := Vector2.ZERO
-	var font: SystemFont
+	var font: Font
 	var smoke: CPUParticles2D
 	var sparks: CPUParticles2D
 	var shown := 0.0
@@ -1192,7 +1254,7 @@ class ConstructionFX extends Node2D:
 	var bg_style: StyleBoxFlat
 	var fill_style: StyleBoxFlat
 
-	func setup(m: Node, p: Node2D, center_off: Vector2, half_size: Vector2, f: SystemFont) -> void:
+	func setup(m: Node, p: Node2D, center_off: Vector2, half_size: Vector2, f: Font) -> void:
 		target = m
 		player = p
 		center = center_off
@@ -1279,8 +1341,6 @@ class ConstructionFX extends Node2D:
 		# our own bar replaces the default one; the module "materialises" as it builds
 		if target.progress_bar != null:
 			target.progress_bar.visible = false
-		var shimmer := 0.5 + 0.5 * sin(t * 8.0)
-		target.modulate = Color(1.0 + 0.12 * shimmer, 1.0 + 0.12 * shimmer, 1.0 + 0.12 * shimmer, 0.35 + 0.5 * shown)
 		queue_redraw()
 
 	func _finish() -> void:
@@ -1321,3 +1381,4 @@ class ConstructionFX extends Node2D:
 			draw_rect(Rect2(pos.x + fw - 2.0, pos.y, 2.0, h), Color(1, 1, 1, 0.9))
 		var label := "Building...  %d%%" % int(shown * 100.0) if near else "Come back inside the circle!"
 		draw_string(font, pos + Vector2(-60, -10), label, HORIZONTAL_ALIGNMENT_CENTER, w + 120, 17, Color(col.r, col.g, col.b, 1.0))
+

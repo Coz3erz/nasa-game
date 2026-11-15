@@ -437,7 +437,6 @@ func _draw_state() -> void:
 		var fl := 0.5 + 0.5 * sin(t * 14.0)
 		_rbox(rect, Color(1.0, 0.08, 0.05, 0.22 * broken_k * (0.4 + 0.6 * fl)), Color(1.0, 0.2, 0.15, broken_k * fl), 8, 3)
 		_warn_icon(c, broken_k, fl)
-		_sparks(broken_k)
 
 func _bolt_icon(p: Vector2, col: Color) -> void:
 	var pts := PackedVector2Array([Vector2(3, -22), Vector2(-9, 2), Vector2(-1, 2), Vector2(-4, 22), Vector2(10, -4), Vector2(2, -4)])

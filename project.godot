@@ -11,7 +11,7 @@ config_version=5
 [application]
 
 config/name="Nasa Game"
-run/main_scene="res://scenes/main scenes/cutscene.tscn"
+run/main_scene="res://scenes/main scenes/main_menu.tscn"
 config/features=PackedStringArray("4.6", "GL Compatibility")
 config/icon="uid://o5q4o7ocx6td"
 
@@ -21,12 +21,15 @@ buses/default_bus_layout="uid://cj08fvlsnbidg"
 
 [autoload]
 
+GameFont="*res://scripts/autoloads/GameFont.gd"
 Transition="*uid://biwie4aohk6df"
 EventBus="*uid://bl05nu4e54tqs"
 GameManager="*uid://ecq8du2oji08"
 BaseManager="*uid://ckvgjnnhg08wv"
 Polish="*uid://bn3mme6x63rk3"
 GameSettings="*uid://d27a8kthqk3d3"
+Dialogue="*res://scenes/ui/dialogue.tscn"
+Hazards="*res://scripts/autoloads/Hazards.gd"
 
 [display]
 

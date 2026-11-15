@@ -1,3 +1,4 @@
+
 extends Control
 
 @export_category("Terminal Style")
@@ -165,7 +166,7 @@ void fragment() {
 }
 """
 
-var font: SystemFont
+var font: Font
 var font_size: int = 38
 var line_height: int = 48
 var padding: float = 30.0
@@ -259,8 +260,7 @@ func _ready() -> void:
 
 	_gs()
 
-	font = SystemFont.new()
-	font.font_names = PackedStringArray(["Courier New", "monospace"])
+	font = GameFont.get_font()
 
 	_create_background_layer()
 	_create_glow_layer()
@@ -345,7 +345,7 @@ func _draw() -> void:
 	for i in range(num_sections):
 		var section_text := section_names[i]
 		if i == selected_section:
-			section_text = "✦ [ " + section_text + " ] ✦"
+			section_text = "âœ¦ [ " + section_text + " ] âœ¦"
 		else:
 			section_text = "  " + section_text + "  "
 		var col := highlight_color if i == selected_section else text_color
@@ -443,7 +443,7 @@ func _draw_bottom_actions() -> void:
 		var action_text := bottom_actions[i]
 		var is_selected := focus_on_bottom and i == selected_bottom_index
 
-		var display_text := ("✦ > " if is_selected else "    ") + action_text
+		var display_text := ("âœ¦ > " if is_selected else "    ") + action_text
 		var drawn_text := display_text
 		if animate_reveal:
 			var visible_chars := int(reveal * display_text.length())
@@ -711,7 +711,7 @@ func _open_section(idx: int) -> void:
 
 func _get_entry_layout(i: int, line_y: float) -> Dictionary:
 	var is_active := (i == selected_index and not focus_on_sections and not focus_on_bottom)
-	var prefix := "✦ > " if is_active else "    "
+	var prefix := "âœ¦ > " if is_active else "    "
 	var full_text: String = prefix + entries[i].text
 	var layout := {
 		"y": line_y,
@@ -761,7 +761,7 @@ func _section_index_from_pos(pos: Vector2) -> int:
 	for i in range(num_sections):
 		var section_text := section_names[i]
 		if i == selected_section:
-			section_text = "✦ [ " + section_text + " ] ✦"
+			section_text = "âœ¦ [ " + section_text + " ] âœ¦"
 		else:
 			section_text = "  " + section_text + "  "
 		var text_width := font.get_string_size(section_text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x
@@ -776,7 +776,7 @@ func _bottom_action_index(pos: Vector2) -> int:
 	var x := padding
 	var gap := font_size * 4.5
 	for i in range(bottom_actions.size()):
-		var display_text := ("✦ > " if focus_on_bottom and i == selected_bottom_index else "    ") + bottom_actions[i]
+		var display_text := ("âœ¦ > " if focus_on_bottom and i == selected_bottom_index else "    ") + bottom_actions[i]
 		var width := font.get_string_size(display_text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x
 		var segment_width := width + gap
 		if pos.x >= x and pos.x < x + segment_width:
@@ -1277,4 +1277,5 @@ func _cycle_entry(label: String, key: String, options: Array) -> Dictionary:
 func _slider_bar(value: float, min_val: float, max_val: float, width: int = 18) -> String:
 	var ratio := (value - min_val) / maxf(max_val - min_val, 1.0)
 	var filled := int(ratio * width)
-	return "█".repeat(filled) + "·".repeat(width - filled)
+	return "â–ˆ".repeat(filled) + "Â·".repeat(width - filled)
+

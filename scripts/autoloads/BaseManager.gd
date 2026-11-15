@@ -1,3 +1,4 @@
+
 extends Node
 
 const BASE_REACTOR_POWER: float = 50.0
@@ -16,6 +17,7 @@ var temp_drain: float = 0.5
 var reactor_drain_mult: float = 0.4
 var hazard_interval: float = 75.0
 var day_failed_sent: bool = false
+var solar_efficiency: float = 1.0      ## dust storms drop this to 0.5
 var failure_roll_interval: float = 24.0
 var failure_chance: float = 0.10
 var _failure_timer: float = 0.0
@@ -26,7 +28,7 @@ func _process(delta: float) -> void:
 			return
 
 	_tick_power_and_systems(delta)
-	_tick_failure_dice(delta)
+	_tick_random_failures(delta)
 
 func calculate_power() -> void:
 	for i in range(active_modules.size() - 1, -1, -1):
@@ -45,7 +47,7 @@ func calculate_power() -> void:
 			var solar_count: int = mod.get_connected_solar_count()
 			if not mod.is_broken and not mod.is_constructing and solar_count > 0 and reactor_energy > 0.0:
 				mod.is_powered = true
-				total_power += BASE_REACTOR_POWER * pow(2.0, float(solar_count - 1))
+				total_power += BASE_REACTOR_POWER * pow(2.0, float(solar_count - 1)) * solar_efficiency
 			else:
 				mod.is_powered = false
 
@@ -111,7 +113,7 @@ func _tick_power_and_systems(delta: float) -> void:
 	elif health < 100.0 and oxygen_level > 30.0 and temp_level > 30.0:
 		health = minf(100.0, health + 1.5 * delta)
 
-func _tick_failure_dice(delta: float) -> void:
+func _tick_random_failures(delta: float) -> void:
 	_failure_timer += delta
 	if _failure_timer < failure_roll_interval:
 		return
@@ -155,4 +157,6 @@ func reset_for_day(day: int) -> void:
 	health = 100.0
 	_failure_timer = 0.0
 	day_failed_sent = false
+	solar_efficiency = 1.0
 	apply_day(day)
+

@@ -1,3 +1,4 @@
+
 extends Node
 ## POLISH - drop-in visual layer for the Game scene (autoload).
 ## Adds: bloom, ambient lighting + shadows, module glow, dust/spark particles,
@@ -13,7 +14,6 @@ const SHOP_PROPERTY := "shop_layer"
 ## To exclude any node + its children from Polish:  node.set_meta("no_polish", true)
 const PRIMARY_WORDS := ["CONFIRM", "DEPLOY", "LAUNCH", "START", "BEGIN", "PLAY"]
 const GLOW := 1.12   # HDR multiplier for glowing things (1.0 = no bloom from them)
-const FONT_NAMES := ["Trebuchet MS", "Verdana", "sans-serif"]   # same font as cutscene.gd
 
 const C_BG      := Color(0.04, 0.06, 0.09, 0.96)
 const C_PANEL   := Color(0.06, 0.09, 0.13, 0.92)
@@ -23,8 +23,8 @@ const C_CYAN    := Color(0.30, 0.85, 1.00)
 const C_AMBER   := Color(1.00, 0.85, 0.30)
 const C_RED     := Color(1.00, 0.25, 0.20)
 
-var font: SystemFont
-var mono: SystemFont
+var font: Font
+var mono: Font
 var ui_theme: Theme
 var soft_tex: GradientTexture2D
 var ring_tex: GradientTexture2D
@@ -62,10 +62,8 @@ var _crit_time := 0.0
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
-	font = SystemFont.new()
-	font.font_names = PackedStringArray(FONT_NAMES)
-	mono = SystemFont.new()
-	mono.font_names = PackedStringArray(["Courier New", "monospace"])
+	font = GameFont.get_font()
+	mono = GameFont.get_font()
 	soft_tex = _radial_tex(256, 0.0)
 	ring_tex = _radial_tex(64, 0.0)
 	ui_theme = _build_theme()
@@ -869,3 +867,4 @@ func _toast(msg: String, col: Color) -> void:
 	tw.tween_interval(3.2)
 	tw.tween_property(p, "modulate:a", 0.0, 0.5)
 	tw.tween_callback(p.queue_free)
+

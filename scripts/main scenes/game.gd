@@ -1,3 +1,4 @@
+
 extends Node2D
 
 @export_group("Music & Audio")
@@ -357,7 +358,7 @@ class SupplyCrate extends Node2D:
 class MarsGearManifest extends Control:
 	signal deploy_confirmed
 
-	var font: SystemFont
+	var font: Font
 	var header_size: int = 32
 	var font_size: int = 24
 	var body_size: int = 20
@@ -381,7 +382,7 @@ class MarsGearManifest extends Control:
 	var selected_index: int = 0
 	var focus_on_bottom: bool = false
 	var selected_bottom_index: int = 0
-	var bottom_actions: Array[String] = ["[ CONFIRM DELIVERY ]", "[ CLEAR MANIFEST ]"]
+	var bottom_actions: Array[String] = ["[ SEND REQUEST ]", "[ CLEAR REQUEST ]"]
 
 	var item_rects: Array[Rect2] = []
 	var minus_rects: Array[Rect2] = []
@@ -497,8 +498,7 @@ void fragment() {
 		mouse_filter = Control.MOUSE_FILTER_STOP
 		focus_mode = Control.FOCUS_ALL
 
-		font = SystemFont.new()
-		font.font_names = PackedStringArray(["Courier New", "monospace"])
+		font = GameFont.get_font()
 		_init_styles()
 
 		bg_layer = ColorRect.new()
@@ -638,12 +638,12 @@ void fragment() {
 		var top_y := padding
 		var hdr_off := _compute_float(0.0)
 
-		var title_str := "[ ROVER SUPPLY REQUEST - SOL %d ]" % GameManager.current_sol
+		var title_str := "[ SUPPLY REQUEST - DAY %d ]" % GameManager.current_sol
 		draw_string(font, Vector2(padding, top_y + font.get_ascent(header_size)) + hdr_off, title_str, HORIZONTAL_ALIGNMENT_LEFT, -1, header_size, text_color)
 
 		var max_mass: float = GameManager.budget_for_day(GameManager.current_sol)
 		var ratio: float = clampf(GameManager.mass_budget / max_mass, 0.0, 1.0)
-		var weight_txt := "MASS BUDGET: %d / %d KG" % [int(GameManager.mass_budget), int(max_mass)]
+		var weight_txt := "WEIGHT LIMIT: %d / %d KG" % [int(GameManager.mass_budget), int(max_mass)]
 		var wt_w := font.get_string_size(weight_txt, HORIZONTAL_ALIGNMENT_LEFT, -1, body_size).x
 		
 		var bar_w := 200.0
@@ -749,7 +749,7 @@ void fragment() {
 
 		ty += 28.0
 		var badge_1 := "%d KG" % int(item["mass"])
-		var badge_2 := "%d KW" % int(item["power"])
+		var badge_2 := "%d KILOWATTS" % int(item["power"])
 		var b1_w := font.get_string_size(badge_1, HORIZONTAL_ALIGNMENT_LEFT, -1, body_size).x + 20.0
 		var b2_w := font.get_string_size(badge_2, HORIZONTAL_ALIGNMENT_LEFT, -1, body_size).x + 20.0
 		var badge_h := float(body_size) + 12.0
@@ -1410,7 +1410,7 @@ func _start_rover_transition() -> void:
 
 	if trans != null:
 		await trans.shutter_open(0.7, Color(1.0, 0.82, 0.35))    # blinds open on Mars
-	await day_loop.banner("SUPPLY DROP", "Rover inbound with your manifest", Color(1.0, 0.82, 0.35), 1.8)
+	await day_loop.banner("SUPPLIES ARRIVING", "The rover is bringing what you asked for", Color(1.0, 0.82, 0.35), 1.8)
 
 	if rover != null:
 		var tw_in := create_tween().set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
@@ -1439,9 +1439,10 @@ func _start_rover_transition() -> void:
 	if trans != null:
 		await trans.shutter_close(0.55, Color(1.0, 0.35, 0.3))   # rover gone -> blinds close (red = danger)
 		await trans.shutter_open(0.6, Color(1.0, 0.35, 0.3))
-	await day_loop.banner("SURVIVE", day_loop.survive_sub(), Color(1.0, 0.35, 0.3), 2.2)
+	await day_loop.banner("HOLD THE BASE", day_loop.survive_sub(), Color(1.0, 0.35, 0.3), 2.2)
 
 	GameManager.current_phase = GameManager.Phase.SURVIVE
 	day_loop.start_timer()
 	if player != null and player.has_method("set_input_locked"):
 		player.set_input_locked(false)
+

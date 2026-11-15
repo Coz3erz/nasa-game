@@ -1,12 +1,13 @@
+
 extends CanvasLayer
 class_name DayLoop
 
 const TAGLINES := [
-	"Get your base up and running!",
-	"Things break faster today.",
-	"Storm season. Stay sharp.",
-	"Almost there. Do not slip!",
-	"Final day. Make it to sunrise!"
+	"Build the base and get the power on.",
+	"Machines fail more often today.",
+	"Dust storms can start today. Stay close to your equipment.",
+	"Almost there. Keep everything running.",
+	"Last day. Hold on until the rescue team lands."
 ]
 const AMBER := Color(1.0, 0.82, 0.35)
 const CYAN := Color(0.4, 0.9, 1.0)
@@ -28,7 +29,7 @@ var time_left: float = 0.0
 var running: bool = false
 var ended: bool = false
 
-var font: SystemFont
+var font: Font
 var panel: PanelContainer
 var day_lbl: Label
 var time_lbl: Label
@@ -39,8 +40,7 @@ var _t: float = 0.0
 func _ready() -> void:
 	layer = 30
 	process_mode = Node.PROCESS_MODE_ALWAYS
-	font = SystemFont.new()
-	font.font_names = PackedStringArray(["Courier New", "monospace"])
+	font = GameFont.get_font()
 	_cover = ColorRect.new()
 	_cover.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_cover.color = Color.BLACK
@@ -309,7 +309,7 @@ func banner(title: String, sub: String, col: Color, hold: float = 2.0) -> void:
 	await _card(title, sub, col, hold, false, true)
 
 func survive_sub() -> String:
-	return "Keep every system online until sunrise"
+	return "Keep air, heat and power running until sunrise"
 
 func play_intro() -> void:
 	var trans := get_node_or_null("/root/Transition")
@@ -411,7 +411,7 @@ func _end_day() -> void:
 	var day := GameManager.current_sol
 	var trans := get_node_or_null("/root/Transition")
 	if day >= GameManager.total_days:
-		await _card("YOU SURVIVED!", "All %d days on Mars complete" % day, AMBER, 3.2, false)
+		await _card("RESCUE TEAM LANDED", "You held the base for all %d days" % day, AMBER, 3.2, false)
 		GameManager.restart_all()
 		var path := win_scene
 		if path == "" or not ResourceLoader.exists(path):
@@ -431,9 +431,62 @@ func _on_failed(reason: String) -> void:
 	ended = true
 	running = false
 	GameManager.current_phase = GameManager.Phase.DEBRIEF
-	await _card("MISSION FAILED", "%s   Retrying Day %d" % [reason, GameManager.current_sol], RED, 2.8, false)
+	Hazards.clear()
+	for p in get_tree().get_nodes_in_group("player"):
+		if p.has_method("set_input_locked"):
+			p.set_input_locked(true)
+	await _death_sequence(reason)
 	GameManager.restart_day()
-	await _reload(RED)
+	get_tree().reload_current_scene()
+
+func _death_shake(v: float, cam: Camera2D) -> void:
+	if is_instance_valid(cam):
+		cam.offset = Vector2(randf_range(-v, v), randf_range(-v, v))
+
+## Crash sound, orange flash and screen shake, then a slow fade to black with a short message.
+func _death_sequence(reason: String) -> void:
+	var layer_fx := CanvasLayer.new()
+	layer_fx.layer = 95
+	layer_fx.process_mode = Node.PROCESS_MODE_ALWAYS
+	add_child(layer_fx)
+	var flash := ColorRect.new()
+	flash.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	flash.color = Color(1.0, 0.38, 0.1, 0.65)
+	flash.mouse_filter = Control.MOUSE_FILTER_STOP
+	layer_fx.add_child(flash)
+	var black := ColorRect.new()
+	black.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	black.color = Color(0, 0, 0, 0)
+	black.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	layer_fx.add_child(black)
+	var msg := Label.new()
+	msg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	msg.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	msg.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	msg.add_theme_font_override("font", font)
+	msg.add_theme_font_size_override("font_size", 26)
+	msg.add_theme_color_override("font_color", Color(1.0, 0.62, 0.3))
+	msg.text = "SIGNAL LOST\n\n%s\n\nStarting day %d again..." % [reason.capitalize(), GameManager.current_sol]
+	msg.modulate.a = 0.0
+	layer_fx.add_child(msg)
+	var snd := AudioStreamPlayer.new()
+	snd.stream = SynthSfx.crash_wav()
+	snd.volume_db = -1.0
+	if AudioServer.get_bus_index("SFX") != -1:
+		snd.bus = &"SFX"
+	layer_fx.add_child(snd)
+	snd.play()
+	var cam := get_viewport().get_camera_2d()
+	var tw_shake := create_tween()
+	tw_shake.tween_method(_death_shake.bind(cam), 26.0, 0.0, 1.5)
+	var tw := create_tween()
+	tw.tween_property(flash, "color:a", 0.0, 0.9)
+	tw.parallel().tween_property(black, "color:a", 1.0, 1.7).set_delay(0.5)
+	tw.tween_property(msg, "modulate:a", 1.0, 0.6)
+	tw.tween_interval(2.0)
+	await tw.finished
+	if is_instance_valid(cam):
+		cam.offset = Vector2.ZERO
 
 func _reload(col: Color = CYAN) -> void:
 	var trans := get_node_or_null("/root/Transition")
@@ -453,3 +506,4 @@ func _play(stream: AudioStream, pitch: float = 1.0, extra_db: float = 0.0) -> vo
 	add_child(pl)
 	pl.finished.connect(pl.queue_free)
 	pl.play()
+

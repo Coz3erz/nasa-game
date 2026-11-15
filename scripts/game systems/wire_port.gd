@@ -40,6 +40,7 @@ func _ready() -> void:
 	if p != null and p.has_meta("is_ghost"):
 		material = ModuleArt.make_ghost_material()
 		rotatable = false
+		visible = false      # no plugs on the blueprint preview; they show while it is being built
 	_snap_to_edge.call_deferred()
 
 func _exit_tree() -> void:
@@ -214,7 +215,7 @@ static func can_rotate_port(port: Node2D) -> bool:
 		if parent_mod.has_meta("is_ghost") and bool(parent_mod.get_meta("is_ghost")):
 			return true
 		if "is_constructing" in parent_mod and bool(parent_mod.is_constructing):
-			return true
+			return false
 	return false
 
 static func rotate_port_around_module(port: Node2D) -> void:

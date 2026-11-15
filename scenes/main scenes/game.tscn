@@ -22,6 +22,14 @@ size = Vector2(210, 55)
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_3y2b4"]
 size = Vector2(191, 266)
 
+[sub_resource type="Gradient" id="Gradient_rg686"]
+interpolation_mode = 2
+colors = PackedColorArray(0, 0, 0, 0.57254905, 0, 0, 0, 0)
+
+[sub_resource type="GradientTexture2D" id="GradientTexture2D_hxrxh"]
+gradient = SubResource("Gradient_rg686")
+fill_from = Vector2(1, 1)
+
 [node name="Game" type="Node2D" unique_id=1192000315]
 script = ExtResource("1_nhvkb")
 wind_sfx = ExtResource("3_243y7")
@@ -84,3 +92,8 @@ position = Vector2(23770, -2362)
 [node name="CollisionShape2D" type="CollisionShape2D" parent="outside_mars" unique_id=1328366760]
 position = Vector2(-3, -89)
 shape = SubResource("RectangleShape2D_3y2b4")
+
+[node name="Sprite2D" type="Sprite2D" parent="." unique_id=163570204]
+position = Vector2(413.00003, 897.00006)
+scale = Vector2(46.328125, 28.27476)
+texture = SubResource("GradientTexture2D_hxrxh")

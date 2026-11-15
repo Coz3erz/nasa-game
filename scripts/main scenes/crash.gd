@@ -1,7 +1,9 @@
+
 extends Control
 
 @export_group("Scene Transition")
 @export_file("*.tscn") var target_scene: String = "res://scenes/main scenes/game.tscn"
+@export_file("*.tscn") var tutorial_scene: String = "res://scenes/main scenes/tutorial.tscn"
 @export var fade_out_duration: float = 1.5
 
 @export_group("Timing")
@@ -20,17 +22,20 @@ extends Control
 
 var log_lines: Array[String] = [
 	">> [FLIGHT_RECORDER // ARES_LANDER_04 // LOG_DUMP_884.LOG]",
-	">> [00:00:02.14] CRITICAL ALERT: X-CLASS CORONAL MASS EJECTION IMPACT",
+	">> [00:00:02.14] CRITICAL ALERT: X-CLASS SOLAR FLARE IMPACT",
 	">> [00:00:03.89] AVIONICS FAILURE... GUIDANCE OFFLINE... HULL BREACH",
 	">> [00:00:08.41] HARD IMPACT DETECTED // ELEVATION: -7,152m",
 	"",
-	"THE SOLAR FLARE CAUSED YOUR SHIP TO CRASH IN HELLAS PLANITIA,",
-	"THE MOST DANGEROUS BASIN ON MARS.",
+	"THE SOLAR FLARE KNOCKED OUT YOUR SHIP AND YOU CRASHED IN HELLAS PLANITIA,",
+	"THE DEEPEST BASIN ON MARS.",
 	"",
 	">> EMERGENCY BEACON TRANSMITTING...",
-	">> EXTRACTION TEAM ETA: 5 SOLS.",
+	">> RESCUE TEAM ETA: 5 DAYS.",
 	"",
-	"SURVIVE FOR 5 DAYS UNTIL HELP ARRIVES."
+	"STAY ALIVE FOR 5 DAYS UNTIL HELP ARRIVES.",
+	"",
+	">> THE COMMANDER HAS A BRIEFING READY.",
+	">> DO YOU WANT TO HEAR HOW THE BASE WORKS BEFORE YOU START?"
 ]
 
 var bg_rect: ColorRect
@@ -40,7 +45,7 @@ var prompt_label: Label
 var skip_warn_label: Label
 var crash_player: AudioStreamPlayer
 var typing_player: AudioStreamPlayer
-var font: SystemFont
+var font: Font
 
 var full_displayed_text: String = ""
 var is_typing: bool = false
@@ -52,13 +57,16 @@ var time_elapsed: float = 0.0
 var shake_strength: float = 0.0
 var base_label_pos: Vector2 = Vector2(72, 64)
 var is_waiting_for_start: bool = false
+var choosing: bool = false
+var skip_requested: bool = false
+var choice_box: HBoxContainer
+var choice_hint: Label
 
 func _ready() -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 
-	font = SystemFont.new()
-	font.font_names = PackedStringArray(["Courier New", "monospace"])
+	font = GameFont.get_font()
 
 	bg_rect = ColorRect.new()
 	bg_rect.color = Color.BLACK
@@ -77,8 +85,8 @@ func _ready() -> void:
 	var ls := LabelSettings.new()
 	ls.font = font
 	ls.font_color = terminal_color
-	ls.font_size = 24
-	ls.line_spacing = 8.0
+	ls.font_size = 20
+	ls.line_spacing = 6.0
 	log_label.label_settings = ls
 	log_label.position = base_label_pos
 	log_label.size = get_viewport_rect().size - Vector2(144, 180)
@@ -92,7 +100,7 @@ func _ready() -> void:
 	pls.font_color = terminal_color.lightened(0.25)
 	pls.font_size = 22
 	prompt_label.label_settings = pls
-	prompt_label.text = ">> [PRESS ANY BUTTON TO CONTINUE]"
+	prompt_label.text = ""
 	prompt_label.position = Vector2(72, get_viewport_rect().size.y - 80)
 	prompt_label.visible = false
 	add_child(prompt_label)
@@ -130,38 +138,31 @@ func _on_viewport_resized() -> void:
 	var vp_size: Vector2 = get_viewport_rect().size
 	log_label.size = vp_size - Vector2(144, 180)
 	prompt_label.position = Vector2(72, vp_size.y - 80)
+	_layout_choice()
 	if skip_warn_label != null:
 		skip_warn_label.position = vp_size - skip_warn_label.size - Vector2(36, 28)
 
 func _input(event: InputEvent) -> void:
-	if transitioning_out or skip_cooldown > 0.0:
+	if transitioning_out or choosing or skip_cooldown > 0.0:
 		return
-
 	var pressed: bool = false
 	if event is InputEventKey and event.pressed and not event.echo:
 		pressed = true
 	elif event is InputEventMouseButton and event.pressed:
-		if event.button_index == MOUSE_BUTTON_LEFT or event.button_index == MOUSE_BUTTON_RIGHT or event.button_index == MOUSE_BUTTON_MIDDLE:
-			pressed = true
+		pressed = true
 	elif event is InputEventJoypadButton and event.pressed:
 		pressed = true
-
 	if not pressed:
 		return
-
 	get_viewport().set_input_as_handled()
-
 	if is_waiting_for_start:
 		is_waiting_for_start = false
 		_run_crash_sequence()
 		return
-
-	if ready_to_continue:
-		_proceed_to_target_scene()
-		return
-
+	# pressing twice while the log types jumps straight to the question
 	if skip_armed_timer > 0.0:
-		_proceed_to_target_scene()
+		skip_requested = true
+		skip_armed_timer = 0.0
 	else:
 		skip_armed_timer = 3.5
 		skip_cooldown = 0.18
@@ -169,7 +170,8 @@ func _input(event: InputEvent) -> void:
 			typing_player.pitch_scale = 0.8
 			typing_player.play()
 
-func _proceed_to_target_scene() -> void:
+func _proceed_to_target_scene(scene_path: String = "") -> void:
+	var dest := scene_path if scene_path != "" else target_scene
 	if transitioning_out:
 		return
 	transitioning_out = true
@@ -190,9 +192,9 @@ func _proceed_to_target_scene() -> void:
 			if not is_inside_tree():
 				return
 			await get_tree().process_frame
-		trans.change_scene(target_scene, fade_out_duration)
+		trans.change_scene(dest, fade_out_duration)
 	else:
-		get_tree().change_scene_to_file(target_scene)
+		get_tree().change_scene_to_file(dest)
 
 func _process(delta: float) -> void:
 	time_elapsed += delta
@@ -209,16 +211,16 @@ func _process(delta: float) -> void:
 	else:
 		log_label.position = base_label_pos
 
-	var cursor: String = "█" if int(time_elapsed * 3.0) % 2 == 0 else " "
+	var cursor: String = "\u2588" if int(time_elapsed * 3.0) % 2 == 0 else " "
 	log_label.text = full_displayed_text + cursor
 
-	if ready_to_continue and prompt_label != null:
+	if false and prompt_label != null:
 		prompt_label.modulate.a = 0.55 + 0.45 * sin(time_elapsed * 5.0)
 
 	if skip_warn_label != null:
 		var vp_size: Vector2 = get_viewport_rect().size
 		skip_warn_label.position = vp_size - skip_warn_label.size - Vector2(36, 28)
-		if skip_armed_timer > 0.0 and not ready_to_continue and not transitioning_out:
+		if skip_armed_timer > 0.0 and not choosing and not transitioning_out:
 			skip_armed_timer = maxf(0.0, skip_armed_timer - delta)
 			var pulse_a: float = 0.7 + 0.3 * sin(time_elapsed * 8.0) if skip_armed_timer > 0.5 else (skip_armed_timer / 0.5) * 0.8
 			skip_warn_label.modulate.a = lerpf(skip_warn_label.modulate.a, pulse_a, delta * 14.0)
@@ -250,6 +252,8 @@ func _run_crash_sequence() -> void:
 
 	is_typing = true
 	for line_idx in range(log_lines.size()):
+		if skip_requested:
+			break
 		if transitioning_out or not is_inside_tree():
 			return
 		var line: String = log_lines[line_idx]
@@ -257,34 +261,74 @@ func _run_crash_sequence() -> void:
 			full_displayed_text += "\n"
 			await get_tree().create_timer(line_pause * 0.6).timeout
 			continue
-
 		for i in range(line.length()):
-			if transitioning_out or not is_inside_tree():
-				return
+			if skip_requested or transitioning_out or not is_inside_tree():
+				break
 			var ch: String = line.substr(i, 1)
 			full_displayed_text += ch
 			if ch != " ":
 				typing_player.pitch_scale = randf_range(0.92, 1.12)
 				typing_player.play()
 			await get_tree().create_timer(char_delay).timeout
-
-		if transitioning_out or not is_inside_tree():
-			return
-
+		if skip_requested:
+			break
 		full_displayed_text += "\n"
 		if line_idx == 3:
 			crash_player.pitch_scale = 0.75
 			crash_player.volume_db = crash_volume_db - 4.0
 			crash_player.play()
 			shake_strength = 14.0
-
 		await get_tree().create_timer(line_pause).timeout
+	if transitioning_out or not is_inside_tree():
+		return
+	if skip_requested:
+		full_displayed_text = "\n".join(log_lines) + "\n"
+	is_typing = false
+	skip_armed_timer = 0.0
+	_show_choice()
 
-	if not transitioning_out and is_inside_tree():
-		is_typing = false
-		ready_to_continue = true
-		skip_armed_timer = 0.0
-		prompt_label.visible = true
+func _show_choice() -> void:
+	choosing = true
+	choice_box = HBoxContainer.new()
+	choice_box.add_theme_constant_override("separation", 22)
+	choice_box.alignment = BoxContainer.ALIGNMENT_BEGIN
+	add_child(choice_box)
+	var yes := _choice_button("YES, SHOW ME")
+	var no := _choice_button("NO, LET ME IN")
+	yes.pressed.connect(_choose.bind(tutorial_scene))
+	no.pressed.connect(_choose.bind(target_scene))
+	choice_hint = Label.new()
+	choice_hint.text = "A / D or arrow keys to choose  -  ENTER or click to confirm"
+	choice_hint.add_theme_font_override("font", font)
+	choice_hint.add_theme_font_size_override("font_size", 14)
+	choice_hint.add_theme_color_override("font_color", Color(0.5, 0.75, 0.7))
+	add_child(choice_hint)
+	_layout_choice()
+	yes.grab_focus()
+
+func _choice_button(text: String) -> Button:
+	var b := Button.new()
+	b.text = text
+	b.custom_minimum_size = Vector2(250, 48)
+	b.add_theme_font_override("font", font)
+	GlassUI.style_button(b, 20)
+	choice_box.add_child(b)
+	return b
+
+func _layout_choice() -> void:
+	if choice_box == null:
+		return
+	var vp := get_viewport_rect().size
+	choice_box.position = Vector2(72, vp.y - 120)
+	choice_hint.position = Vector2(72, vp.y - 52)
+
+func _choose(path: String) -> void:
+	if transitioning_out:
+		return
+	choosing = false
+	for c in choice_box.get_children():
+		(c as Button).disabled = true
+	_proceed_to_target_scene(path)
 
 func _generate_crash_wav() -> AudioStreamWAV:
 	var mix_rate: int = 22050
@@ -342,3 +386,4 @@ func _generate_type_click_wav() -> AudioStreamWAV:
 	wav.stereo = false
 	wav.data = data
 	return wav
+

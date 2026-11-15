@@ -14,3 +14,9 @@ signal module_broken(module_name: String)
 signal game_over(reason: String)
 @warning_ignore("unused_signal")
 signal tutorial_step_advanced(step: int)
+
+# Narrow gameplay hooks used by the optional tutorial scene.
+signal player_moved(player: Node2D)
+signal module_placed(module: BaseModule)
+signal module_built(module: BaseModule)
+signal wire_connected(wire: Node2D, receiver: Node2D)

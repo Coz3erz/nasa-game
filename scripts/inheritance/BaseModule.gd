@@ -20,6 +20,8 @@ var progress_bar: ProgressBar = null
 var connected_wires: Array = []
 var base_visual_color: Color = Color.WHITE
 var flash_time: float = 0.0
+var _spark_timer: float = 0.0
+var _repair_bar: Node2D = null
 
 @onready var visual_rect: ColorRect = get_node_or_null("Visual")
 
@@ -43,6 +45,7 @@ func _ready() -> void:
 		if not BaseManager.active_modules.has(self):
 			BaseManager.active_modules.append(self)
 		BaseManager.calculate_power()
+	visible = true
 	_update_visual_state(0.0)
 
 func get_center() -> Vector2:
@@ -66,6 +69,7 @@ func interact_radius() -> float:
 
 func start_construction() -> void:
 	is_constructing = true
+	visible = true   # stays visible: ModuleArt draws the blueprint scaffold while building
 	is_powered = false
 	build_progress = 0.0
 	if visual_rect != null:
@@ -81,6 +85,7 @@ func start_construction() -> void:
 
 func _finish_build() -> void:
 	is_constructing = false
+	visible = true
 	build_progress = 100.0
 	if visual_rect != null:
 		visual_rect.modulate.a = 1.0
@@ -91,6 +96,7 @@ func _finish_build() -> void:
 		if not BaseManager.active_modules.has(self):
 			BaseManager.active_modules.append(self)
 		BaseManager.calculate_power()
+	EventBus.module_built.emit(self)
 
 func _process(delta: float) -> void:
 	if has_meta("is_ghost") and bool(get_meta("is_ghost")):
@@ -108,6 +114,12 @@ func _process(delta: float) -> void:
 				_finish_build()
 		return
 
+	if is_broken:
+		_tick_sparks(delta)
+		if _repair_bar == null or not is_instance_valid(_repair_bar):
+			_repair_bar = RepairBar.new()
+			_repair_bar.set("host", self)
+			add_child(_repair_bar)
 	if is_broken and player != null:
 		var in_reach := get_center().distance_to(player.global_position) <= interact_radius()
 		var holding_e := Input.is_action_pressed("interact") or Input.is_physical_key_pressed(KEY_E)
@@ -197,7 +209,7 @@ func _update_visual_state(delta: float) -> void:
 		visual_rect.color = base_visual_color.darkened(0.55)
 
 func face_reactor() -> void:
-	if module_name == "Reactor" or module_name == "Solar Panel":
+	if module_name == "Reactor":
 		return
 	var reactor: BaseModule = null
 	for m in get_tree().get_nodes_in_group("modules"):
@@ -219,10 +231,106 @@ func face_reactor() -> void:
 	var col := get_node_or_null("CollisionShape2D") as CollisionShape2D
 	var ctr := col.position if col != null else half
 	var target_rot := float(s) * PI * 0.5
+	if module_name == "Solar Panel":
+		var art := get_node_or_null("ModuleArt") as Node2D
+		if art != null:
+			# Rotate the art about its center; preserve its original collision footprint.
+			art.rotation = target_rot
+			art.scale = Vector2.ONE if s % 2 == 0 else Vector2(half.y / half.x, half.x / half.y)
+			art.position = ctr - art.transform.basis_xform(ctr)
+	# Solar outputs use the same edge-facing rule as module receivers.
 	for c in get_children():
-		if c is WireReceiver:
+		if c is WireReceiver or (module_name == "Solar Panel" and c.has_method("spawn_wire")):
 			var r := c as Node2D
 			var rot := r.rotation + angle_difference(r.rotation, target_rot)
 			var tw := create_tween().set_parallel(true)
 			tw.tween_property(r, "position", ctr + dir * edge, 0.4).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 			tw.tween_property(r, "rotation", rot, 0.4).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+
+
+## Real sparks: little bright particles that fly OUT of the module, arc and fall.
+func _tick_sparks(delta: float) -> void:
+	_spark_timer -= delta
+	if _spark_timer > 0.0:
+		return
+	_spark_timer = randf_range(0.25, 0.9)
+	var fp := get_footprint()
+	var pos := Vector2(randf_range(fp.position.x, fp.end.x), randf_range(fp.position.y, fp.end.y))
+	var big := randf() < 0.25
+	var p := CPUParticles2D.new()
+	p.one_shot = true
+	p.explosiveness = 1.0
+	p.amount = 22 if big else 10
+	p.lifetime = 0.8
+	p.local_coords = false
+	p.spread = 180.0
+	p.initial_velocity_min = 90.0
+	p.initial_velocity_max = 380.0 if big else 260.0
+	p.gravity = Vector2(0, 700)
+	p.damping_min = 20.0
+	p.damping_max = 60.0
+	p.scale_amount_min = 0.05
+	p.scale_amount_max = 0.11
+	p.color = Color(3.0, 2.0, 0.7, 1.0)
+	p.z_index = 80
+	var g := Gradient.new()
+	g.set_color(0, Color(1, 1, 1, 1))
+	g.set_color(1, Color(1.0, 0.35, 0.1, 0.0))
+	p.color_ramp = g
+	var tex := GradientTexture2D.new()
+	var tg := Gradient.new()
+	tg.set_color(0, Color(1, 1, 1, 1))
+	tg.set_color(1, Color(1, 1, 1, 0))
+	tex.gradient = tg
+	tex.fill = GradientTexture2D.FILL_RADIAL
+	tex.fill_from = Vector2(0.5, 0.5)
+	tex.fill_to = Vector2(1.0, 0.5)
+	tex.width = 32
+	tex.height = 32
+	p.texture = tex
+	var mat := CanvasItemMaterial.new()
+	mat.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
+	p.material = mat
+	get_parent().add_child(p)
+	p.global_position = pos
+	p.emitting = true
+	get_tree().create_timer(1.4).timeout.connect(p.queue_free)
+
+## Progress bar above a broken module (fills while you hold E).
+class RepairBar extends Node2D:
+	var host: BaseModule
+	var shown := 0.0
+	var vis := 0.0
+	var t := 0.0
+	func _ready() -> void:
+		top_level = true
+		z_as_relative = false
+		z_index = 250
+	func _process(d: float) -> void:
+		if host == null or not is_instance_valid(host) or not host.is_broken:
+			queue_free()
+			return
+		t += d
+		shown = lerpf(shown, host.fix_progress / 100.0, 1.0 - exp(-14.0 * d))
+		vis = lerpf(vis, 1.0, 1.0 - exp(-8.0 * d))
+		global_position = host.get_center() + Vector2(0.0, -host.get_half_size().length() - 34.0)
+		global_rotation = 0.0
+		queue_redraw()
+	func _draw() -> void:
+		if host == null or not is_instance_valid(host):
+			return
+		var w := 150.0
+		var h := 16.0
+		var a := vis
+		var holding := host.fix_progress > 0.5
+		draw_rect(Rect2(-w * 0.5 - 4.0, -h * 0.5 - 4.0, w + 8.0, h + 8.0), Color(0.04, 0.05, 0.09, 0.9 * a))
+		var col := Color(1.0, 0.45, 0.2).lerp(Color(0.4, 1.0, 0.55), shown)
+		draw_rect(Rect2(-w * 0.5, -h * 0.5, w, h), Color(0.15, 0.17, 0.25, a))
+		if shown > 0.005:
+			draw_rect(Rect2(-w * 0.5, -h * 0.5, w * shown, h), Color(col.r, col.g, col.b, a))
+			draw_rect(Rect2(-w * 0.5 + w * shown - 2.0, -h * 0.5, 2.0, h), Color(1, 1, 1, a))
+		var f := ThemeDB.fallback_font
+		var txt := "Fixing...  %d%%" % int(shown * 100.0) if holding else "Hold E to fix"
+		var tw := f.get_string_size(txt, HORIZONTAL_ALIGNMENT_LEFT, -1, 17).x
+		var pulse := 1.0 if holding else 0.65 + 0.35 * sin(t * 6.0)
+		draw_string(f, Vector2(-tw * 0.5, -h * 0.5 - 10.0), txt, HORIZONTAL_ALIGNMENT_LEFT, -1, 17, Color(1, 0.95, 0.8, a * pulse))
