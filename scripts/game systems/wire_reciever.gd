@@ -1,26 +1,24 @@
 @tool
-extends WirePort
+extends StaticBody2D
 class_name WireReceiver
 
 @export var standby_color: Color = Color(0.25, 0.75, 1.0):
 	set(value):
 		standby_color = value
 		queue_redraw()
+@export var accepted_sources: Array[String] = []
 
 var receiver_point: Marker2D = null
 var target_module: BaseModule = null
 var connected_wire: Node2D = null
-var wires: Array = []
-## Empty = accepts any wire. Otherwise only wires coming from a module with one of these names.
-var accepted_sources: PackedStringArray = PackedStringArray()
-var capacity: int = 1
+var pulse_time: float = 0.0
+var _is_hovered: bool = false
 
 var housing_style: StyleBoxFlat
 var well_style: StyleBoxFlat
 var flange_style: StyleBoxFlat
 
 func _ready() -> void:
-	super._ready()
 	var old_sprite: Sprite2D = get_node_or_null("Sprite2D") as Sprite2D
 	if old_sprite != null:
 		old_sprite.visible = false
@@ -36,6 +34,11 @@ func _ready() -> void:
 		add_to_group("wire_receivers")
 		if get_parent() is BaseModule:
 			target_module = get_parent() as BaseModule
+
+func _exit_tree() -> void:
+	if _is_hovered:
+		_is_hovered = false
+		WirePort.hover_count = maxi(0, WirePort.hover_count - 1)
 
 func _init_styles() -> void:
 	housing_style = StyleBoxFlat.new()
@@ -56,52 +59,77 @@ func _init_styles() -> void:
 	flange_style.set_border_width_all(1)
 	flange_style.set_corner_radius_all(2)
 
+func _process(delta: float) -> void:
+	pulse_time += delta
+	if not Engine.is_editor_hint():
+		_update_hover_state()
+	queue_redraw()
+
+func _update_hover_state() -> void:
+	var can_rot := WirePort.can_rotate_port(self)
+	var mouse_close := false
+	if can_rot:
+		var local_m := to_local(get_global_mouse_position())
+		mouse_close = Rect2(-22, -36, 44, 72).has_point(local_m)
+
+	if mouse_close and not _is_hovered:
+		_is_hovered = true
+		WirePort.hover_count += 1
+	elif not mouse_close and _is_hovered:
+		_is_hovered = false
+		WirePort.hover_count = maxi(0, WirePort.hover_count - 1)
+
+func _input(event: InputEvent) -> void:
+	if Engine.is_editor_hint() or not _is_hovered:
+		return
+	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
+		if WirePort.can_rotate_port(self):
+			WirePort.rotate_port_around_module(self)
+			get_viewport().set_input_as_handled()
+			queue_redraw()
+
 func get_receiver_position() -> Vector2:
 	if receiver_point != null:
 		return receiver_point.global_position
 	return global_position
 
-func _prune() -> void:
-	for i in range(wires.size() - 1, -1, -1):
-		if not is_instance_valid(wires[i]):
-			wires.remove_at(i)
-	if connected_wire != null and not is_instance_valid(connected_wire):
-		connected_wire = wires.back() if not wires.is_empty() else null
-
-func accepts_wire(wire_node: Node2D) -> bool:
-	if accepted_sources.is_empty():
+func accepts_wire(wire_node: Node2D = null) -> bool:
+	if target_module == null and get_parent() is BaseModule:
+		target_module = get_parent() as BaseModule
+	if wire_node == null:
 		return true
-	if wire_node == null or not ("source_module" in wire_node):
-		return false
-	var s = wire_node.source_module
-	return is_instance_valid(s) and accepted_sources.has(s.module_name)
+	if "source_module" in wire_node and is_instance_valid(wire_node.source_module):
+		var src_mod: BaseModule = wire_node.source_module
+		if src_mod == target_module:
+			return false
+		if target_module != null and target_module.module_name == "Reactor":
+			return src_mod.module_name == "Solar Panel"
+		if not accepted_sources.is_empty() and not accepted_sources.has(src_mod.module_name):
+			return false
+	return true
 
 func can_accept_wire(wire_node: Node2D = null) -> bool:
-	_prune()
-	if wires.size() >= capacity:
+	if connected_wire != null and is_instance_valid(connected_wire):
 		return false
 	if target_module == null and get_parent() is BaseModule:
 		target_module = get_parent() as BaseModule
 	if target_module == null:
 		return false
-	if not (target_module.can_accept_wires and not target_module.is_broken):
+	if target_module.is_constructing or target_module.is_broken or not target_module.can_accept_wires:
 		return false
-	return wire_node == null or accepts_wire(wire_node)
+	return accepts_wire(wire_node)
 
 func accept_wire(wire_node: Node2D) -> void:
 	if target_module == null and get_parent() is BaseModule:
 		target_module = get_parent() as BaseModule
 	connected_wire = wire_node
-	if not wires.has(wire_node):
-		wires.append(wire_node)
 	if target_module != null:
 		target_module.accept_wire(wire_node)
 	queue_redraw()
 
 func remove_wire(wire_node: Node2D) -> void:
-	wires.erase(wire_node)
 	if connected_wire == wire_node:
-		connected_wire = wires.back() if not wires.is_empty() else null
+		connected_wire = null
 	if target_module != null:
 		target_module.remove_wire(wire_node)
 	queue_redraw()
@@ -120,6 +148,9 @@ func _draw() -> void:
 	var is_plugged_in: bool = connected_wire != null and is_instance_valid(connected_wire)
 	var active_col: Color = _get_active_color()
 	var pulse: float = 0.7 + 0.3 * sin(pulse_time * (6.0 if is_plugged_in else 3.0))
+
+	if _is_hovered:
+		draw_rect(Rect2(-20, -35, 40, 70), Color(0.42, 1.0, 0.55, 0.4), false, 2.0)
 
 	draw_rect(Rect2(-14, -30, 32, 64), Color(0, 0, 0, 0.42))
 	draw_style_box(flange_style, Rect2(-18, -26, 8, 52))
@@ -157,5 +188,3 @@ func _draw() -> void:
 	var led_top_col: Color = active_col.lightened(0.25) if is_plugged_in else Color(0.18, 0.20, 0.24)
 	draw_circle(Vector2(0, -15), 2.2, led_top_col)
 	draw_circle(Vector2(0, 15), 2.2, led_top_col)
-
-	_draw_port_fx(40.0)

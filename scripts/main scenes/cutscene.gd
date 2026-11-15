@@ -80,7 +80,7 @@ extends Control
 @export var sol_margin_ratio: float = 0.04
 
 @export_group("Scene")
-@export_file("*.tscn") var next_scene: String = "res://Main.tscn"
+@export_file("*.tscn") var next_scene: String = "res://scenes/main scenes/crash.tscn"
 
 const BG_SHADER := """
 shader_type canvas_item;
@@ -783,6 +783,8 @@ var ship_node: ShipRenderer
 var engine_glow: EngineGlow
 var embers: EmberField
 var sol_label: Label
+var skip_label: Label
+var skip_armed_timer: float = 0.0
 var post_layer: ColorRect
 var audio_player: AudioStreamPlayer
 var typing_player: AudioStreamPlayer
@@ -920,6 +922,17 @@ func _build_sol_text() -> void:
 	sol_label.text = ""
 	add_child(sol_label)
 
+	skip_label = Label.new()
+	skip_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var sls := LabelSettings.new()
+	sls.font = font
+	sls.font_color = sol_color
+	sls.font_size = 16
+	skip_label.label_settings = sls
+	skip_label.text = "[ PRESS ANY BUTTON AGAIN TO SKIP ]"
+	skip_label.modulate.a = 0.0
+	add_child(skip_label)
+
 func _build_post() -> void:
 	post_layer = ColorRect.new()
 	post_layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -994,6 +1007,9 @@ func _layout() -> void:
 	sol_base_pos = Vector2(pad, pad)
 	sol_label.position = sol_base_pos
 
+	if skip_label:
+		skip_label.position = view_size - skip_label.size - Vector2(32, 28)
+
 	var aspect := view_size.x / view_size.y
 	bg_mat.set_shader_parameter("aspect", aspect)
 	bg_mat.set_shader_parameter("lens_center", Vector2(sun_center.x / view_size.y, sun_center.y / view_size.y))
@@ -1010,9 +1026,28 @@ func _layout() -> void:
 func _on_resize() -> void:
 	_layout()
 
+func _unhandled_input(event: InputEvent) -> void:
+	if scene_ending:
+		return
+	var pressed: bool = (event is InputEventKey and event.pressed and not event.echo) \
+		or (event is InputEventMouseButton and event.pressed) \
+		or (event is InputEventJoypadButton and event.pressed)
+	if not pressed:
+		return
+
+	if skip_armed_timer > 0.0:
+		_end_cutscene()
+	else:
+		skip_armed_timer = 3.5
+
 func _schedule_end() -> void:
 	await get_tree().create_timer(total_duration).timeout
 	if not is_inside_tree() or scene_ending:
+		return
+	_end_cutscene()
+
+func _end_cutscene() -> void:
+	if scene_ending:
 		return
 	scene_ending = true
 
@@ -1171,6 +1206,15 @@ func _update_text(delta: float) -> void:
 	if rng.randf() < 0.012:
 		jitter = rng.randf_range(-2.5, 2.5)
 	sol_label.position = sol_base_pos + Vector2(jitter, 0.0)
+
+	if skip_label:
+		skip_label.position = view_size - skip_label.size - Vector2(32, 28)
+		if skip_armed_timer > 0.0:
+			skip_armed_timer = maxf(0.0, skip_armed_timer - delta)
+			var target_a: float = 0.65 + 0.25 * sin(time * 8.0) if skip_armed_timer > 0.5 else (skip_armed_timer / 0.5) * 0.8
+			skip_label.modulate.a = lerpf(skip_label.modulate.a, target_a, delta * 14.0)
+		else:
+			skip_label.modulate.a = lerpf(skip_label.modulate.a, 0.0, delta * 10.0)
 
 func _update_audio() -> void:
 	if audio_player and audio_player.playing and not scene_ending:

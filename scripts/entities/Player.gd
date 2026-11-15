@@ -1,8 +1,8 @@
 extends CharacterBody2D
 ## PLAYER
-##   SPACE            toggle build mode (you can still walk around in it)
-##   E (interact)     in build mode: place + start building  |  outside: wires
-##   SCROLL / TAB     swap which module you're about to place
+##   SPACE           toggle build mode (you can still walk around in it)
+##   E (interact)    in build mode: place + start building  |  outside: wires
+##   SCROLL / TAB    swap which module you're about to place
 ## The build ghost is ALWAYS placed directly ahead of the way you're facing.
 
 # - tuning -
@@ -31,6 +31,12 @@ extends CharacterBody2D
 @export_group("Juice")
 @export var camera_lookahead: float = 46.0
 
+@export_group("Footstep Audio")
+@export var metal_footstep_sfx: AudioStream
+@export var mars_footstep_sfx: AudioStream
+@export var footstep_interval: float = 0.34
+@export var footstep_volume_db: float = -8.0
+
 const BUILD_ACTION := &"build_mode"
 const DIR_ACTIONS: Dictionary = {"up": "ui_up", "down": "ui_down", "left": "ui_left", "right": "ui_right"}
 const DIR_VECS: Dictionary = {"up": Vector2.UP, "down": Vector2.DOWN, "left": Vector2.LEFT, "right": Vector2.RIGHT}
@@ -45,6 +51,8 @@ const C_AMBER := Color(1.0, 0.85, 0.3)
 
 # state (names kept so other scripts keep working)
 var is_active: bool = false
+var input_locked: bool = false
+var is_outside: bool = false
 var current_wire: Node2D = null
 var facing_dir: String = "down"
 var facing_vec: Vector2 = Vector2.DOWN
@@ -59,6 +67,11 @@ var _last_vertical := "down"
 var _move_vel := Vector2.ZERO
 var _t := 0.0
 var _font: SystemFont
+
+var _footstep_timer: float = 0.0
+var _footstep_player: AudioStreamPlayer
+var _default_metal_stream: AudioStreamWAV
+var _default_mars_stream: AudioStreamWAV
 
 # juice state
 var _sq := Vector2.ONE
@@ -114,6 +127,7 @@ func _ready() -> void:
 	_make_dust()
 	_make_build_hud()
 	_make_hint_panel()
+	_setup_footstep_audio()
 	_hints_node = Hints.new()
 	_hints_node.p = self
 	add_child(_hints_node)
@@ -148,9 +162,119 @@ func enable_player() -> void:
 	Fx.burst(get_parent(), global_position, Color(0.5, 1.4, 1.8, 0.9), 26, 60.0, 180.0, 0.7, 0.04, 0.1, true)
 	Ring.spawn(get_parent(), global_position, Color(0.4, 1.3, 1.6), 90.0, 0.55)
 
+func set_input_locked(locked: bool) -> void:
+	input_locked = locked
+	if locked:
+		velocity = Vector2.ZERO
+		_move_vel = Vector2.ZERO
+		held_dirs.clear()
+		if is_build_mode:
+			_exit_build_mode()
+		if current_wire != null and is_instance_valid(current_wire):
+			current_wire.drop(global_position)
+			current_wire = null
+		_update_animation(Vector2.ZERO)
+
+func set_outside_mode(outside: bool, bounds: Rect2) -> void:
+	is_outside = outside
+	if outside and is_build_mode:
+		_exit_build_mode()
+	if _dust != null:
+		_dust.color = Color(0.92, 0.55, 0.35, 0.65) if outside else Color(0.85, 0.82, 0.75, 0.55)
+	if player_camera == null:
+		return
+	if outside and bounds.size != Vector2.ZERO:
+		player_camera.limit_left = int(bounds.position.x)
+		player_camera.limit_top = int(bounds.position.y)
+		player_camera.limit_right = int(bounds.end.x)
+		player_camera.limit_bottom = int(bounds.end.y)
+		player_camera.reset_smoothing()
+	else:
+		player_camera.limit_left = -10000000
+		player_camera.limit_top = -10000000
+		player_camera.limit_right = 10000000
+		player_camera.limit_bottom = 10000000
+		player_camera.reset_smoothing()
+
+func _setup_footstep_audio() -> void:
+	_footstep_player = AudioStreamPlayer.new()
+	_footstep_player.volume_db = footstep_volume_db
+	add_child(_footstep_player)
+	_default_metal_stream = _generate_metal_step_wav()
+	_default_mars_stream = _generate_mars_step_wav()
+
+func _update_footsteps(delta: float, input_dir: Vector2) -> void:
+	if input_dir == Vector2.ZERO or _move_vel.length_squared() < 100.0:
+		_footstep_timer = footstep_interval * 0.85
+		return
+	_footstep_timer += delta
+	if _footstep_timer >= footstep_interval:
+		_footstep_timer = 0.0
+		if _footstep_player != null:
+			_footstep_player.volume_db = footstep_volume_db
+			if is_outside:
+				_footstep_player.stream = mars_footstep_sfx if mars_footstep_sfx != null else _default_mars_stream
+				_footstep_player.pitch_scale = randf_range(0.88, 1.08)
+			else:
+				_footstep_player.stream = metal_footstep_sfx if metal_footstep_sfx != null else _default_metal_stream
+				_footstep_player.pitch_scale = randf_range(0.94, 1.12)
+			_footstep_player.play()
+
+func _generate_metal_step_wav() -> AudioStreamWAV:
+	var mix_rate: int = 22050
+	var duration: float = 0.09
+	var samples: int = int(mix_rate * duration)
+	var data := PackedByteArray()
+	data.resize(samples * 2)
+	for i in range(samples):
+		var t: float = float(i) / float(mix_rate)
+		var env: float = exp(-t * 48.0)
+		var clank: float = sin(t * TAU * 185.0) * 0.55 + sin(t * TAU * 420.0) * 0.3 + sin(t * TAU * 890.0) * 0.15
+		var noise: float = randf_range(-0.35, 0.35) * exp(-t * 85.0)
+		var sample: float = clampf((clank + noise) * env, -1.0, 1.0)
+		var pcm: int = int(sample * 32767.0)
+		data[i * 2] = pcm & 0xFF
+		data[i * 2 + 1] = (pcm >> 8) & 0xFF
+	var wav := AudioStreamWAV.new()
+	wav.format = AudioStreamWAV.FORMAT_16_BITS
+	wav.mix_rate = mix_rate
+	wav.stereo = false
+	wav.data = data
+	return wav
+
+func _generate_mars_step_wav() -> AudioStreamWAV:
+	var mix_rate: int = 22050
+	var duration: float = 0.14
+	var samples: int = int(mix_rate * duration)
+	var data := PackedByteArray()
+	data.resize(samples * 2)
+	var lp: float = 0.0
+	for i in range(samples):
+		var t: float = float(i) / float(mix_rate)
+		var env: float = sin(clampf(t / duration, 0.0, 1.0) * PI) * exp(-t * 14.0)
+		var raw: float = randf_range(-1.0, 1.0)
+		lp += 0.24 * (raw - lp)
+		var thud: float = sin(t * TAU * 90.0) * exp(-t * 35.0) * 0.35
+		var sample: float = clampf((lp * 0.9 + thud) * env, -1.0, 1.0)
+		var pcm: int = int(sample * 32767.0)
+		data[i * 2] = pcm & 0xFF
+		data[i * 2 + 1] = (pcm >> 8) & 0xFF
+	var wav := AudioStreamWAV.new()
+	wav.format = AudioStreamWAV.FORMAT_16_BITS
+	wav.mix_rate = mix_rate
+	wav.stereo = false
+	wav.data = data
+	return wav
+
 # - per-frame -
 func _physics_process(delta: float) -> void:
 	if not is_active:
+		return
+	if input_locked:
+		_move_vel = Vector2.ZERO
+		velocity = Vector2.ZERO
+		move_and_slide()
+		_update_animation(Vector2.ZERO)
 		return
 
 	var input_dir: Vector2 = Input.get_vector("ui_left", "ui_right", "ui_up", "ui_down")
@@ -171,6 +295,7 @@ func _physics_process(delta: float) -> void:
 
 	move_and_slide()
 	_update_animation(input_dir)
+	_update_footsteps(delta, input_dir)
 
 	if is_build_mode:
 		_update_build_ghost(delta)
@@ -250,7 +375,7 @@ func _update_squash(d: float) -> void:
 		sprite.position = _sprite_base_pos + Vector2(0.0, (1.0 - sc.y) * _sprite_half_h)
 		sprite.rotation = lerp_angle(sprite.rotation, clampf(_move_vel.x / speed, -1.0, 1.0) * 0.07, 1.0 - exp(-12.0 * d))
 	if _dust != null:
-		_dust.emitting = is_active and spd > 0.5
+		_dust.emitting = is_active and not input_locked and spd > 0.5
 		_dust.position = Vector2(0.0, _sprite_half_h * 0.85)
 		if moving:
 			_dust.direction = -_move_vel.normalized()
@@ -298,7 +423,7 @@ func _make_dust() -> void:
 
 # - input -
 func _unhandled_input(event: InputEvent) -> void:
-	if not is_active:
+	if not is_active or input_locked:
 		return
 	if event.is_action_pressed(BUILD_ACTION):
 		_toggle_build_mode()
@@ -325,6 +450,10 @@ func _unhandled_input(event: InputEvent) -> void:
 func _toggle_build_mode() -> void:
 	if is_build_mode:
 		_exit_build_mode()
+		return
+	if is_outside:
+		_flash_hint("Can't build out on the Martian surface!", C_RED)
+		_pop(0.08)
 		return
 	_refresh_build_options()
 	if build_options.is_empty():
@@ -436,14 +565,14 @@ func _update_build_ghost(delta: float, snap_now: bool = false) -> void:
 	var center := global_position + to_mouse
 	var origin := center - _ghost_center_off
 	_ghost_origin = origin
- 
+
 	if snap_now or ghost_module.global_position.distance_to(origin) > 700.0:
 		ghost_module.global_position = origin
 	else:
 		ghost_module.global_position = ghost_module.global_position.lerp(origin, 1.0 - exp(-ghost_glide * delta))
- 
-	can_place = true
-	if _ghost_test_shape != null:
+
+	can_place = not is_outside
+	if can_place and _ghost_test_shape != null:
 		var q := PhysicsShapeQueryParameters2D.new()
 		q.shape = _ghost_test_shape
 		q.transform = Transform2D(0.0, origin + _ghost_center_off)
@@ -462,7 +591,7 @@ func _update_build_ghost(delta: float, snap_now: bool = false) -> void:
 		var cp := Vector2(clampf(global_position.x, rc.position.x, rc.end.x), clampf(global_position.y, rc.position.y, rc.end.y))
 		if cp.distance_to(global_position) < player_radius + 6.0:
 			can_place = false
- 
+
 	var pulse := 0.5 + 0.5 * sin(_t * 6.0)
 	var a := lerpf(ghost_module.modulate.a, 0.5 + 0.2 * pulse, 0.25)
 	_ghost_flash = maxf(0.0, _ghost_flash - delta)
@@ -472,9 +601,10 @@ func _update_build_ghost(delta: float, snap_now: bool = false) -> void:
 		ghost_module.modulate = Color(0.55, 1.0, 1.3, a)
 	else:
 		ghost_module.modulate = Color(1.4, 0.3, 0.3, a)
+
 func _draw() -> void:
 	pass
- 
+
 func _deny() -> void:
 	_ghost_flash = 0.25
 	_sq_vel.x += 3.5 * (1.0 if randf() > 0.5 else -1.0)
@@ -482,7 +612,7 @@ func _deny() -> void:
 	_flash_hint("Can't build there - something's in the way!", C_RED)
 
 func _attempt_place() -> void:
-	if not is_instance_valid(ghost_module) or build_options.is_empty():
+	if is_outside or not is_instance_valid(ghost_module) or build_options.is_empty():
 		return
 	if not can_place:
 		_deny()
@@ -866,7 +996,7 @@ func _compute_hint_rows() -> Array:
 		"grab":
 			e_text = "Grab the wire"
 	rows.append(["E", e_text])
-	if _has_buildables():
+	if _has_buildables() and not is_outside:
 		rows.append(["SPACE", "Build stuff"])
 	return rows
 

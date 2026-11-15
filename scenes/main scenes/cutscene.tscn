@@ -1,11 +1,15 @@
 [gd_scene format=3 uid="uid://bw7mjm563g20s"]
 
 [ext_resource type="Script" uid="uid://ymxcwnobphie" path="res://scripts/main scenes/cutscene.gd" id="1_vg5b8"]
+[ext_resource type="AudioStream" uid="uid://druwnf3l0duu7" path="res://sounds/cutscene/cutscene.wav" id="2_1rqqt"]
+[ext_resource type="AudioStream" uid="uid://08n8kgkq3efk" path="res://sounds/cutscene/key_type.mp3" id="3_o384k"]
 
 [node name="cutscene" type="Control" unique_id=877909203]
 layout_mode = 3
 anchors_preset = 0
 script = ExtResource("1_vg5b8")
+ambient_audio = ExtResource("2_1rqqt")
+typing_sfx = ExtResource("3_o384k")
 total_duration = 10.0
 sol_type_delay = 3.0
 sol_char_delay = 0.7
@@ -16,4 +20,4 @@ gas_radius = 3.8
 lens_strength = 0.0
 sol_text = "mars"
 sol_color = Color(0, 1, 0.25490198, 1)
-next_scene = "uid://65xbkmaftctv"
+next_scene = "uid://ddpefoc34vlx3"

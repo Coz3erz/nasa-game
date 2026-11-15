@@ -1,0 +1,17 @@
+[gd_scene format=3 uid="uid://ddpefoc34vlx3"]
+
+[ext_resource type="Script" uid="uid://bubcbpsj7c88y" path="res://scripts/main scenes/crash.gd" id="1_8c4bi"]
+[ext_resource type="AudioStream" uid="uid://cxqaw88chw4pf" path="res://sounds/cutscene/crash.wav" id="2_r14ux"]
+[ext_resource type="AudioStream" uid="uid://08n8kgkq3efk" path="res://sounds/cutscene/key_type.mp3" id="3_hr3i7"]
+
+[node name="crash" type="Control" unique_id=2023789675]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_8c4bi")
+target_scene = "uid://65xbkmaftctv"
+crash_sfx = ExtResource("2_r14ux")
+typing_sfx = ExtResource("3_hr3i7")

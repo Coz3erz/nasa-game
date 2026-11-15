@@ -1,0 +1,16 @@
+[gd_resource type="TileSet" format=3 uid="uid://da80um5yql8sw"]
+
+[ext_resource type="Texture2D" uid="uid://cgoeufg6uot6r" path="res://sprites/mars-outpost-kit-free/MarsOutpostKit_FreeSample/Tilesets/Sand/sand_ground_16.png" id="1_sand"]
+
+[sub_resource type="TileSetAtlasSource" id="TileSetAtlasSource_sand"]
+texture = ExtResource("1_sand")
+0:0/0 = 0
+1:0/0 = 0
+1:0/0/probability = 0.25
+2:0/0 = 0
+2:0/0/probability = 0.08
+3:0/0 = 0
+3:0/0/probability = 0.3
+
+[resource]
+sources/0 = SubResource("TileSetAtlasSource_sand")

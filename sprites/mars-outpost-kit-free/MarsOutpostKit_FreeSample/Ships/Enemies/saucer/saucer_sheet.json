@@ -1,0 +1,61 @@
+{
+ "frames": [
+  {
+   "filename": "saucer_pulse_0",
+   "frame": {
+    "x": 0,
+    "y": 0,
+    "w": 32,
+    "h": 32
+   },
+   "duration": 125
+  },
+  {
+   "filename": "saucer_pulse_1",
+   "frame": {
+    "x": 34,
+    "y": 0,
+    "w": 32,
+    "h": 32
+   },
+   "duration": 125
+  },
+  {
+   "filename": "saucer_pulse_2",
+   "frame": {
+    "x": 68,
+    "y": 0,
+    "w": 32,
+    "h": 32
+   },
+   "duration": 125
+  },
+  {
+   "filename": "saucer_pulse_3",
+   "frame": {
+    "x": 102,
+    "y": 0,
+    "w": 32,
+    "h": 32
+   },
+   "duration": 125
+  }
+ ],
+ "meta": {
+  "app": "GameShipKit",
+  "image": "saucer_sheet.png",
+  "size": {
+   "w": 134,
+   "h": 32
+  },
+  "scale": "1",
+  "frameTags": [
+   {
+    "name": "pulse",
+    "from": 0,
+    "to": 3,
+    "direction": "forward"
+   }
+  ]
+ }
+}

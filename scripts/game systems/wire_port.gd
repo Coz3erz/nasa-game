@@ -201,3 +201,38 @@ func _draw_tag() -> void:
 	draw_style_box(_tag_style, Rect2(-tw * 0.5 - 10.0, -fs - 4.0, tw + 20.0, fs + 14.0))
 	draw_string(f, Vector2(-tw * 0.5, 0.0), TAG_TEXT, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, Color(1, 1, 1, 1))
 	draw_set_transform_matrix(Transform2D.IDENTITY)
+static func is_player_in_build_mode(tree: SceneTree) -> bool:
+	if tree == null:
+		return false
+	var p := tree.get_first_node_in_group("player")
+	if p != null and "is_build_mode" in p:
+		return bool(p.is_build_mode)
+	return false
+
+static func can_rotate_port(port: Node2D) -> bool:
+	if port == null or not port.is_inside_tree():
+		return false
+	if not is_player_in_build_mode(port.get_tree()):
+		return false
+	var parent_mod := port.get_parent()
+	if parent_mod != null:
+		if parent_mod.has_meta("is_ghost") and bool(parent_mod.get_meta("is_ghost")):
+			return true
+		if "is_constructing" in parent_mod and bool(parent_mod.is_constructing):
+			return true
+	return false
+
+static func rotate_port_around_module(port: Node2D) -> void:
+	var parent_mod := port.get_parent() as Node2D
+	if parent_mod == null:
+		port.rotation += PI * 0.5
+		return
+
+	var center := Vector2.ZERO
+	var col := parent_mod.get_node_or_null("CollisionShape2D") as CollisionShape2D
+	if col != null:
+		center = col.position
+
+	var rel := port.position - center
+	port.position = center + Vector2(-rel.y, rel.x)
+	port.rotation = fposmod(port.rotation + PI * 0.5, TAU)

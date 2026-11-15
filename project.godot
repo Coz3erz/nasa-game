@@ -15,6 +15,10 @@ run/main_scene="res://scenes/main scenes/cutscene.tscn"
 config/features=PackedStringArray("4.6", "GL Compatibility")
 config/icon="uid://o5q4o7ocx6td"
 
+[audio]
+
+buses/default_bus_layout="uid://cj08fvlsnbidg"
+
 [autoload]
 
 Transition="*uid://biwie4aohk6df"
@@ -22,6 +26,7 @@ EventBus="*uid://bl05nu4e54tqs"
 GameManager="*uid://ecq8du2oji08"
 BaseManager="*uid://ckvgjnnhg08wv"
 Polish="*uid://bn3mme6x63rk3"
+GameSettings="*uid://d27a8kthqk3d3"
 
 [display]
 

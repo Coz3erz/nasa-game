@@ -1,0 +1,16 @@
+MARS OUTPOST KIT - LICENSE
+
+You may:
+- Use these assets in personal and commercial games and projects.
+- Modify, recolor and edit them as you like.
+- Use them in trailers, screenshots and promotional material.
+Credit is appreciated but not required:
+"Mars Outpost Kit by GameShipKit (gameshipkit.com)"
+
+You may not:
+- Resell, redistribute or share these assets on their own or as part
+  of another asset pack, even if modified.
+- Claim the original artwork as your own.
+- Use them to train AI image models or include them in datasets.
+
+Assets are provided "as is" without warranty of any kind.

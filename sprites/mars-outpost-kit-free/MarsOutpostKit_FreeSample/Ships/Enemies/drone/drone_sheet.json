@@ -1,0 +1,61 @@
+{
+ "frames": [
+  {
+   "filename": "drone_pulse_0",
+   "frame": {
+    "x": 0,
+    "y": 0,
+    "w": 24,
+    "h": 24
+   },
+   "duration": 125
+  },
+  {
+   "filename": "drone_pulse_1",
+   "frame": {
+    "x": 26,
+    "y": 0,
+    "w": 24,
+    "h": 24
+   },
+   "duration": 125
+  },
+  {
+   "filename": "drone_pulse_2",
+   "frame": {
+    "x": 52,
+    "y": 0,
+    "w": 24,
+    "h": 24
+   },
+   "duration": 125
+  },
+  {
+   "filename": "drone_pulse_3",
+   "frame": {
+    "x": 78,
+    "y": 0,
+    "w": 24,
+    "h": 24
+   },
+   "duration": 125
+  }
+ ],
+ "meta": {
+  "app": "GameShipKit",
+  "image": "drone_sheet.png",
+  "size": {
+   "w": 102,
+   "h": 24
+  },
+  "scale": "1",
+  "frameTags": [
+   {
+    "name": "pulse",
+    "from": 0,
+    "to": 3,
+    "direction": "forward"
+   }
+  ]
+ }
+}

@@ -1,5 +1,5 @@
 @tool
-extends WirePort
+extends StaticBody2D
 
 @export var wire_scene: PackedScene
 @export var wire_color: Color = Color(0.85, 0.15, 0.15):
@@ -10,13 +10,14 @@ extends WirePort
 
 var spawned_wire: Node2D = null
 var parent_module: BaseModule = null
+var pulse_time: float = 0.0
+var _is_hovered: bool = false
 
 var base_plate_style: StyleBoxFlat
 var inner_recess_style: StyleBoxFlat
 var collar_style: StyleBoxFlat
 
 func _ready() -> void:
-	super._ready()
 	var old_sprite: Sprite2D = get_node_or_null("Sprite2D") as Sprite2D
 	if old_sprite != null:
 		old_sprite.visible = false
@@ -28,6 +29,11 @@ func _ready() -> void:
 		add_to_group("wire_sources")
 		if get_parent() is BaseModule:
 			parent_module = get_parent() as BaseModule
+
+func _exit_tree() -> void:
+	if _is_hovered:
+		_is_hovered = false
+		WirePort.hover_count = maxi(0, WirePort.hover_count - 1)
 
 func _init_styles() -> void:
 	base_plate_style = StyleBoxFlat.new()
@@ -46,7 +52,43 @@ func _init_styles() -> void:
 	collar_style.set_border_width_all(1)
 	collar_style.set_corner_radius_all(1)
 
+func _process(delta: float) -> void:
+	pulse_time += delta
+	if not Engine.is_editor_hint():
+		_update_hover_state()
+	queue_redraw()
+
+func _update_hover_state() -> void:
+	var can_rot := WirePort.can_rotate_port(self)
+	var mouse_ close := false
+	if can_rot:
+		var local_m := to_local(get_global_mouse_position())
+		mouse_close = Rect2(-10, -14, 22, 28).has_point(local_m)
+
+	if mouse_close and not _is_hovered:
+		_is_hovered = true
+		WirePort.hover_count += 1
+	elif not mouse_close and _is_hovered:
+		_is_hovered = false
+		WirePort.hover_count = maxi(0, WirePort.hover_count - 1)
+
+func _input(event: InputEvent) -> void:
+	if Engine.is_editor_hint() or not _is_hovered:
+		return
+	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
+		if WirePort.can_rotate_port(self):
+			WirePort.rotate_port_around_module(self)
+			get_viewport().set_input_as_handled()
+			queue_redraw()
+
 func can_spawn_wire() -> bool:
+	if parent_module == null and get_parent() is BaseModule:
+		parent_module = get_parent() as BaseModule
+	if parent_module != null:
+		if parent_module.is_constructing or parent_module.is_broken:
+			return false
+		if parent_module.has_meta("is_ghost") and bool(parent_module.get_meta("is_ghost")):
+			return false
 	return spawned_wire == null or not is_instance_valid(spawned_wire)
 
 func spawn_wire() -> Node2D:
@@ -57,6 +99,8 @@ func spawn_wire() -> Node2D:
 	get_tree().current_scene.add_child(new_wire)
 	if new_wire.has_method("register_ignored_rid"):
 		new_wire.register_ignored_rid(get_rid())
+		if parent_module != null:
+			new_wire.register_ignored_rid(parent_module.get_rid())
 	new_wire.setup(global_position, wire_color, self)
 	spawned_wire = new_wire
 	queue_redraw()
@@ -68,6 +112,9 @@ func _draw() -> void:
 
 	var has_wire_active: bool = spawned_wire != null and is_instance_valid(spawned_wire)
 	var pulse: float = 0.75 + 0.25 * sin(pulse_time * 4.5)
+
+	if _is_hovered:
+		draw_rect(Rect2(-8, -12, 18, 24), Color(0.42, 1.0, 0.55, 0.35), false, 1.5)
 
 	draw_rect(Rect2(-5, -9, 12, 19), Color(0, 0, 0, 0.4))
 	draw_style_box(base_plate_style, Rect2(-6, -10, 12, 20))
@@ -90,5 +137,3 @@ func _draw() -> void:
 
 	var led_col: Color = wire_color.lightened(0.35) if not has_wire_active else Color(0.2, 1.0, 0.4)
 	draw_circle(Vector2(-2.2, 0.0), 1.1, led_col)
-
-	_draw_port_fx(16.0)

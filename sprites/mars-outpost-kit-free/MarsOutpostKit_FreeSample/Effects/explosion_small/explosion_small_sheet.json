@@ -1,0 +1,101 @@
+{
+ "frames": [
+  {
+   "filename": "explosion_small_play_0",
+   "frame": {
+    "x": 0,
+    "y": 0,
+    "w": 32,
+    "h": 32
+   },
+   "duration": 62
+  },
+  {
+   "filename": "explosion_small_play_1",
+   "frame": {
+    "x": 34,
+    "y": 0,
+    "w": 32,
+    "h": 32
+   },
+   "duration": 62
+  },
+  {
+   "filename": "explosion_small_play_2",
+   "frame": {
+    "x": 68,
+    "y": 0,
+    "w": 32,
+    "h": 32
+   },
+   "duration": 62
+  },
+  {
+   "filename": "explosion_small_play_3",
+   "frame": {
+    "x": 102,
+    "y": 0,
+    "w": 32,
+    "h": 32
+   },
+   "duration": 62
+  },
+  {
+   "filename": "explosion_small_play_4",
+   "frame": {
+    "x": 136,
+    "y": 0,
+    "w": 32,
+    "h": 32
+   },
+   "duration": 62
+  },
+  {
+   "filename": "explosion_small_play_5",
+   "frame": {
+    "x": 170,
+    "y": 0,
+    "w": 32,
+    "h": 32
+   },
+   "duration": 62
+  },
+  {
+   "filename": "explosion_small_play_6",
+   "frame": {
+    "x": 204,
+    "y": 0,
+    "w": 32,
+    "h": 32
+   },
+   "duration": 62
+  },
+  {
+   "filename": "explosion_small_play_7",
+   "frame": {
+    "x": 238,
+    "y": 0,
+    "w": 32,
+    "h": 32
+   },
+   "duration": 62
+  }
+ ],
+ "meta": {
+  "app": "GameShipKit",
+  "image": "explosion_small_sheet.png",
+  "size": {
+   "w": 270,
+   "h": 32
+  },
+  "scale": "1",
+  "frameTags": [
+   {
+    "name": "play",
+    "from": 0,
+    "to": 7,
+    "direction": "forward"
+   }
+  ]
+ }
+}

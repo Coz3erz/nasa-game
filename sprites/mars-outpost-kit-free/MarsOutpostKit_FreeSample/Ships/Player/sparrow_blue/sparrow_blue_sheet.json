@@ -1,0 +1,61 @@
+{
+ "frames": [
+  {
+   "filename": "sparrow_blue_thrust_0",
+   "frame": {
+    "x": 0,
+    "y": 0,
+    "w": 32,
+    "h": 40
+   },
+   "duration": 83
+  },
+  {
+   "filename": "sparrow_blue_thrust_1",
+   "frame": {
+    "x": 34,
+    "y": 0,
+    "w": 32,
+    "h": 40
+   },
+   "duration": 83
+  },
+  {
+   "filename": "sparrow_blue_thrust_2",
+   "frame": {
+    "x": 68,
+    "y": 0,
+    "w": 32,
+    "h": 40
+   },
+   "duration": 83
+  },
+  {
+   "filename": "sparrow_blue_thrust_3",
+   "frame": {
+    "x": 102,
+    "y": 0,
+    "w": 32,
+    "h": 40
+   },
+   "duration": 83
+  }
+ ],
+ "meta": {
+  "app": "GameShipKit",
+  "image": "sparrow_blue_sheet.png",
+  "size": {
+   "w": 134,
+   "h": 40
+  },
+  "scale": "1",
+  "frameTags": [
+   {
+    "name": "thrust",
+    "from": 0,
+    "to": 3,
+    "direction": "forward"
+   }
+  ]
+ }
+}

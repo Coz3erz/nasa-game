@@ -1,24 +1,15 @@
 extends Node
 
 var active_modules: Array = []
-var total_power: float = 100.0
+var total_power: float = 0.0
 var current_power_draw: float = 0.0
 var reactor_energy: float = 100.0
 var oxygen_level: float = 100.0
 var temp_level: float = 100.0
 
-# ---- pacing: everything here is deliberately slow and relaxed ----
-const REACTOR_DRAIN := 0.8      # reactor fuel burned per second at full load
-const SOLAR_CHARGE := 0.35      # fuel given back per second by each solar panel
-const O2_LOSS := 0.7
-const O2_GAIN := 2.0
-const TEMP_LOSS := 0.5
-const TEMP_GAIN := 1.5
-
-var failure_roll_interval: float = 18.0
-var failure_chance: float = 0.12
+var failure_roll_interval: float = 6.0
+var failure_chance: float = 0.18
 var _failure_timer: float = 0.0
-var _blackout := false
 
 func _process(delta: float) -> void:
 	if get_node_or_null("/root/GameManager") != null:
@@ -36,16 +27,32 @@ func calculate_power() -> void:
 	current_power_draw = 0.0
 	total_power = 0.0
 
+	# Pass 1: Solar Panels are self-powered once built
 	for mod in active_modules:
-		if mod.module_name == "Reactor" and not mod.is_broken and reactor_energy > 0.0:
-			total_power += 100.0
+		if mod.module_name == "Solar Panel":
+			mod.is_powered = not mod.is_broken and not mod.is_constructing
 
+	# Pass 2: Reactor is ONLY powered if a Solar Panel is wired into it
 	for mod in active_modules:
 		if mod.module_name == "Reactor":
-			mod.is_powered = reactor_energy > 0.0
+			if not mod.is_broken and not mod.is_constructing and mod.is_fed_by_solar() and reactor_energy > 0.0:
+				mod.is_powered = true
+				total_power += 100.0
+			else:
+				mod.is_powered = false
+
+	# Pass 3: Modules powered directly by Solar (free + failure-immune) or by an active Reactor
+	for mod in active_modules:
+		if mod.module_name == "Solar Panel" or mod.module_name == "Reactor":
 			continue
 
-		if mod.has_valid_power_source() and (current_power_draw + mod.power_draw <= total_power):
+		if mod.is_broken or mod.is_constructing:
+			mod.is_powered = false
+			continue
+
+		if mod.is_fed_by_solar():
+			mod.is_powered = true
+		elif mod.is_fed_by_reactor() and (current_power_draw + mod.power_draw <= total_power):
 			mod.is_powered = true
 			current_power_draw += mod.power_draw
 		else:
@@ -54,33 +61,18 @@ func calculate_power() -> void:
 	if get_node_or_null("/root/EventBus") != null:
 		EventBus.power_changed.emit(current_power_draw, total_power)
 
-func _solar_inputs() -> int:
-	var n := 0
-	for mod in active_modules:
-		if is_instance_valid(mod) and mod.module_name == "Reactor" and not mod.is_broken and mod.has_method("solar_count"):
-			n += mod.solar_count()
-	return n
-
 func _tick_power_and_systems(delta: float) -> void:
-	if current_power_draw > 0.0 and reactor_energy > 0.0:
-		var drain_rate: float = (current_power_draw / 100.0) * REACTOR_DRAIN
+	if current_power_draw > 0.0 and total_power > 0.0 and reactor_energy > 0.0:
+		var drain_rate: float = (current_power_draw / 100.0) * 1.2
 		reactor_energy = maxf(0.0, reactor_energy - drain_rate * delta)
 		if reactor_energy <= 0.0:
-			_blackout = true
-			calculate_power()
-
-	var solar := _solar_inputs()
-	if solar > 0:
-		reactor_energy = minf(100.0, reactor_energy + solar * SOLAR_CHARGE * delta)
-		if _blackout and reactor_energy >= 5.0:
-			_blackout = false
 			calculate_power()
 
 	var life_support_active: bool = false
 	var thermal_active: bool = false
 
 	for mod in active_modules:
-		if not is_instance_valid(mod) or mod.is_broken or not mod.is_powered:
+		if not is_instance_valid(mod) or mod.is_broken or mod.is_constructing or not mod.is_powered:
 			continue
 		if mod.module_name == "Life Support":
 			life_support_active = true
@@ -88,19 +80,19 @@ func _tick_power_and_systems(delta: float) -> void:
 			thermal_active = true
 
 	if life_support_active:
-		oxygen_level = minf(100.0, oxygen_level + O2_GAIN * delta)
+		oxygen_level = minf(100.0, oxygen_level + 3.5 * delta)
 	else:
-		oxygen_level = maxf(0.0, oxygen_level - O2_LOSS * delta)
+		oxygen_level = maxf(0.0, oxygen_level - 2.2 * delta)
 
 	if thermal_active:
-		temp_level = minf(100.0, temp_level + TEMP_GAIN * delta)
+		temp_level = minf(100.0, temp_level + 3.0 * delta)
 	else:
-		temp_level = maxf(0.0, temp_level - TEMP_LOSS * delta)
+		temp_level = maxf(0.0, temp_level - 1.8 * delta)
 
 	if oxygen_level <= 0.0 and get_node_or_null("/root/EventBus") != null:
-		EventBus.game_over.emit("We ran out of air!")
+		EventBus.game_over.emit("OXYGEN DEPLETED")
 	elif temp_level <= 0.0 and get_node_or_null("/root/EventBus") != null:
-		EventBus.game_over.emit("It got too cold!")
+		EventBus.game_over.emit("HYPOTHERMIA - THERMAL FAILURE")
 
 func _tick_failure_dice(delta: float) -> void:
 	_failure_timer += delta
@@ -110,8 +102,13 @@ func _tick_failure_dice(delta: float) -> void:
 
 	var candidates: Array[BaseModule] = []
 	for mod in active_modules:
-		if is_instance_valid(mod) and mod.module_name != "Reactor" and not mod.is_broken and mod.is_powered:
-			candidates.append(mod)
+		if not is_instance_valid(mod):
+			continue
+		if mod.is_broken or mod.is_constructing or not mod.is_powered:
+			continue
+		if mod.has_failure_immunity():
+			continue
+		candidates.append(mod)
 
 	if candidates.is_empty():
 		return
