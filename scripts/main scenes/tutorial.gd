@@ -23,7 +23,7 @@ const shop_top := Rect2(0.50, 0.04, 0.48, 0.10)
 const shop_list := Rect2(0.02, 0.14, 0.39, 0.72)
 const shop_info := Rect2(0.42, 0.14, 0.56, 0.72)
 const shop_buttons := Rect2(0.0, 0.86, 0.5, 0.2)
-const hud_area := Rect2(0.05, 0.05, 0.30, 0.30)
+const hud_area := Rect2(0.025, 0.045, 0.27, 0.25)
 
 const GAME_SCENE := "res://scenes/main scenes/game.tscn"
 const GameScript := preload("res://scripts/main scenes/game.gd")

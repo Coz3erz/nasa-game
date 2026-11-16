@@ -774,7 +774,6 @@ func _setup_hud() -> void:
 	_add_bar(body, "AIR   ", "o2", C_CYAN)
 	_add_bar(body, "WARMTH", "temp", Color(1.0, 0.55, 0.25))
 	_add_bar(body, "HEALTH", "hp", Color(1.0, 0.4, 0.45))
-	_add_bar(body, "POWER ", "core", C_GREEN)
 	_add_bar(body, "LOAD  ", "load", C_AMBER)
 	tog.pressed.connect(func() -> void:
 		body.visible = not body.visible
@@ -840,7 +839,6 @@ func _update_hud(delta: float) -> void:
 		"o2": BaseManager.oxygen_level,
 		"temp": BaseManager.temp_level,
 		"hp": BaseManager.health,
-		"core": BaseManager.reactor_energy,
 		"load": clampf(BaseManager.current_power_draw / maxf(BaseManager.total_power, 1.0) * 100.0, 0.0, 100.0)}
 	for k in vals.keys():
 		var d: Dictionary = _bars[k]
