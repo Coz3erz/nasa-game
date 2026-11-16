@@ -665,13 +665,6 @@ func _build_gameplay_page() -> void:
 	})
 	entries.append({"text": _bool_text("Particles", _get_setting("particles", true)), "action": "toggle", "param": "particles"})
 	entries.append({"text": _bool_text("Baseline Optimizations", _get_setting("baseline_optimizations", true)), "action": "toggle", "param": "baseline_optimizations"})
-	entries.append({"text": "Detail modes keep your chosen Max FPS.", "action": "info"})
-	entries.append({"text": "Normal: full quality. Light: mobile tier on all devices.", "action": "info"})
-	entries.append({"text": "Low Detail / Ultra: heavier cuts, still playable.", "action": "info"})
-	if _mobile_layout:
-		entries.append({"text": "TOUCH PLAY - ready automatically", "action": "info"})
-		entries.append({"text": "Left side: walk. Build mode: aim on the right.", "action": "info"})
-		entries.append({"text": "Use the on-screen Use, Build and Next buttons.", "action": "info"})
 	scroll_offset = 0
 	_update_scroll_range()
 	queue_redraw()
@@ -722,7 +715,6 @@ func _build_controls_page() -> void:
 	current_page = "controls"
 	entries.clear()
 	entries.append({"text": "Show: " + controls_device + "  [change]", "action": "control_device"})
-	entries.append({"text": "Select an action to change its button.", "action": "info"})
 	for action in _get_custom_actions():
 		entries.append({"text": "%s: %s" % [CONTROL_NAMES.get(action, action), _get_action_bindings_display(action)], "action": "rebind", "param": action})
 	entries.append({"text": "Restore default controls", "action": "reset_keys_confirm"})

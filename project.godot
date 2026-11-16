@@ -16,7 +16,7 @@ run/main_scene="res://scenes/main scenes/main_menu.tscn"
 config/features=PackedStringArray("4.6", "GL Compatibility")
 boot_splash/bg_color=Color(0, 0, 0, 1)
 boot_splash/image="uid://7dl70lfjlwjc"
-config/icon="uid://o5q4o7ocx6td"
+config/icon="uid://dubogkhh42qsv"
 
 [autoload]
 
@@ -33,6 +33,7 @@ GameAudio="*res://scripts/autoloads/GameAudio.gd"
 PauseMenu="*res://scripts/autoloads/PauseMenu.gd"
 MarsWeather="*res://scripts/autoloads/MarsWeather.gd"
 Hazards="*res://scripts/autoloads/Hazards.gd"
+Fps="*uid://bmhoejrqsenkx"
 
 [display]
 

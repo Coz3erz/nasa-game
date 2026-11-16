@@ -1,5 +1,5 @@
-# CHANGELOG (2026-11-16): Cargo bounce rework. Higher arc, calibrated flight time,
-# forward overshoot, 2 big bounces with horizontal momentum, short ground slide.
+# CHANGELOG (2026-11-16): 7 days; shop item limits (MAX label, Solar Panel 2, Med Kit 5); web builds render at a fixed viewport size and use cheap shaders / fewer wind particles.
+# Previous: Cargo bounce rework. Higher arc, calibrated flight time, forward overshoot, 2 big bounces with horizontal momentum, short ground slide.
 extends Node2D
 
 @export_group("Music & Audio")
@@ -19,7 +19,7 @@ extends Node2D
 
 @export_group("Days")
 @export_file("*.tscn") var win_scene: String = ""
-@export var total_days: int = 5
+@export var total_days: int = 7
 @export var day_length: float = 240.0
 @export var debug_mode: bool = false
 
@@ -693,7 +693,8 @@ void fragment() {
 
 	func _apply_quality() -> void:
 		if is_instance_valid(glow_layer):
-			glow_layer.visible = not GameSettings.reduced_detail() and not GameSettings.mobile_quality()
+			# Web builds skip the full-screen starfield shader entirely.
+			glow_layer.visible = not GameSettings.reduced_detail() and not GameSettings.mobile_quality() and not OS.has_feature("web")
 		queue_redraw()
 
 	func _compute_float(phase: float) -> Vector2:
@@ -752,7 +753,8 @@ void fragment() {
 			var display_name: String = _get_display_name(item)
 			var qty: int = GameManager.get_item_count(item_id)
 			var is_sel: bool = (not focus_on_bottom and i == selected_index)
-			var can_afford: bool = GameManager.mass_budget >= float(item["mass"])
+			var at_max: bool = GameManager.at_max(item_id)
+			var can_afford: bool = GameManager.mass_budget >= float(item["mass"]) and not at_max
 			var f_off := _compute_float(float(i + 1) * float_phase_offset)
 
 			var card_rect := Rect2(Vector2(left_x, card_y) + f_off, Vector2(left_w, row_height))
@@ -782,6 +784,11 @@ void fragment() {
 			var qty_center_x := (minus_rect.end.x + plus_rect.position.x) * 0.5
 			var qty_col := soft_amber if qty > 0 else muted_text
 			draw_string(font, Vector2(qty_center_x - qty_w * 0.5, text_y), qty_str, HORIZONTAL_ALIGNMENT_LEFT, -1, body_size, qty_col)
+
+			if at_max:
+				var max_size := int(body_size * 0.6)
+				var max_w := font.get_string_size("MAX", HORIZONTAL_ALIGNMENT_LEFT, -1, max_size).x
+				draw_string(font, Vector2(qty_center_x - max_w * 0.5, text_y + 16.0), "MAX", HORIZONTAL_ALIGNMENT_LEFT, -1, max_size, soft_mint)
 
 			if is_sel:
 				glow_positions.append(card_rect.get_center())
@@ -1032,7 +1039,9 @@ void fragment() {
 		var cost: float = float(item["mass"])
 		var id: String = item["id"]
 		if dir > 0:
-			if GameManager.mass_budget >= cost:
+			if GameManager.at_max(id):
+				_beep(0.6)
+			elif GameManager.mass_budget >= cost:
 				GameManager.mass_budget -= cost
 				GameManager.add_to_inventory(id)
 				_beep(1.35)
@@ -1101,7 +1110,9 @@ class MarsWindRenderer extends Node2D:
 	func setup(area_bounds: Rect2) -> void:
 		bounds = area_bounds
 		z_index = 40
-		var count := (60 if GameSettings.mobile_quality() else 260) if GameSettings.particles_enabled() else 0
+		# Web builds use the low particle count (CPU-drawn particles are slow in WASM).
+		var low := GameSettings.mobile_quality() or OS.has_feature("web")
+		var count := (60 if low else 260) if GameSettings.particles_enabled() else 0
 		if count == _quality_count:
 			return
 		_quality_count = count
@@ -1172,6 +1183,10 @@ func _apply_transition_sfx() -> void:
 
 func _ready() -> void:
 	GameAudio.set_menu_music(false)
+	# Web: render at the fixed base viewport size and scale up. Full-screen pixel shaders
+	# are the main cost in browsers, and this keeps the pixel count constant.
+	if OS.has_feature("web"):
+		get_window().content_scale_mode = Window.CONTENT_SCALE_MODE_VIEWPORT
 	GameManager.total_days = total_days
 	GameManager.day_length = day_length
 	day_loop = DayLoop.new()
@@ -1210,6 +1225,7 @@ func _setup_background_music() -> void:
 			(st as AudioStreamWAV).loop_mode = AudioStreamWAV.LOOP_FORWARD
 		music_player.stream = st
 	else:
+		# Fallback is slow to generate (esp. on web). Assign background_music in the Inspector to skip it.
 		music_player.stream = _generate_space_music_loop_wav()
 
 	music_player.finished.connect(func():

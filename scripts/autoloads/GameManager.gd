@@ -1,11 +1,15 @@
+# CHANGELOG (2026-11-16): 7 days; mass budget stops growing after day 5; per-request item limits (Solar Panel 2, Med Kit 5); Comms warning text now 8s.
 extends Node
 
 enum Phase { INTRO, BUILD, ROVER, SURVIVE, DEBRIEF }
 var current_phase: Phase = Phase.BUILD
 var current_sol: int = 1
 var mass_budget: float = 2400.0
-var total_days: int = 5
+var total_days: int = 7
 var day_length: float = 240.0
+
+## The mass budget grows by 600 kg per day up to this day, then stays flat.
+const RESOURCE_CAP_DAY := 5
 
 signal day_failed(reason: String)
 
@@ -33,8 +37,9 @@ var catalog: Array[Dictionary] = [
 		"title": "SOLAR ARRAY",
 		"mass": 350.0,
 		"power": 0.0,
+		"max": 2,
 		"scene_path": "res://scenes/modules/solar_panel.tscn",
-		"desc": "WHAT IT DOES:\nTurns sunlight into power. Each panel you plug into the reactor doubles what it gives you: 50 kilowatts, then 100, then 200. Plug a panel straight into a machine and that machine can never fail.\n\nWHY IT MATTERS:\nMars is about 1.5 times farther from the Sun than Earth, so sunlight here is less than half as strong. Dust storms can cover panels and cut their output badly.",
+		"desc": "WHAT IT DOES:\nTurns sunlight into power. Each panel you plug into the reactor doubles what it gives you: 50 kilowatts, then 100. You can bring up to 2 panels. Plug a panel straight into a machine and that machine can never fail.\n\nWHY IT MATTERS:\nMars is about 1.5 times farther from the Sun than Earth, so sunlight here is less than half as strong. Dust storms can cover panels and cut their output badly.",
 		"color": Color(1.0, 0.8, 0.25)
 	},
 	{
@@ -70,7 +75,7 @@ var catalog: Array[Dictionary] = [
 		"mass": 450.0,
 		"power": 15.0,
 		"scene_path": "res://scenes/modules/comms.tscn",
-		"desc": "WHAT IT DOES:\nPicks up a warning 15 seconds before a solar flare hits, which gives you time to unplug your machines. Uses 15 kilowatts. It will not warn you about dust storms.\n\nWHY IT MATTERS:\nA message between Mars and Earth takes 3 to 22 minutes each way, so crews on Mars have to handle emergencies themselves.",
+		"desc": "WHAT IT DOES:\nPicks up a warning 8 seconds before a solar flare hits, which gives you time to unplug your machines. Uses 15 kilowatts. It will not warn you about dust storms.\n\nWHY IT MATTERS:\nA message between Mars and Earth takes 3 to 22 minutes each way, so crews on Mars have to handle emergencies themselves.",
 		"color": Color(0.45, 1.0, 0.6)
 	},
 	{
@@ -78,9 +83,10 @@ var catalog: Array[Dictionary] = [
 		"title": "MED KIT",
 		"mass": 150.0,
 		"power": 0.0,
+		"max": 5,
 		"scene_path": "",
 		"consumable": true,
-		"desc": "WHAT IT DOES:\nRestores 45 health. Use {use_medkit} to use one once the rover has left. Weighs almost nothing.\n\nWHY IT MATTERS:\nThe nearest hospital is millions of kilometers away, so every astronaut is trained in first aid.",
+		"desc": "WHAT IT DOES:\nRestores 45 health. Use {use_medkit} to use one once the rover has left. Weighs almost nothing. You can bring up to 5.\n\nWHY IT MATTERS:\nThe nearest hospital is millions of kilometers away, so every astronaut is trained in first aid.",
 		"color": Color(1.0, 0.45, 0.5)
 	}
 ]
@@ -96,6 +102,16 @@ func remove_from_inventory(item_id: String) -> bool:
 
 func get_item_count(item_id: String) -> int:
 	return inventory.get(item_id, 0)
+
+## Per-request purchase limit for an item (999 = effectively unlimited).
+func max_for(item_id: String) -> int:
+	for it in catalog:
+		if it["id"] == item_id:
+			return int(it.get("max", 999))
+	return 999
+
+func at_max(item_id: String) -> bool:
+	return get_item_count(item_id) >= max_for(item_id)
 
 func stage_for_rover_drop() -> bool:
 	var has_any := false
@@ -113,7 +129,7 @@ func deliver_pending_supplies() -> void:
 		pending_delivery[k] = 0
 
 func budget_for_day(day: int) -> float:
-	return 2400.0 + 600.0 * float(day - 1)
+	return 2400.0 + 600.0 * float(mini(day, RESOURCE_CAP_DAY) - 1)
 
 func begin_day() -> void:
 	for k in inventory.keys():

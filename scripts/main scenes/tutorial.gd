@@ -246,7 +246,7 @@ func _chapter_story() -> void:
 	await _say("You survived the landing, and this base took less damage than we feared. It still needs a lot of work.", true)
 	if _cancelled:
 		return
-	await _say("Rescue is five days out. Your job is to keep this base alive until then. Power, air, and heat.", true)
+	await _say("Rescue is seven days out. Your job is to keep this base alive until then. Power, air, and heat.", true)
 	if _cancelled:
 		return
 	await _say("I'm on Mars too, so there's no delay on this channel. Earth is different. A message to them takes between three and twenty-two minutes each way, so out here we solve our own problems.", true)
@@ -422,7 +422,7 @@ func _chapter_solar() -> void:
 	await _say("So one panel runs the Oxygen Maker and the heater, and that's all 50. Nothing left over.", true)
 	if _cancelled:
 		return
-	await _say("But panels stack, and they stack fast. Two panels give 100 kilowatts. Three give 200.", true)
+	await _say("But panels stack, and they stack fast. Add a second one and the reactor doubles its output to 100 kilowatts.", true)
 	if _cancelled:
 		return
 	_give("Solar Panel", 1)
@@ -441,9 +441,6 @@ func _chapter_solar() -> void:
 		return
 	_objective("")
 	await _say("That's 100 kilowatts now, double what you had. A second panel is almost always worth its weight.", true, reactor, reactor)
-	if _cancelled:
-		return
-	await _say("The reactor also keeps a reserve. The more power your equipment draws, the faster it drains. If it runs empty, everything shuts off, so don't run more than you need.", true)
 	if _cancelled:
 		return
 
@@ -527,10 +524,10 @@ func _chapter_flare() -> void:
 	await _say("The second is cheaper. Unplug your machines before the flare arrives. Equipment that's not connected to power can't be damaged by the surge.", true)
 	if _cancelled:
 		return
-	await _say("How do you know a flare is coming? That's what the comms dish is for. While it's powered, it picks up a warning 15 seconds before impact.", true)
+	await _say("How do you know a flare is coming? That's what the comms dish is for. While it's powered, it picks up a warning 8 seconds before impact.", true)
 	if _cancelled:
 		return
-	await _say("Fifteen seconds isn't long. How well it works depends on where you're standing, how fast you move, and some luck.", true)
+	await _say("Eight seconds isn't long. How well it works depends on where you're standing, how fast you move, and some luck.", true)
 	if _cancelled:
 		return
 	await _say("Here's what a flare looks like.", false)
@@ -552,7 +549,7 @@ func _chapter_finish() -> void:
 	await _say("That's the essentials. Panels first, and stack them. Keep air and warmth running. Repair fast. Plan for hazards before the rover leaves.", true)
 	if _cancelled:
 		return
-	await _say("Five days. I'll be on this channel the whole time. Good luck out there.", true)
+	await _say("Seven days. I'll be on this channel the whole time. Good luck out there.", true)
 	if _cancelled:
 		return
 	_done = true

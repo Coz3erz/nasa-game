@@ -1,9 +1,9 @@
-# CHANGELOG (2026-11-15): Day-one storms; sever every cable without hidden immunity; reuse cutscene gas shader and exported flare audio; storm penalty lasts until storm end.
+# CHANGELOG (2026-11-16): Comms warning 8s; dust storms 65% of hazards; flare breaks go through BaseManager.break_module_with_fx; web builds use the cheap shader paths.
 extends Node
 ## AUTOLOAD (name it Hazards, put it LAST in the autoload list).
 ## Runs the two Mars hazards during the SURVIVE phase and reads BaseManager for shield / comms / power.
 ##
-## SOLAR FLARE : Comms (powered) warns 15 s ahead. On impact: a powered Storm Shield blocks everything.
+## SOLAR FLARE : Comms (powered) warns 8 s ahead. On impact: a powered Storm Shield blocks everything.
 ##               Without it: 15 damage, and every RUNNING module fails. Unplugged modules are safe.
 ## DUST STORM  : cannot be avoided. Every cable disconnects, solar output x0.5 for the storm, 25 damage.
 ## Modules wired DIRECTLY to a solar panel are immune to both (BaseModule.has_failure_immunity()).
@@ -13,7 +13,7 @@ extends Node
 
 signal demo_finished
 
-const FLARE_WARNING_SECONDS := 15.0
+const FLARE_WARNING_SECONDS := 8.0
 const FLARE_DAMAGE := 15.0
 const STORM_DAMAGE := 25.0
 const STORM_SOLAR_FACTOR := 0.5
@@ -21,7 +21,7 @@ const STORM_SECONDS := 30.0
 const FLARE_RISE_SECONDS := 1.75
 const FLARE_FX_SECONDS := 5.25
 const STORM_FROM_DAY := 1            # all hazards can occur from day one
-const STORM_CHANCE := 0.45
+const STORM_CHANCE := 0.65           # storms are now the more common hazard
 const SHIELD := "Shield"
 const COMMS := "Comms"
 
@@ -116,7 +116,7 @@ func _start_flare() -> void:
 		_state = S.WARNING
 		_warn_left = FLARE_WARNING_SECONDS
 		_fx.show_warning(true)
-		_fx.toast("Comms picked up a solar flare. Impact in 15 seconds. Unplug your equipment.", AMBER)
+		_fx.toast("Comms picked up a solar flare. Impact in %d seconds. Unplug your equipment." % int(FLARE_WARNING_SECONDS), AMBER)
 	else:
 		_flare_hit()
 
@@ -194,7 +194,7 @@ func _break_modules(only_running: bool) -> int:
 			continue
 		if m.has_failure_immunity():
 			continue
-		m.break_module()
+		BaseManager.break_module_with_fx(m)
 		count += 1
 	return count
 
@@ -400,7 +400,8 @@ void fragment(){
 		_apply_quality()
 
 	func _apply_quality() -> void:
-		var cheap := GameSettings.reduced_detail() or GameSettings.mobile_quality()
+		# Web builds always use the cheap shader paths (full-screen fbm is too heavy for WebGL2 on most laptops).
+		var cheap := GameSettings.reduced_detail() or GameSettings.mobile_quality() or OS.has_feature("web")
 		(storm.material as ShaderMaterial).set_shader_parameter("cheap_quality", cheap)
 		(flare.material as ShaderMaterial).set_shader_parameter("cheap_quality", cheap)
 		(corona.material as ShaderMaterial).set_shader_parameter("flat_quality", GameSettings.ultra_enabled())
@@ -506,7 +507,7 @@ void fragment(){
 		warn_label.text = "SOLAR FLARE IN %d" % s
 		if s != _last_beep:
 			_last_beep = s
-			beep.pitch_scale = 1.0 + (15 - s) * 0.03
+			beep.pitch_scale = 1.0 + (8 - s) * 0.05
 			beep.play()
 
 	func hurt_flash() -> void:

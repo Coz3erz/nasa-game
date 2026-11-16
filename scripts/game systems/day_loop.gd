@@ -7,6 +7,8 @@ const TAGLINES := [
 	"Build the base and get the power on.",
 	"Machines fail more often today.",
 	"Conditions are worsening. Hazards strike more often.",
+	"Halfway there. Don't let anything slip.",
+	"Hazards hit harder now. Stay sharp.",
 	"Almost there. Keep everything running.",
 	"Last day. Hold on until the rescue team lands."
 ]

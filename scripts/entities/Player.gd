@@ -1,4 +1,5 @@
-# CHANGELOG (2026-11-16): Rotate indicators removed from build hint panel + hint rows.
+# CHANGELOG (2026-11-16): Build-mode stutter fix. Scenes are cached and preloaded on a thread, and one hidden ghost per module is pooled instead of instantiating/freeing it every time build mode opens.
+# Previous: Rotate indicators removed from build hint panel + hint rows.
 # Rotate functions + input handler kept (rotate_port action still triggers _rotate_aimed_port).
 extends CharacterBody2D
 
@@ -106,6 +107,11 @@ var _outside_area: Area2D
 var _outside_checked := false
 var _panel_bad: StyleBoxFlat
 
+# Build-mode stutter fix: cached scenes + pooled hidden ghosts.
+var _scene_cache: Dictionary = {}   # scene_path -> PackedScene
+var _ghost_pool: Dictionary = {}    # item id -> {node, half, center_off, shape}
+var _prewarm_timer := 0.0
+
 func _ready() -> void:
 	add_to_group("player")
 	visible = false
@@ -133,8 +139,7 @@ func _invalidate_scene_cache() -> void:
 	_outside_checked = false
 
 func _exit_tree() -> void:
-	if is_instance_valid(ghost_module):
-		ghost_module.queue_free()
+	_free_ghost_pool()
 	if is_instance_valid(_hud):
 		_hud.queue_free()
 
@@ -160,6 +165,7 @@ func enable_player() -> void:
 	_pop(-0.3)
 	Fx.burst(get_parent(), global_position, Color(0.5, 1.4, 1.8, 0.9), 26, 60.0, 180.0, 0.7, 0.04, 0.1, true)
 	Ring.spawn(get_parent(), global_position, Color(0.4, 1.3, 1.6), 90.0, 0.55)
+	_prewarm_build_assets()
 
 func set_input_locked(locked: bool) -> void:
 	input_locked = locked
@@ -316,6 +322,12 @@ func _process(delta: float) -> void:
 	_update_hints()
 	if is_build_mode:
 		_update_hud_text()
+	elif is_active and not input_locked:
+		# Quietly warm up build assets (one ghost per tick) so pressing build never hitches.
+		_prewarm_timer -= delta
+		if _prewarm_timer <= 0.0:
+			_prewarm_timer = 0.5
+			_prewarm_build_assets()
 
 func _update_facing() -> void:
 	for i in range(held_dirs.size() - 1, -1, -1):
@@ -457,7 +469,7 @@ func _unhandled_input(event: InputEvent) -> void:
 			elif event.button_index == MOUSE_BUTTON_LEFT and WirePort.hover_count == 0:
 				_attempt_place()
 
-# rotate function kept â€” called by rotate_port action and gamepad X
+# rotate function kept - called by rotate_port action and gamepad X
 func _rotate_aimed_port() -> void:
 	var target: Node2D = null
 	var distance := 90.0
@@ -499,6 +511,24 @@ func _exit_build_mode() -> void:
 	_pop(0.06)
 	queue_redraw()
 
+# ---------------------------------------------------------------- scene cache + ghost pool
+## Returns the PackedScene for a path. Uses the cache, then a finished threaded load, then a blocking load as a last resort.
+func _get_scene(path: String) -> PackedScene:
+	if _scene_cache.has(path):
+		return _scene_cache[path]
+	var status := ResourceLoader.load_threaded_get_status(path)
+	var res: Resource = null
+	if status == ResourceLoader.THREAD_LOAD_LOADED:
+		res = ResourceLoader.load_threaded_get(path)
+	elif status == ResourceLoader.THREAD_LOAD_IN_PROGRESS:
+		return null # not ready yet, a later refresh/prewarm picks it up
+	else:
+		res = load(path)
+	if res is PackedScene:
+		_scene_cache[path] = res
+		return res
+	return null
+
 func _refresh_build_options() -> void:
 	var prev_id := ""
 	if selected_module_index < build_options.size():
@@ -508,11 +538,32 @@ func _refresh_build_options() -> void:
 	for item_data in GameManager.catalog:
 		var item_id = item_data["id"]
 		if GameManager.get_item_count(item_id) > 0:
-			var scene = null if not item_data.has("scene_path") or str(item_data["scene_path"]) == "" else load(item_data["scene_path"])
+			var path := str(item_data.get("scene_path", ""))
+			if path == "":
+				continue
+			var scene := _get_scene(path)
 			if scene != null:
 				build_options.append({"id": item_id, "scene": scene})
 				if item_id == prev_id:
 					selected_module_index = build_options.size() - 1
+
+## Kicks off background loads for every buildable scene, and builds at most ONE pooled ghost per call.
+func _prewarm_build_assets() -> void:
+	for item_data in GameManager.catalog:
+		var path := str(item_data.get("scene_path", ""))
+		if path != "" and not _scene_cache.has(path):
+			ResourceLoader.load_threaded_request(path)
+	for item_data in GameManager.catalog:
+		var id: String = item_data["id"]
+		var path := str(item_data.get("scene_path", ""))
+		if path == "" or GameManager.get_item_count(id) <= 0:
+			continue
+		if _ghost_pool.has(id) and is_instance_valid(_ghost_pool[id]["node"]):
+			continue
+		var scene := _get_scene(path)
+		if scene != null:
+			_get_pooled_ghost(id, scene)
+			return
 
 func _cycle_ghost(dir: int) -> void:
 	if build_options.size() < 2:
@@ -522,42 +573,68 @@ func _cycle_ghost(dir: int) -> void:
 	_pop(0.06)
 
 func _clear_ghost() -> void:
+	# Hide instead of free: the ghost stays pooled for the next time build mode opens.
 	if is_instance_valid(ghost_module):
-		ghost_module.queue_free()
+		ghost_module.visible = false
 	ghost_module = null
 	_ghost_test_shape = null
+
+func _free_ghost_pool() -> void:
+	for id in _ghost_pool:
+		var n = _ghost_pool[id]["node"]
+		if is_instance_valid(n):
+			n.queue_free()
+	_ghost_pool.clear()
+
+func _get_pooled_ghost(id: String, scene: PackedScene) -> Dictionary:
+	if _ghost_pool.has(id):
+		var e: Dictionary = _ghost_pool[id]
+		if is_instance_valid(e["node"]) and e["node"].get_parent() == get_parent():
+			return e
+		_ghost_pool.erase(id)
+	var g = scene.instantiate()
+	g.set_meta("is_ghost", true)
+	g.set("is_constructing", true)
+	g.process_mode = Node.PROCESS_MODE_DISABLED
+	g.z_index = 20
+	g.visible = false
+	get_parent().add_child(g)
+	# A pooled ghost lives for a long time, so make sure it never shows up as a real module.
+	BaseManager.active_modules.erase(g)
+	_neutralize_ghost(g)
+	var half := Vector2(64, 64)
+	var off := Vector2.ZERO
+	var shape: Shape2D = null
+	var col := g.get_node_or_null("CollisionShape2D") as CollisionShape2D
+	if col != null and col.shape != null:
+		off = col.position
+		if col.shape is RectangleShape2D:
+			var sz: Vector2 = (col.shape as RectangleShape2D).size
+			half = sz * 0.5
+			var ts := RectangleShape2D.new()
+			ts.size = sz - Vector2(6, 6)
+			shape = ts
+		else:
+			shape = col.shape
+			half = Vector2(48, 48)
+	var entry := {"node": g, "half": half, "center_off": off, "shape": shape}
+	_ghost_pool[id] = entry
+	return entry
 
 func _spawn_ghost() -> void:
 	_clear_ghost()
 	if build_options.is_empty():
 		return
 	var option: Dictionary = build_options[selected_module_index]
-	var g = option["scene"].instantiate()
-	g.set_meta("is_ghost", true)
-	g.set("is_constructing", true)
-	g.process_mode = Node.PROCESS_MODE_DISABLED
-	g.z_index = 20
-	get_parent().add_child(g)
-	_neutralize_ghost(g)
-	ghost_module = g
-	_ghost_half = Vector2(64, 64)
-	_ghost_center_off = Vector2.ZERO
-	_ghost_test_shape = null
-	var col := g.get_node_or_null("CollisionShape2D") as CollisionShape2D
-	if col != null and col.shape != null:
-		_ghost_center_off = col.position
-		if col.shape is RectangleShape2D:
-			var sz: Vector2 = (col.shape as RectangleShape2D).size
-			_ghost_half = sz * 0.5
-			var ts := RectangleShape2D.new()
-			ts.size = sz - Vector2(6, 6)
-			_ghost_test_shape = ts
-		else:
-			_ghost_test_shape = col.shape
-			_ghost_half = Vector2(48, 48)
+	var e := _get_pooled_ghost(option["id"], option["scene"])
+	ghost_module = e["node"]
+	_ghost_half = e["half"]
+	_ghost_center_off = e["center_off"]
+	_ghost_test_shape = e["shape"]
 	_ghost_zone = _ghost_half.length() + BaseModule.ZONE_PAD
+	ghost_module.visible = true
 	_update_build_ghost(0.0, true)
-	g.modulate.a = 0.0
+	ghost_module.modulate.a = 0.0
 	_hud_key = ""
 
 func _neutralize_ghost(n: Node) -> void:
@@ -1061,7 +1138,7 @@ func _compute_hint_rows() -> Array:
 		rows.append([InputSupport.label("interact"), "Place it"])
 		if build_options.size() > 1:
 			rows.append([InputSupport.label("cycle_module"), "Pick another"])
-		# rotate_port row removed â€” rotate is no longer advertised
+		# rotate_port row removed - rotate is no longer advertised
 		rows.append([InputSupport.label("build_mode"), "Stop building"])
 		return rows
 	rows.append([InputSupport.movement_label(), "Walk"])

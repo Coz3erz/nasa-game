@@ -162,8 +162,7 @@ func _layout(size: Vector2) -> void:
 
 	_buttons = {
 		"interact":     Rect2(right - big, bottom - big, big, big),
-		"rotate_port":  Rect2(right - big, bottom - big - gap - sm, big, sm),
-		"use_medkit":   Rect2(right - big, bottom - big - gap - sm - gap - sm, big, sm),
+		"use_medkit":   Rect2(right - big, bottom - big - gap - sm, big, sm),
 		"build_mode":   Rect2(right - big - gap - sm, bottom - sm, sm, sm),
 		"cycle_module": Rect2(right - big - gap - sm, bottom - sm * 2.0 - gap, sm, sm),
 		"pause_game":   Rect2(right - 78.0 * _u, size.y * 0.18, 78.0 * _u, 68.0 * _u)
