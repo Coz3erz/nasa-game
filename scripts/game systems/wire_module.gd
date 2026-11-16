@@ -14,6 +14,7 @@ var parent_module: BaseModule = null
 var pulse_time: float = 0.0
 var _is_hovered: bool = false
 
+var shadow_style: StyleBoxFlat
 var base_plate_style: StyleBoxFlat
 var inner_recess_style: StyleBoxFlat
 var collar_style: StyleBoxFlat
@@ -37,6 +38,10 @@ func _exit_tree() -> void:
 		WirePort.hover_count = maxi(0, WirePort.hover_count - 1)
 
 func _init_styles() -> void:
+	shadow_style = StyleBoxFlat.new()
+	shadow_style.bg_color = Color(0, 0, 0, 0.4)
+	shadow_style.set_corner_radius_all(3)
+
 	base_plate_style = StyleBoxFlat.new()
 	base_plate_style.bg_color = Color(0.18, 0.20, 0.24)
 	base_plate_style.border_color = Color(0.08, 0.09, 0.11)
@@ -111,7 +116,7 @@ func spawn_wire() -> Node2D:
 	return new_wire
 
 func _draw() -> void:
-	if base_plate_style == null:
+	if base_plate_style == null or shadow_style == null:
 		_init_styles()
 
 	var has_wire_active: bool = spawned_wire != null and is_instance_valid(spawned_wire)
@@ -120,7 +125,7 @@ func _draw() -> void:
 	if _is_hovered:
 		draw_rect(Rect2(-8, -12, 18, 24), Color(0.42, 1.0, 0.55, 0.35), false, 1.5)
 
-	draw_rect(Rect2(-5, -9, 12, 19), Color(0, 0, 0, 0.4))
+	draw_style_box(shadow_style, Rect2(-5, -9, 12, 19))
 	draw_style_box(base_plate_style, Rect2(-6, -10, 12, 20))
 	draw_style_box(inner_recess_style, Rect2(-4, -7, 8, 14))
 

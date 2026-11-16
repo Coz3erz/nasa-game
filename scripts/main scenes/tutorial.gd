@@ -1,6 +1,8 @@
 # CHANGELOG (2026-11-16): Bottom-right objective for the "buy supplies" step
 # only. Other objectives stay top-left. Also fixes a `returna` → `return` typo
 # in `_record_event()` that could cause a parse error.
+# CHANGELOG (2026-11-16, b): HUD lost its POWER bar (one row shorter), so the
+# tutorial's HUD highlight (hud_area) height went from 0.34 to 0.30.
 extends Node2D
 ## The opening briefing. It plays as the real first morning: story, the supply request screen,
 ## building, wiring, solar stacking, failures and both hazards, then drops into Day 1.
@@ -17,12 +19,11 @@ var _pending_events: Array[String] = []
 @export_group("Commander")
 @export var commander_sprite: Texture2D          ## leave empty to auto-use the captain art
 @export var commander_name: String = "COMMANDER"
-@export_group("Supply screen highlights (fractions of the screen)")
-@export var shop_top := Rect2(0.50, 0.04, 0.48, 0.10)
-@export var shop_list := Rect2(0.02, 0.14, 0.39, 0.72)
-@export var shop_info := Rect2(0.42, 0.14, 0.56, 0.72)
-@export var shop_buttons := Rect2(0.02, 0.86, 0.44, 0.13)
-@export var hud_area := Rect2(0.0, 0.0, 0.30, 0.34)
+const shop_top := Rect2(0.50, 0.04, 0.48, 0.10)
+const shop_list := Rect2(0.02, 0.14, 0.39, 0.72)
+const shop_info := Rect2(0.42, 0.14, 0.56, 0.72)
+const shop_buttons := Rect2(0.0, 0.86, 0.5, 0.2)
+const hud_area := Rect2(0.05, 0.05, 0.30, 0.30)
 
 const GAME_SCENE := "res://scenes/main scenes/game.tscn"
 const GameScript := preload("res://scripts/main scenes/game.gd")
@@ -44,7 +45,9 @@ var _cancelled := false
 var _dialogue_poll: Timer
 
 func _ready() -> void:
+	print("shop_info=", shop_info, " shop_buttons=", shop_buttons, " shop_list=", shop_list)
 	GameAudio.set_menu_music(false)
+	set_meta("show_hud", false)
 	_dialogue_poll = Timer.new()
 	_dialogue_poll.wait_time = 0.03
 	add_child(_dialogue_poll)
@@ -163,7 +166,6 @@ func _on_wire_connected(wire: Node2D, receiver: Node2D) -> void:
 	if src is BaseModule and dst is BaseModule:
 		_record_event("wire:%s>%s" % [(src as BaseModule).module_name, (dst as BaseModule).module_name])
 
-## One commander box. dim = darken everything but the box. anchor/spot may be a node.
 func _say(text: String, dim: bool = false, anchor: Variant = null, spot: Variant = null) -> void:
 	if _cancelled:
 		return
@@ -172,7 +174,6 @@ func _say(text: String, dim: bool = false, anchor: Variant = null, spot: Variant
 	_lock(true)
 	Dialogue.show_dialogue(text, anchor, commander_name, _speaker_texture, true)
 	Dialogue._set_dim(dim and enable_tutorial_dim, spot if enable_region_spotlights else null)
-	# Await an owned timer, not a persistent autoload coroutine after this scene is freed.
 	while Dialogue._line_visible and not _cancelled:
 		await _dialogue_poll.timeout
 		if _cancelled:
@@ -324,7 +325,6 @@ func _chapter_supplies() -> void:
 	_objective("")
 	_shop_layer.queue_free()
 	_lock(true)
-	# top up anything they skipped so the lesson can continue; the briefing builds one at a time
 	var had_ls: int = GameManager.inventory.get("Life Support", 0)
 	var had_sp: int = GameManager.inventory.get("Solar Panel", 0)
 	for key in GameManager.inventory:
@@ -448,6 +448,7 @@ func _chapter_solar() -> void:
 		return
 
 func _chapter_bars() -> void:
+	set_meta("show_hud", true)
 	var v := _vp()
 	await _say("These bars are what keep you alive. Air, warmth, and health.", true, Dialogue.SCREEN, _frac(hud_area))
 	if _cancelled:
@@ -561,8 +562,6 @@ func _chapter_finish() -> void:
 	Transition.change_scene(GAME_SCENE)
 
 func _release_touch_fingers() -> void:
-	# Release any held touch buttons before we leave the scene, so the next
-	# scene doesn't inherit a stuck "pressed" action from TouchControls.
 	var tc := get_tree().root.get_node_or_null("TouchControlsAutoload")
 	if tc != null and tc.has_method("_release_all"):
 		tc.call("_release_all")

@@ -17,6 +17,7 @@ var connected_wires: Array[Node2D] = []
 var pulse_time: float = 0.0
 var _is_hovered: bool = false
 
+var shadow_style: StyleBoxFlat
 var housing_style: StyleBoxFlat
 var well_style: StyleBoxFlat
 var flange_style: StyleBoxFlat
@@ -44,6 +45,10 @@ func _exit_tree() -> void:
 		WirePort.hover_count = maxi(0, WirePort.hover_count - 1)
 
 func _init_styles() -> void:
+	shadow_style = StyleBoxFlat.new()
+	shadow_style.bg_color = Color(0, 0, 0, 0.42)
+	shadow_style.set_corner_radius_all(6)
+
 	housing_style = StyleBoxFlat.new()
 	housing_style.bg_color = Color(0.17, 0.19, 0.23)
 	housing_style.border_color = Color(0.07, 0.08, 0.10)
@@ -172,7 +177,7 @@ func _get_active_color() -> Color:
 	return standby_color
 
 func _draw() -> void:
-	if housing_style == null:
+	if housing_style == null or shadow_style == null:
 		_init_styles()
 
 	_clean_wires()
@@ -183,7 +188,7 @@ func _draw() -> void:
 	if _is_hovered:
 		draw_rect(Rect2(-20, -35, 40, 70), Color(0.42, 1.0, 0.55, 0.4), false, 2.0)
 
-	draw_rect(Rect2(-14, -30, 32, 64), Color(0, 0, 0, 0.42))
+	draw_style_box(shadow_style, Rect2(-14, -30, 32, 64))
 	draw_style_box(flange_style, Rect2(-18, -26, 8, 52))
 	draw_style_box(housing_style, Rect2(-14, -32, 30, 64))
 	draw_style_box(well_style, Rect2(-8, -22, 20, 44))

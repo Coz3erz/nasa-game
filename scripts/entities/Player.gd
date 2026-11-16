@@ -1081,18 +1081,12 @@ func _compute_hint_rows() -> Array:
 	return rows
 
 func _update_hints() -> void:
-	if InputSupport.has_touch():
+	if _hint_panel != null:
+		_hint_panel.offset_bottom = -20
+	if not is_active or input_locked or GameSettings.group_nodes("shop_ui").any(func(n): return n.is_visible_in_tree()):
 		if _hint_panel != null:
 			_hint_panel.hide()
 		_hint_marks.clear()
-		return
-	if _hint_panel != null:
-		_hint_panel.offset_bottom = -20
-	if _hint_panel != null and (not is_active or input_locked or GameSettings.group_nodes("shop_ui").any(func(n): return n.is_visible_in_tree())):
-		_hint_panel.hide()
-		_hint_marks.clear()
-		return
-	if not is_active:
 		return
 	_hint_marks.clear()
 	_hint_kind = ""
@@ -1129,6 +1123,10 @@ func _update_hints() -> void:
 						if src != null:
 							_hint_kind = "grab"
 							_hint_marks.append({"pos": src.global_position, "col": C_CYAN, "text": InputSupport.label("interact") + "  grab wire"})
+	if InputSupport.has_touch():
+		if _hint_panel != null:
+			_hint_panel.hide()
+		return
 	var show_build := _has_buildables() and not is_outside and not input_locked and (GameManager.current_phase in [GameManager.Phase.BUILD, GameManager.Phase.SURVIVE])
 	_hint_panel.visible = show_build or _hint_kind != "" or is_build_mode
 	var row_state: Array = [is_build_mode, _hint_kind, build_options.size(), _has_buildables(), is_outside, InputSupport.device_kind, InputSupport.labels_revision]

@@ -832,7 +832,7 @@ func _add_bar(parent: Node, text: String, key: String, col: Color) -> void:
 func _update_hud(delta: float) -> void:
 	if _hud == null or not is_instance_valid(_hud):
 		return
-	var live := GameManager.current_phase == GameManager.Phase.SURVIVE
+	var live = GameManager.current_phase == GameManager.Phase.SURVIVE or (is_instance_valid(_game) and _game.get_meta("show_hud", false))
 	_hud_panel.modulate.a = lerpf(_hud_panel.modulate.a, 1.0 if live else 0.0, delta * 4.0)
 	if not live:
 		return
@@ -863,7 +863,6 @@ func _update_hud(delta: float) -> void:
 	_crit_flash.color.a = danger * 0.10 * (0.5 + 0.5 * sin(_t * 6.0))
 	_crit_time = maxf(0.0, _crit_time - delta)
 	_crit_label.modulate.a = clampf(_crit_time, 0.0, 1.0) * (0.6 + 0.4 * sin(_t * 12.0))
-
 func _on_module_broken(module_name: String) -> void:
 	if not _installed or _alert_box == null:
 		return
