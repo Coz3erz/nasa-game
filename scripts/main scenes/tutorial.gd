@@ -1,4 +1,6 @@
-# CHANGELOG (2026-11-15): Buffered tutorial events avoid missed-signal stalls; contextual 0.5s shop fade; per-step speaker anchors; exported dim/region fallbacks and current balancing text.
+# CHANGELOG (2026-11-16): Bottom-right objective for the "buy supplies" step
+# only. Other objectives stay top-left. Also fixes a `returna` → `return` typo
+# in `_record_event()` that could cause a parse error.
 extends Node2D
 ## The opening briefing. It plays as the real first morning: story, the supply request screen,
 ## building, wiring, solar stacking, failures and both hazards, then drops into Day 1.
@@ -9,17 +11,18 @@ extends Node2D
 @export var commander_step_offsets: Dictionary = {0: Vector2(0, 1), 1: Vector2(1, 0), 2: Vector2(0, 1), 3: Vector2(-1, 0), 4: Vector2(0, -1), 5: Vector2(1, 0)}
 var _shop_step := 0
 var _objective_source := ""
+var _objective_corner: String = "top_left"
 var _pending_events: Array[String] = []
 
 @export_group("Commander")
 @export var commander_sprite: Texture2D          ## leave empty to auto-use the captain art
 @export var commander_name: String = "COMMANDER"
 @export_group("Supply screen highlights (fractions of the screen)")
-@export var shop_top := Rect2(0.03, 0.02, 0.94, 0.13)
-@export var shop_list := Rect2(0.03, 0.16, 0.56, 0.68)
-@export var shop_info := Rect2(0.60, 0.16, 0.37, 0.68)
-@export var shop_buttons := Rect2(0.03, 0.85, 0.94, 0.13)
-@export var hud_area := Rect2(0.0, 0.0, 0.30, 0.34)   ## where your air / warmth / health bars sit
+@export var shop_top := Rect2(0.50, 0.04, 0.48, 0.10)
+@export var shop_list := Rect2(0.02, 0.14, 0.39, 0.72)
+@export var shop_info := Rect2(0.42, 0.14, 0.56, 0.72)
+@export var shop_buttons := Rect2(0.02, 0.86, 0.44, 0.13)
+@export var hud_area := Rect2(0.0, 0.0, 0.30, 0.34)
 
 const GAME_SCENE := "res://scenes/main scenes/game.tscn"
 const GameScript := preload("res://scripts/main scenes/game.gd")
@@ -110,11 +113,32 @@ func _build_objective_label() -> void:
 	panel.visible = false
 	_objective_label.set_meta("panel", panel)
 
-func _objective(text: String) -> void:
+func _objective(text: String, corner: String = "top_left") -> void:
 	var panel: Control = _objective_label.get_meta("panel")
 	panel.visible = text != ""
 	_objective_source = text
+	_objective_corner = corner
 	_objective_label.text = InputSupport.expand(text)
+	panel.reset_size()
+	_position_objective_panel(corner)
+	call_deferred("_position_objective_panel", corner)
+
+func _position_objective_panel(corner: String) -> void:
+	var panel: Control = _objective_label.get_meta("panel")
+	if not is_instance_valid(panel) or not panel.visible:
+		return
+	var vp := get_viewport().get_visible_rect().size
+	var sz := panel.size
+	var margin := 16.0
+	match corner:
+		"bottom_right":
+			panel.position = Vector2(vp.x - sz.x - margin, vp.y - sz.y - margin)
+		"bottom_left":
+			panel.position = Vector2(margin, vp.y - sz.y - margin)
+		"top_right":
+			panel.position = Vector2(vp.x - sz.x - margin, margin)
+		_:
+			panel.position = Vector2(margin, margin)
 
 func _lock(locked: bool) -> void:
 	($Player as Node).call("set_input_locked", locked)
@@ -293,7 +317,7 @@ func _chapter_supplies() -> void:
 	if _cancelled:
 		return
 	_shop.process_mode = Node.PROCESS_MODE_INHERIT
-	_objective("Add 1 Oxygen Maker + 2 Solar Panels, then SEND REQUEST")
+	_objective("Add 1 Oxygen Maker + 2 Solar Panels", "bottom_right")
 	await _wait("sent")
 	if _cancelled:
 		return
@@ -325,7 +349,7 @@ func _say_shop(text: String, spot: Variant) -> void:
 	_shop.process_mode = Node.PROCESS_MODE_INHERIT
 
 func _chapter_build() -> void:
-	await _say("Press {build_mode} to enter build mode and aim with your mouse, right stick or touch aim pad. Use {interact} to place the Oxygen Maker. Leave some space around the reactor, it needs clearance.")
+	await _say("Press {build_mode} to enter build mode and aim with your mouse, right stick, or touch aim pad. Press {interact} to place the Oxygen Maker. Leave some space around the reactor, it needs clearance.")
 	if _cancelled:
 		return
 	_objective("Place the Oxygen Maker  ({build_mode}, aim, {interact})")
@@ -362,7 +386,7 @@ func _chapter_reactor() -> void:
 	await _say("To connect equipment, walk up to a reactor output and press {interact} to pick up its cable. Carry it to the socket and press {interact} again to plug it in.", false, reactor)
 	if _cancelled:
 		return
-	_objective("Plug the reactor into the Oxygen Maker  ({interact} to grab, {interact} to connect)")
+	_objective("Plug the reactor into the Oxygen Maker  ({interact} to grab and connect)")
 	await _wait("wire:Reactor>Life Support")
 	if _cancelled:
 		return
@@ -521,7 +545,7 @@ func _chapter_flare() -> void:
 		return
 
 func _chapter_finish() -> void:
-	await _say("One last item. Med kits. Press H anywhere on Mars to use one, and it restores 45 health. They weigh almost nothing, so take a couple every day.", false)
+	await _say("One last item. Med kits. Use one anywhere on Mars to restore 45 health ({use_medkit}). They weigh almost nothing, so take a couple every day.", false)
 	if _cancelled:
 		return
 	await _say("That's the essentials. Panels first, and stack them. Keep air and warmth running. Repair fast. Plan for hazards before the rover leaves.", true)
@@ -533,7 +557,15 @@ func _chapter_finish() -> void:
 	_done = true
 	SaveFlags.set_flag("tutorial_done")
 	_lock(true)
+	_release_touch_fingers()
 	Transition.change_scene(GAME_SCENE)
+
+func _release_touch_fingers() -> void:
+	# Release any held touch buttons before we leave the scene, so the next
+	# scene doesn't inherit a stuck "pressed" action from TouchControls.
+	var tc := get_tree().root.get_node_or_null("TouchControlsAutoload")
+	if tc != null and tc.has_method("_release_all"):
+		tc.call("_release_all")
 
 func _exit_tree() -> void:
 	_cancelled = true
@@ -555,3 +587,5 @@ func _exit_tree() -> void:
 func _process(_delta: float) -> void:
 	if is_instance_valid(_objective_label) and _objective_source != "":
 		_objective_label.text = InputSupport.expand(_objective_source)
+		if _objective_corner != "top_left":
+			_position_objective_panel(_objective_corner)

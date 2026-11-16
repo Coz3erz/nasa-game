@@ -1,5 +1,5 @@
-# CHANGELOG (2026-11-15): Pause the survival clock with gameplay; persistent death/reload fade prevents default-grey flash; honest day text.
-# Combined with original SystemFont (Courier New) for consistency with options.gd restore.
+# CHANGELOG (2026-11-16): Banner skip support. Any input (space/enter/esc/click/tap
+# /any gamepad button) after a 0.4s arming delay skips the current cinematic banner.
 extends CanvasLayer
 class_name DayLoop
 
@@ -17,7 +17,6 @@ const MUTED := Color(0.65, 0.72, 0.82)
 
 var win_scene: String = ""
 
-## set by game.gd from its "Transition SFX" exports (all optional)
 var sfx_card_slam: AudioStream
 var sfx_type: AudioStream
 var sfx_card_out: AudioStream
@@ -30,6 +29,12 @@ var time_left: float = 0.0
 var running: bool = false
 var ended: bool = false
 var _leaving := false
+
+# ── SKIP
+var _banner_active := false
+var _banner_armed_msec := 0
+var _skip_banner_requested := false
+@export var show_skip_hint: bool = true
 
 var font
 var panel: PanelContainer
@@ -62,6 +67,32 @@ func _exit_tree() -> void:
 		if child is Timer:
 			child.stop()
 			child.timeout.emit()
+
+# ── SKIP: input handler fires before any UI / player input
+func _input(event: InputEvent) -> void:
+	if not _banner_active or _skip_banner_requested or _leaving:
+		return
+	if Time.get_ticks_msec() < _banner_armed_msec:
+		return
+	var do_skip := false
+	if event is InputEventKey and event.pressed and not event.echo:
+		match event.keycode:
+			KEY_SPACE, KEY_ENTER, KEY_KP_ENTER, KEY_ESCAPE, KEY_E:
+				do_skip = true
+	elif event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
+		do_skip = true
+	elif event is InputEventScreenTouch and event.pressed:
+		do_skip = true
+	elif event is InputEventJoypadButton and event.pressed:
+		do_skip = true
+	if do_skip:
+		_skip_banner_requested = true
+		get_viewport().set_input_as_handled()
+
+# ── SKIP: public method for external triggers (kept for extensibility)
+func request_skip_banner() -> void:
+	if _banner_active and Time.get_ticks_msec() >= _banner_armed_msec:
+		_skip_banner_requested = true
 
 func _lbl(size: int, col: Color) -> Label:
 	var l := Label.new()
@@ -147,10 +178,12 @@ void fragment() {
 """
 const BAR_H := 84.0
 
-## solid   = opaque intro card (stays up as _intro_card; play_intro/reveal wipe it away)
-## dismiss = animate out and free itself (used by banners)
-## neither = stays up (end-of-day cards; the next shutter covers them)
 func _card(title: String, sub: String, col: Color, hold: float, solid: bool, dismiss: bool = false) -> void:
+	# ── SKIP: arm flag for this card
+	_banner_active = true
+	_banner_armed_msec = Time.get_ticks_msec() + 400
+	_skip_banner_requested = false
+
 	var card := Control.new()
 	card.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	card.mouse_filter = Control.MOUSE_FILTER_STOP
@@ -174,7 +207,6 @@ func _card(title: String, sub: String, col: Color, hold: float, solid: bool, dis
 	flash.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	card.add_child(flash)
 
-	# cinematic letterbox bars with a glowing inner edge
 	var bars: Array[ColorRect] = []
 	for is_top in [true, false]:
 		var bar := ColorRect.new()
@@ -200,7 +232,6 @@ func _card(title: String, sub: String, col: Color, hold: float, solid: bool, dis
 	vb.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	card.add_child(vb)
 
-	# title: one label per letter so each can slam in separately
 	var row := HBoxContainer.new()
 	row.alignment = BoxContainer.ALIGNMENT_CENTER
 	row.add_theme_constant_override("separation", 0)
@@ -232,12 +263,22 @@ func _card(title: String, sub: String, col: Color, hold: float, solid: bool, dis
 	pips.modulate.a = 0.0
 	vb.add_child(pips)
 
+	# ── SKIP: skip hint text below the pips
+	var skip_hint: Label = null
+	if show_skip_hint:
+		skip_hint = _lbl(13, Color(col.r * 1.2, col.g * 1.2, col.b * 1.2))
+		skip_hint.text = "TAP TO SKIP" if InputSupport.has_touch() else "PRESS ANY KEY TO SKIP"
+		skip_hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		skip_hint.modulate.a = 0.0
+		vb.add_child(skip_hint)
+
 	if solid:
 		card.modulate.a = 0.0
 		create_tween().tween_property(card, "modulate:a", 1.0, 0.25)
 
 	await get_tree().process_frame
 	if _leaving:
+		_banner_active = false
 		return
 	for l in letters:
 		l.pivot_offset = l.size * 0.5
@@ -257,42 +298,69 @@ func _card(title: String, sub: String, col: Color, hold: float, solid: bool, dis
 	tw.tween_property(flash, "color:a", 0.0, 0.55)
 	tw.tween_property(line, "custom_minimum_size:x", 460.0, 0.7).set_delay(0.15).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
 	var type_t := clampf(sub.length() * 0.025, 0.4, 1.4)
-	var build_t := 0.35 + t_end + type_t          # time until all text is on screen
+	var build_t := 0.35 + t_end + type_t
 	tw.tween_property(s, "visible_ratio", 1.0, type_t).set_delay(0.35 + t_end)
 	if sfx_type != null:
 		var last := [0]
 		tw.tween_method(_card_type_tick.bind(sub, last), 0.0, 1.0, type_t).set_delay(0.35 + t_end)
 	tw.tween_property(pips, "modulate:a", 1.0, 0.4).set_delay(0.5 + t_end)
-	tw.tween_property(vb, "scale", Vector2(1.04, 1.04), build_t + hold + 0.5)   # slow push-in
+	if skip_hint != null:
+		tw.tween_property(skip_hint, "modulate:a", 0.55, 0.3).set_delay(0.6 + t_end)
+	tw.tween_property(vb, "scale", Vector2(1.04, 1.04), build_t + hold + 0.5)
 
-	# `hold` = how long everything stays fully readable AFTER the build-in finishes
-	await SceneDelay.timer(self, build_t + hold, false).timeout
+	# ── SKIP: interruptible wait loop
+	var _wait_elapsed := 0.0
+	while _wait_elapsed < build_t + hold and not _skip_banner_requested and not _leaving:
+		await get_tree().process_frame
+		_wait_elapsed += get_process_delta_time()
 	if _leaving:
+		_banner_active = false
 		return
+
+	# ── SKIP: fast-forward the slam-in visuals if the user skipped mid-animation
+	if _skip_banner_requested:
+		if is_instance_valid(tw):
+			tw.kill()
+		for l in letters:
+			if is_instance_valid(l):
+				l.scale = Vector2.ONE
+				l.modulate = Color.WHITE
+		s.visible_ratio = 1.0
+		pips.modulate.a = 1.0
+		line.custom_minimum_size.x = 460.0
+		flash.color.a = 0.0
+		bars[0].offset_bottom = BAR_H
+		bars[1].offset_top = -BAR_H
 
 	if solid:
 		_intro_card = card
+		_banner_active = false
+		if _skip_banner_requested:
+			# keep the card; play_intro will shutter_close over it normally
+			return
 		if get_node_or_null("/root/Transition") == null:
 			var out := create_tween()
 			out.tween_property(card, "modulate:a", 0.0, 0.7)
 			await out.finished
-			if _leaving:
-				return
 		return
+
 	if dismiss:
 		_play(sfx_card_out)
+		var ex_dur := 0.15 if _skip_banner_requested else 0.5
 		var ex := create_tween().set_parallel(true)
-		ex.tween_property(vb, "modulate:a", 0.0, 0.5)
-		ex.tween_property(vb, "scale", Vector2(1.2, 1.2), 0.5).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN)
-		ex.tween_property(bg, "modulate:a", 0.0, 0.5).set_delay(0.15)
-		ex.tween_property(bars[0], "offset_bottom", 0.0, 0.4).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN)
-		ex.tween_property(bars[1], "offset_top", 0.0, 0.4).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN)
+		ex.tween_property(vb, "modulate:a", 0.0, ex_dur)
+		ex.tween_property(vb, "scale", Vector2(1.2, 1.2), ex_dur).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN)
+		ex.tween_property(bg, "modulate:a", 0.0, ex_dur)
+		ex.tween_property(bars[0], "offset_bottom", 0.0, ex_dur * 0.8).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN)
+		ex.tween_property(bars[1], "offset_top", 0.0, ex_dur * 0.8).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN)
 		await ex.finished
 		if _leaving:
+			_banner_active = false
 			return
 		card.queue_free()
 
-# Named callback avoids an anonymous closure retaining the suspended card frame on quit.
+	_banner_active = false
+
 func _card_type_tick(value: float, text: String, last: Array) -> void:
 	var n := int(value * text.length())
 	if n != last[0]:
@@ -300,7 +368,6 @@ func _card_type_tick(value: float, text: String, last: Array) -> void:
 		if n > 0 and n <= text.length() and text[n - 1] != " ":
 			_play(sfx_type, randf_range(0.95, 1.08), -6.0)
 
-## row of day pips: finished days filled, today pulsing, future dim
 func _pips(col: Color) -> HBoxContainer:
 	var hb := HBoxContainer.new()
 	hb.alignment = BoxContainer.ALIGNMENT_CENTER
@@ -323,7 +390,6 @@ func _pips(col: Color) -> HBoxContainer:
 		hb.add_child(p)
 	return hb
 
-## cinematic title that plays over the game and then clears itself
 func banner(title: String, sub: String, col: Color, hold: float = 2.0) -> void:
 	await _card(title, sub, col, hold, false, true)
 	if _leaving:
@@ -338,14 +404,14 @@ func play_intro() -> void:
 		if trans.overlay.modulate.a > 0.0:
 			trans.fade_from_black(0.35)
 		if trans.shutter_progress > 0.0:
-			trans.shutter_open(0.7)          # coming back from a day reload: blinds sweep open on the card
+			trans.shutter_open(0.7)
 	var day := GameManager.current_sol
 	var tag: String = TAGLINES[clampi(day - 1, 0, TAGLINES.size() - 1)]
 	await _card("DAY %d" % day, tag, CYAN, 2.4, true)
 	if _leaving:
 		return
 	if trans != null:
-		await trans.shutter_close(0.55)      # card -> blinds slam shut; shop is built behind them
+		await trans.shutter_close(0.55)
 		if _leaving:
 			return
 
@@ -358,7 +424,7 @@ func reveal() -> void:
 		await get_tree().process_frame
 		if _leaving:
 			return
-		await trans.shutter_open(0.85)       # blinds sweep open on the finished shop
+		await trans.shutter_open(0.85)
 		if _leaving:
 			return
 		return
@@ -389,7 +455,11 @@ func start_timer() -> void:
 	tw.tween_property(panel, "modulate", Color.WHITE, 0.5)
 
 func _process(delta: float) -> void:
+	if _leaving:
+		return
 	_t += delta
+	if not is_instance_valid(kit_lbl) or not is_instance_valid(time_lbl) or not is_instance_valid(bar):
+		return
 	var kits := GameManager.get_item_count("Med Kit")
 	kit_lbl.visible = kits > 0
 	if kits > 0:
@@ -490,7 +560,6 @@ func _death_shake(v: float, cam: Camera2D) -> void:
 	if is_instance_valid(cam):
 		cam.offset = Vector2(randf_range(-v, v), randf_range(-v, v))
 
-## Crash sound, orange flash and screen shake, then a slow fade to black with a short message.
 func _death_sequence(reason: String) -> void:
 	var layer_fx := CanvasLayer.new()
 	layer_fx.layer = 95

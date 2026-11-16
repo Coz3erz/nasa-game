@@ -1,20 +1,13 @@
-# CHANGELOG (2026-11-15): Fix synchronous tutorial plug race; hide ghost ports, player preview ring and inapplicable hints; use shared reactor centre.
+# CHANGELOG (2026-11-16): Rotate indicators removed from build hint panel + hint rows.
+# Rotate functions + input handler kept (rotate_port action still triggers _rotate_aimed_port).
 extends CharacterBody2D
-## PLAYER
-##   SPACE           toggle build mode (you can still walk around in it)
-##   E (interact)    in build mode: place + start building  |  outside: wires
-##   SCROLL / TAB    swap which module you're about to place
-## The build ghost is ALWAYS placed directly ahead of the way you're facing.
 
-# - tuning -
 @export_group("Movement")
 @export var speed: float = 300.0
 @export var acceleration: float = 2600.0
 @export var friction: float = 3400.0
 
 @export_group("Animation")
-## true  = you have idle_up / idle_down / idle_left / idle_right
-## false = you only have idle_up / idle_down (left/right idle falls back to the last up/down idle)
 @export var all_idles: bool = false
 
 @export_group("Wires")
@@ -23,15 +16,15 @@ extends CharacterBody2D
 @export var pickup_range: float = 80.0
 
 @export_group("Build")
-@export var build_gap: float = 24.0        ## empty space between you and the ghost
-@export var build_grid: float = 32.0       ## placement grid
+@export var build_gap: float = 24.0
+@export var build_grid: float = 32.0
 @export var player_radius: float = 18.0
 @export var ghost_glide: float = 22.0
-@export var reactor_block_radius: float = 340.0 ## no building inside this circle around the reactor
-@export var exit_block_margin: float = 64.0     ## no building this close to the exit area
-@export var wire_crawl_speed: float = 30.0      ## speed when the wire is pulled as far as it goes
-@export var wire_stretch_range: float = 260.0   ## extra pixels of stretch to reach full slowdown
-@export var build_radius: float = 300.0    ## higher = ghost snaps faster
+@export var reactor_block_radius: float = 340.0
+@export var exit_block_margin: float = 64.0
+@export var wire_crawl_speed: float = 30.0
+@export var wire_stretch_range: float = 260.0
+@export var build_radius: float = 300.0
 
 @export_group("Juice")
 @export var camera_lookahead: float = 46.0
@@ -54,7 +47,6 @@ const C_AMBER := Color(1.0, 0.85, 0.3)
 @onready var player_camera: Camera2D = get_node_or_null("PlayerCamera")
 @onready var sprite: Sprite2D = get_node_or_null("Sprite2D")
 
-# state (names kept so other scripts keep working)
 var is_active: bool = false
 var input_locked: bool = false
 var is_outside: bool = false
@@ -72,13 +64,10 @@ var _last_vertical := "down"
 var _move_vel := Vector2.ZERO
 var _t := 0.0
 var _font: Font
-
 var _footstep_timer: float = 0.0
 var _footstep_player: AudioStreamPlayer
 var _default_metal_stream: AudioStreamWAV
 var _default_mars_stream: AudioStreamWAV
-
-# juice state
 var _sq := Vector2.ONE
 var _sq_vel := Vector2.ZERO
 var _walk_t := 0.0
@@ -97,8 +86,6 @@ var _hint_key_cache := ""
 var _hint_kind := ""
 var _hint_marks: Array = []
 var _hints_node: Hints
-
-# ghost state
 var _ghost_origin := Vector2.ZERO
 var _ghost_half := Vector2(64, 64)
 var _ghost_center_off := Vector2.ZERO
@@ -113,7 +100,6 @@ var _hud_key := ""
 var _panel_ok: StyleBoxFlat
 var _panel_bad: StyleBoxFlat
 
-# - setup -
 func _ready() -> void:
 	add_to_group("player")
 	visible = false
@@ -161,7 +147,6 @@ func enable_player() -> void:
 	_move_vel = Vector2.ZERO
 	if player_camera != null:
 		player_camera.enabled = true
-	# materialise effect
 	_pop(-0.3)
 	Fx.burst(get_parent(), global_position, Color(0.5, 1.4, 1.8, 0.9), 26, 60.0, 180.0, 0.7, 0.04, 0.1, true)
 	Ring.spawn(get_parent(), global_position, Color(0.4, 1.3, 1.6), 90.0, 0.55)
@@ -272,7 +257,6 @@ func _generate_mars_step_wav() -> AudioStreamWAV:
 	wav.data = data
 	return wav
 
-# - per-frame -
 func _physics_process(delta: float) -> void:
 	if not is_active:
 		return
@@ -282,15 +266,11 @@ func _physics_process(delta: float) -> void:
 		move_and_slide()
 		_update_animation(Vector2.ZERO)
 		return
-
 	var input_dir: Vector2 = Input.get_vector("ui_left", "ui_right", "ui_up", "ui_down")
 	_update_facing()
-
-	# smooth acceleration / friction (stored separately so wire tension keeps working as before)
 	var rate := acceleration if input_dir != Vector2.ZERO else friction
 	_move_vel = _move_vel.move_toward(input_dir * speed, rate * delta)
 	velocity = _move_vel
-	# rubber band: the further the wire is stretched, the slower you can move away from its anchor
 	if current_wire != null and is_instance_valid(current_wire) and "socket_pos" in current_wire:
 		var away: Vector2 = global_position - current_wire.socket_pos
 		var over: float = maxf(current_wire.get_total_rope_length(), away.length()) - current_wire.max_length
@@ -301,7 +281,6 @@ func _physics_process(delta: float) -> void:
 			var comp := velocity.dot(dir)
 			if comp > 0.0:
 				velocity -= dir * comp * (1.0 - f)
-
 	if current_wire != null and is_instance_valid(current_wire) and current_wire.has_method("apply_tension_to_player"):
 		var did_snap: bool = current_wire.apply_tension_to_player(self, delta)
 		if did_snap:
@@ -310,14 +289,12 @@ func _physics_process(delta: float) -> void:
 			current_wire = null
 			_pop(-0.18)
 			shake(0.25)
-
 	var before_move := global_position
 	move_and_slide()
 	if global_position.distance_squared_to(before_move) > 0.01:
 		EventBus.player_moved.emit(self)
 	_update_animation(input_dir)
 	_update_footsteps(delta, input_dir)
-
 	if is_build_mode:
 		_update_build_ghost(delta)
 
@@ -331,7 +308,6 @@ func _process(delta: float) -> void:
 		_update_hud_text()
 		queue_redraw()
 
-# - facing -
 func _update_facing() -> void:
 	for i in range(held_dirs.size() - 1, -1, -1):
 		if not Input.is_action_pressed(DIR_ACTIONS[held_dirs[i]]):
@@ -372,9 +348,7 @@ func _update_animation(input_dir: Vector2) -> void:
 	if anim_player.has_animation(anim_name) and anim_player.current_animation != anim_name:
 		anim_player.play(anim_name)
 
-# - juice -
 func _pop(amount: float) -> void:
-	# amount > 0 = squash (wide + short), amount < 0 = stretch (tall + thin)
 	_sq_vel += Vector2(amount, -amount) * 15.0
 
 func shake(amount: float) -> void:
@@ -442,12 +416,11 @@ func _make_dust() -> void:
 	_dust.color_ramp = g
 	add_child(_dust)
 
-# - input -
 func _unhandled_input(event: InputEvent) -> void:
 	if not is_active or input_locked:
 		return
 	if InputSupport.device_kind == "touch" and event is InputEventMouseButton and event.device == -1:
-		return # Touch controls own placement; an emulated UI tap must not place a second module.
+		return
 	if event.is_action_pressed(BUILD_ACTION):
 		_toggle_build_mode()
 		get_viewport().set_input_as_handled()
@@ -475,7 +448,7 @@ func _unhandled_input(event: InputEvent) -> void:
 			elif event.button_index == MOUSE_BUTTON_LEFT and WirePort.hover_count == 0:
 				_attempt_place()
 
-# - build mode -
+# rotate function kept — called by rotate_port action and gamepad X
 func _rotate_aimed_port() -> void:
 	var target: Node2D = null
 	var distance := 90.0
@@ -552,13 +525,12 @@ func _spawn_ghost() -> void:
 	var option: Dictionary = build_options[selected_module_index]
 	var g = option["scene"].instantiate()
 	g.set_meta("is_ghost", true)
-	g.set("is_constructing", true)            # stops BaseModule._ready from registering the preview
+	g.set("is_constructing", true)
 	g.process_mode = Node.PROCESS_MODE_DISABLED
 	g.z_index = 20
 	get_parent().add_child(g)
 	_neutralize_ghost(g)
 	ghost_module = g
-	# measure the module's footprint from its collision shape
 	_ghost_half = Vector2(64, 64)
 	_ghost_center_off = Vector2.ZERO
 	_ghost_test_shape = null
@@ -569,7 +541,7 @@ func _spawn_ghost() -> void:
 			var sz: Vector2 = (col.shape as RectangleShape2D).size
 			_ghost_half = sz * 0.5
 			var ts := RectangleShape2D.new()
-			ts.size = sz - Vector2(6, 6)       # tiny shrink so flush neighbours don't count as overlap
+			ts.size = sz - Vector2(6, 6)
 			_ghost_test_shape = ts
 		else:
 			_ghost_test_shape = col.shape
@@ -579,7 +551,6 @@ func _spawn_ghost() -> void:
 	g.modulate.a = 0.0
 	_hud_key = ""
 
-## The preview must not collide, be interactable, or be treated as a wire target.
 func _neutralize_ghost(n: Node) -> void:
 	if n is WirePort or (n is CanvasItem and (n.has_method("can_spawn_wire") or n.has_method("get_receiver_position"))):
 		n.visible = false
@@ -616,12 +587,10 @@ func _update_build_ghost(delta: float, snap_now: bool = false) -> void:
 	var center := global_position + to_mouse
 	var origin := center - _ghost_center_off
 	_ghost_origin = origin
-
 	if snap_now or ghost_module.global_position.distance_to(origin) > 700.0:
 		ghost_module.global_position = origin
 	else:
 		ghost_module.global_position = ghost_module.global_position.lerp(origin, 1.0 - exp(-ghost_glide * delta))
-
 	can_place = not is_outside
 	if can_place and _ghost_test_shape != null:
 		var q := PhysicsShapeQueryParameters2D.new()
@@ -644,7 +613,6 @@ func _update_build_ghost(delta: float, snap_now: bool = false) -> void:
 		var cp := Vector2(clampf(global_position.x, rc.position.x, rc.end.x), clampf(global_position.y, rc.position.y, rc.end.y))
 		if cp.distance_to(global_position) < player_radius + 6.0:
 			can_place = false
-
 	var pulse := 0.5 + 0.5 * sin(_t * 6.0)
 	var a := lerpf(ghost_module.modulate.a, 0.5 + 0.2 * pulse, 0.25)
 	_ghost_flash = maxf(0.0, _ghost_flash - delta)
@@ -683,7 +651,6 @@ func _exit_rect() -> Rect2:
 	var sz: Vector2 = cs.shape.get_rect().size * cs.global_scale.abs()
 	return Rect2(cs.global_position - sz * 0.5, sz)
 
-## Two rules only: not near the reactor (circle) and not near the exit.
 func _reactor_clearance_ok(center: Vector2) -> bool:
 	var footprint := Rect2(center - _ghost_half, _ghost_half * 2.0)
 	var r := _reactor_node()
@@ -700,7 +667,6 @@ func _reactor_clearance_ok(center: Vector2) -> bool:
 func _attempt_place() -> void:
 	if is_outside or not is_instance_valid(ghost_module) or build_options.is_empty():
 		return
-	# Revalidate at commit time as well as when tinting the preview.
 	_update_build_ghost(0.0)
 	if not can_place or not _reactor_clearance_ok(_ghost_origin + _ghost_center_off):
 		_deny()
@@ -710,7 +676,6 @@ func _attempt_place() -> void:
 	if not GameManager.remove_from_inventory(item_name):
 		_deny()
 		return
-
 	var parent_node := get_parent()
 	var m = option["scene"].instantiate()
 	m.set("is_constructing", true)
@@ -719,11 +684,9 @@ func _attempt_place() -> void:
 	parent_node.add_child(m)
 	m.start_construction()
 	EventBus.module_placed.emit(m)
-
 	var fx := ConstructionFX.new()
 	fx.setup(m, self, _ghost_center_off, _ghost_half, _font)
 	parent_node.add_child(fx)
-
 	var c := _ghost_origin + _ghost_center_off
 	Fx.burst(parent_node, c, Color(0.75, 0.78, 0.85, 0.55), 22, 40.0, 150.0, 0.9, 0.3, 0.7)
 	Fx.burst(parent_node, c, Color(1.6, 1.2, 0.5, 1.0), 16, 80.0, 220.0, 0.5, 0.04, 0.09, true, Vector2(0, 260))
@@ -731,10 +694,9 @@ func _attempt_place() -> void:
 	_pop(0.2)
 	shake(0.35)
 	_flash_hint("Building %s - stay inside the circle!" % item_name, C_GREEN)
-
 	_refresh_build_options()
 	_exit_build_mode()
-# - build HUD -
+
 func _box(border: Color) -> StyleBoxFlat:
 	var s := StyleBoxFlat.new()
 	s.bg_color = Color(0.05, 0.08, 0.12, 0.92)
@@ -780,7 +742,8 @@ func _make_build_hud() -> void:
 	vb.add_theme_constant_override("separation", 4)
 	_build_title = _lbl(20, C_CYAN)
 	_build_hint = _lbl(14, Color(0.75, 0.82, 0.88))
-	_build_hint.text = InputSupport.expand("{interact} place     {build_mode} stop     {cycle_module} swap     {rotate_port} rotate")
+	# rotate_port indicator removed from this line
+	_build_hint.text = "" if InputSupport.has_touch() else InputSupport.expand("{interact} place     {build_mode} stop     {cycle_module} swap")
 	vb.add_child(_build_title)
 	vb.add_child(_build_hint)
 	_build_panel.add_child(vb)
@@ -806,7 +769,11 @@ func _set_build_hud(on: bool) -> void:
 
 func _update_hud_text() -> void:
 	if _build_hint != null:
-		_build_hint.text = InputSupport.expand("{interact} place     {build_mode} stop     {cycle_module} swap     {rotate_port} rotate")
+		if InputSupport.has_touch():
+			_build_hint.text = ""
+		else:
+			# rotate_port indicator removed here too
+			_build_hint.text = InputSupport.expand("{interact} place     {build_mode} stop     {cycle_module} swap")
 	if _build_title == null or build_options.is_empty() or selected_module_index >= build_options.size():
 		return
 	var id: String = build_options[selected_module_index]["id"]
@@ -831,7 +798,6 @@ func _flash_hint(text: String, col: Color) -> void:
 	tw.tween_interval(1.4)
 	tw.tween_property(_toast, "modulate:a", 0.0, 0.5)
 
-# - wires -
 func _nearest_broken_module() -> BaseModule:
 	var best: BaseModule = null
 	var bd := INF
@@ -847,10 +813,8 @@ func _broken_module_in_reach() -> bool:
 	return _nearest_broken_module() != null
 
 func _try_interact() -> void:
-	# E also repairs broken modules (hold). Don't grab wires while you're trying to fix something.
 	if current_wire == null and _broken_module_in_reach():
 		return
-
 	if current_wire != null:
 		var receiver: Node2D = _find_nearby_receiver(current_wire)
 		if receiver != null and _reactor_full(current_wire, receiver):
@@ -864,7 +828,7 @@ func _try_interact() -> void:
 			return
 		if receiver != null:
 			var connecting := current_wire
-			current_wire = null # release ownership before tutorial callbacks lock input
+			current_wire = null
 			receiver.accept_wire(connecting)
 			if not connecting.is_plugged:
 				current_wire = connecting
@@ -884,14 +848,12 @@ func _try_interact() -> void:
 			current_wire = null
 			_pop(0.08)
 		return
-
 	var dropped_wire: Node2D = _find_closest_dropped_wire()
 	if dropped_wire != null:
 		current_wire = dropped_wire
 		current_wire.pick_up(global_position)
 		_grab_fx()
 		return
-
 	var plugged_wire: Node2D = _find_closest_plugged_wire()
 	if plugged_wire != null:
 		if is_instance_valid(plugged_wire.plugged_receiver) and plugged_wire.plugged_receiver.has_method("remove_wire"):
@@ -900,7 +862,6 @@ func _try_interact() -> void:
 		current_wire.pick_up(global_position)
 		_grab_fx()
 		return
-
 	var source: Node2D = _find_closest_wire_source()
 	if source != null:
 		var new_wire: Node2D = source.spawn_wire()
@@ -963,7 +924,6 @@ func _find_nearby_receiver(w: Node2D = null) -> Node2D:
 				closest_receiver = node
 	if closest_receiver != null:
 		return closest_receiver
-
 	var shape: CircleShape2D = CircleShape2D.new()
 	shape.radius = plug_range
 	var query: PhysicsShapeQueryParameters2D = PhysicsShapeQueryParameters2D.new()
@@ -987,7 +947,6 @@ func _find_nearby_receiver(w: Node2D = null) -> Node2D:
 							closest_receiver = child
 	return closest_receiver
 
-# - effect helpers -
 func _has_buildables() -> bool:
 	for item in GameManager.catalog:
 		if item.has("scene_path") and str(item["scene_path"]) != "" and GameManager.get_item_count(item["id"]) > 0:
@@ -1026,7 +985,6 @@ func _deny_wire(r: Node2D) -> void:
 	_sq_vel.x += 3.0 * (1.0 if randf() > 0.5 else -1.0)
 	shake(0.15)
 
-# ----- corner key hints + glowing "you can do something here" markers -----
 func _make_hint_panel() -> void:
 	_hint_panel = PanelContainer.new()
 	_hint_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -1090,7 +1048,7 @@ func _compute_hint_rows() -> Array:
 		rows.append([InputSupport.label("interact"), "Place it"])
 		if build_options.size() > 1:
 			rows.append([InputSupport.label("cycle_module"), "Pick another"])
-		rows.append([InputSupport.label("rotate_port"), "Turn it"])
+		# rotate_port row removed — rotate is no longer advertised
 		rows.append([InputSupport.label("build_mode"), "Stop building"])
 		return rows
 	rows.append([InputSupport.movement_label(), "Walk"])
@@ -1110,8 +1068,13 @@ func _compute_hint_rows() -> Array:
 	return rows
 
 func _update_hints() -> void:
+	if InputSupport.has_touch():
+		if _hint_panel != null:
+			_hint_panel.hide()
+		_hint_marks.clear()
+		return
 	if _hint_panel != null:
-		_hint_panel.offset_bottom = -250 if InputSupport.device_kind == "touch" else -20
+		_hint_panel.offset_bottom = -20
 	if _hint_panel != null and (not is_active or input_locked or get_tree().get_nodes_in_group("shop_ui").any(func(n): return n.is_visible_in_tree())):
 		_hint_panel.hide()
 		_hint_marks.clear()
@@ -1157,7 +1120,6 @@ func _update_hints() -> void:
 	_hint_panel.visible = show_build or _hint_kind != "" or is_build_mode
 	_set_hint_rows(_compute_hint_rows())
 
-## Drawn by the Hints node (world space, always on top): the build circle in build mode.
 func _overlay_draw(c: Node2D) -> void:
 	if not is_build_mode or not is_instance_valid(ghost_module):
 		return
@@ -1172,7 +1134,6 @@ func _overlay_draw(c: Node2D) -> void:
 		var eg := ex.grow(exit_block_margin)
 		c.draw_rect(eg, Color(1.0, 0.3, 0.25, 0.07))
 		c.draw_rect(eg, Color(1.0, 0.35, 0.3, 0.55 + 0.2 * pulse), false, 3.0)
-	# No player-centred preview circle.
 	var ctr := _ghost_origin + _ghost_center_off
 	c.draw_circle(ctr, _ghost_zone, Color(col.r, col.g, col.b, 0.05))
 	var n := 40
@@ -1230,7 +1191,6 @@ class Fx:
 			_soft.height = 64
 		return _soft
 
-	## fire-and-forget one-shot particle burst (frees itself)
 	static func burst(parent: Node, pos: Vector2, col: Color, amount: int, v_min: float, v_max: float, life: float, s_min: float, s_max: float, additive: bool = false, grav: Vector2 = Vector2.ZERO) -> void:
 		if parent == null or not parent.is_inside_tree():
 			return
@@ -1288,8 +1248,6 @@ class Ring extends Node2D:
 		tw.tween_property(ring, "w", 1.0, dur)
 		tw.chain().tween_callback(ring.queue_free)
 
-## Lives next to a module while it's being built: smoke + sparks while you're in range,
-## a nice drawn progress bar, and a pop + flash when it finishes.
 class ConstructionFX extends Node2D:
 	var target: BaseModule
 	var player: Node2D
@@ -1312,7 +1270,6 @@ class ConstructionFX extends Node2D:
 		font = f
 		z_index = 90
 		global_position = m.global_position + center
-
 		bg_style = StyleBoxFlat.new()
 		bg_style.bg_color = Color(0.04, 0.06, 0.09, 0.92)
 		bg_style.border_color = Color(0.3, 0.85, 1.0, 0.8)
@@ -1322,7 +1279,6 @@ class ConstructionFX extends Node2D:
 		bg_style.shadow_size = 8
 		fill_style = StyleBoxFlat.new()
 		fill_style.set_corner_radius_all(3)
-
 		smoke = CPUParticles2D.new()
 		smoke.texture = Fx.tex()
 		smoke.amount = 26
@@ -1349,7 +1305,6 @@ class ConstructionFX extends Node2D:
 		smoke.color_ramp = g
 		smoke.emitting = false
 		add_child(smoke)
-
 		sparks = CPUParticles2D.new()
 		sparks.texture = Fx.tex()
 		sparks.amount = 14
@@ -1388,7 +1343,6 @@ class ConstructionFX extends Node2D:
 		smoke.emitting = near
 		sparks.emitting = near
 		shown = lerpf(shown, clampf(target.build_progress / 100.0, 0.0, 1.0), 1.0 - exp(-16.0 * delta))
-		# our own bar replaces the default one; the module "materialises" as it builds
 		if target.progress_bar != null:
 			target.progress_bar.visible = false
 		queue_redraw()

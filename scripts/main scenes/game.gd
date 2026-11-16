@@ -1,4 +1,5 @@
-# CHANGELOG (2026-11-15): Register every shop view for contextual hint suppression and stop title music on gameplay entry.
+# CHANGELOG (2026-11-16): Cargo bounce rework. Higher arc, calibrated flight time,
+# forward overshoot, 2 big bounces with horizontal momentum, short ground slide.
 extends Node2D
 
 @export_group("Music & Audio")
@@ -8,13 +9,12 @@ extends Node2D
 @export var wind_volume_db: float = -6.0
 
 @export_group("Transition SFX")
-## All optional - leave empty for silence. Played by the shutter / title cards / banners.
-@export var shutter_close_sfx: AudioStream     ## blinds slam shut
-@export var shutter_open_sfx: AudioStream      ## blinds sweep open
-@export var card_slam_sfx: AudioStream         ## title card / banner appears
-@export var card_type_sfx: AudioStream         ## subtitle typewriter tick (played per character)
-@export var card_out_sfx: AudioStream          ## banner leaves
-@export var timer_start_sfx: AudioStream       ## survival timer starts
+@export var shutter_close_sfx: AudioStream
+@export var shutter_open_sfx: AudioStream
+@export var card_slam_sfx: AudioStream
+@export var card_type_sfx: AudioStream
+@export var card_out_sfx: AudioStream
+@export var timer_start_sfx: AudioStream
 @export var transition_sfx_volume_db: float = -4.0
 
 @export_group("Days")
@@ -46,8 +46,11 @@ class SupplyCrate extends Node2D:
 	signal picked_up
 
 	const INTERACT_RADIUS := 85.0
-	const GRAVITY := 1050.0
-	const BOUNCE_RESTITUTION := 0.54
+	const GRAVITY := 980.0
+	const BOUNCE_RESTITUTION := 0.42
+	const HORIZONTAL_DAMP := 0.75
+	const MAX_BOUNCES := 2
+	const BOUNCE_THRESHOLD := 95.0
 
 	var player_ref: CharacterBody2D
 	var is_airborne: bool = false
@@ -64,6 +67,8 @@ class SupplyCrate extends Node2D:
 	var box_scale: Vector2 = Vector2.ONE
 	var bounce_count: int = 0
 	var dust_rings: Array[Dictionary] = []
+	var is_sliding: bool = false
+	var _slide_vel: Vector2 = Vector2.ZERO
 
 	var pickup_sfx: AudioStreamPlayer
 	var thud_sfx: AudioStreamPlayer
@@ -128,16 +133,34 @@ class SupplyCrate extends Node2D:
 		player_ref = p
 		global_position = rover_ground_pos
 		z_height = -absf(head_height)
-		vel_z = -340.0
 
-		var flight_time := 0.72
-		vel_xy = (target_pos - rover_ground_pos) / flight_time
-		box_rot = -0.45
-		rot_speed = 6.5
+		# Stronger upward launch so the arc reads clearly.
+		var v0 := 420.0
+		vel_z = -v0
+
+		# Compute actual time in air for this launch so horizontal velocity
+		# is calibrated, then aim PAST the target so the crate travels forward
+		# and settles after bouncing/sliding.
+		var g := GRAVITY
+		var start_h := absf(z_height)
+		var t_land := (v0 + sqrt(v0 * v0 + 2.0 * g * start_h)) / g
+
+		var direction := target_pos - rover_ground_pos
+		var dist := direction.length()
+		var overshoot := 40.0
+		var aimed := target_pos
+		if dist > 0.01:
+			aimed = target_pos + (direction / dist) * overshoot
+		vel_xy = (aimed - rover_ground_pos) / maxf(t_land, 0.01)
+
+		box_rot = -0.01
+		rot_speed = 3
 		box_scale = Vector2(0.55, 1.25)
 		bounce_count = 0
 		is_airborne = true
 		is_landed = false
+		is_sliding = false
+		_slide_vel = Vector2.ZERO
 
 		await landed
 
@@ -152,6 +175,8 @@ class SupplyCrate extends Node2D:
 
 		if is_airborne:
 			_step_bounce_physics(delta)
+		elif is_sliding:
+			_step_slide(delta)
 
 		box_scale = box_scale.lerp(Vector2.ONE, 1.0 - exp(-18.0 * delta))
 
@@ -176,31 +201,57 @@ class SupplyCrate extends Node2D:
 			bounce_count += 1
 			var impact_speed := absf(vel_z)
 
-			if impact_speed > 65.0 and bounce_count <= 4:
+			if impact_speed > BOUNCE_THRESHOLD and bounce_count <= MAX_BOUNCES:
+				# Realistic vertical damping, keep more horizontal momentum.
 				vel_z = -impact_speed * BOUNCE_RESTITUTION
-				vel_xy *= 0.58
-				rot_speed = -rot_speed * 0.42
-				box_rot *= 0.5
+				vel_xy *= HORIZONTAL_DAMP
+				rot_speed *= 0.55
+				box_rot *= 0.65
 
-				var squash := clampf(impact_speed / 420.0, 0.14, 0.42)
-				box_scale = Vector2(1.0 + squash, 1.0 - squash * 0.78)
-				_spawn_impact_dust(clampf(impact_speed / 360.0, 0.35, 1.0))
+				var squash := clampf(impact_speed / 500.0, 0.12, 0.34)
+				box_scale = Vector2(1.0 + squash, 1.0 - squash * 0.72)
+				_spawn_impact_dust(clampf(impact_speed / 440.0, 0.3, 0.9))
 
 				if thud_sfx != null:
-					thud_sfx.volume_db = lerpf(-16.0, -3.0, clampf(impact_speed / 420.0, 0.0, 1.0))
-					thud_sfx.pitch_scale = randf_range(0.85, 1.05) + float(bounce_count) * 0.12
+					thud_sfx.volume_db = lerpf(-14.0, -3.0, clampf(impact_speed / 500.0, 0.0, 1.0))
+					thud_sfx.pitch_scale = randf_range(0.9, 1.05) + float(bounce_count) * 0.1
 					thud_sfx.play()
 			else:
+				# Settle into a short ground slide so motion resolves naturally
+				# instead of stopping dead.
 				z_height = 0.0
 				vel_z = 0.0
+				_slide_vel = vel_xy * 0.55
 				vel_xy = Vector2.ZERO
-				rot_speed = 0.0
-				box_rot = 0.0
-				box_scale = Vector2(1.18, 0.85)
+				rot_speed *= 0.5
+				box_scale = Vector2(1.12, 0.88)
 				_spawn_impact_dust(0.35)
+
+				if thud_sfx != null:
+					thud_sfx.volume_db = -6.0
+					thud_sfx.pitch_scale = 0.92
+					thud_sfx.play()
+
 				is_airborne = false
+				is_sliding = true
 				is_landed = true
 				landed.emit()
+
+	func _step_slide(delta: float) -> void:
+		if _slide_vel.length() < 4.0:
+			is_sliding = false
+			_slide_vel = Vector2.ZERO
+			box_rot = 0.0
+			rot_speed = 0.0
+			box_scale = Vector2.ONE
+			return
+
+		global_position += _slide_vel * delta
+		_slide_vel = _slide_vel.move_toward(Vector2.ZERO, 380.0 * delta)
+
+		rot_speed = move_toward(rot_speed, 0.0, delta * 8.0)
+		box_rot = lerpf(box_rot, 0.0, clampf(delta * 6.0, 0.0, 1.0))
+		box_scale = box_scale.lerp(Vector2.ONE, 1.0 - exp(-14.0 * delta))
 
 	func _spawn_impact_dust(strength: float) -> void:
 		for i in range(6):
@@ -665,7 +716,7 @@ void fragment() {
 		var ratio: float = clampf(GameManager.mass_budget / max_mass, 0.0, 1.0)
 		var weight_txt := "WEIGHT LIMIT: %d / %d KG" % [int(GameManager.mass_budget), int(max_mass)]
 		var wt_w := font.get_string_size(weight_txt, HORIZONTAL_ALIGNMENT_LEFT, -1, body_size).x
-		
+
 		var bar_w := 200.0
 		var bar_h := 16.0
 		var bar_x := vs.x - padding - bar_w
@@ -673,7 +724,7 @@ void fragment() {
 
 		draw_string(font, Vector2(bar_x - wt_w - 20.0, top_y + font.get_ascent(body_size) + 4.0 + hdr_off.y), weight_txt, HORIZONTAL_ALIGNMENT_LEFT, -1, body_size, soft_amber)
 		draw_style_box(bar_bg_style, Rect2(bar_x, bar_y, bar_w, bar_h))
-		
+
 		if ratio > 0.01:
 			bar_fill_style.bg_color = soft_mint if ratio > 0.25 else soft_amber
 			draw_style_box(bar_fill_style, Rect2(bar_x, bar_y, maxf(16.0, bar_w * ratio), bar_h))
@@ -713,7 +764,7 @@ void fragment() {
 			var sym_y := btn_y + (btn_sz + font.get_ascent(body_size) - font.get_descent(body_size)) * 0.5
 			var minus_w := font.get_string_size("-", HORIZONTAL_ALIGNMENT_LEFT, -1, body_size).x
 			var plus_w := font.get_string_size("+", HORIZONTAL_ALIGNMENT_LEFT, -1, body_size).x
-			
+
 			draw_string(font, Vector2(minus_rect.get_center().x - minus_w * 0.5, sym_y), "-", HORIZONTAL_ALIGNMENT_LEFT, -1, body_size, text_color if qty > 0 else muted_text)
 			draw_string(font, Vector2(plus_rect.get_center().x - plus_w * 0.5, sym_y), "+", HORIZONTAL_ALIGNMENT_LEFT, -1, body_size, text_color if can_afford else muted_text)
 
@@ -791,11 +842,11 @@ void fragment() {
 			if line == "":
 				ty += body_size * 0.8
 				continue
-			
+
 			var is_heading := line.begins_with("WHAT IT DOES") or line.begins_with("NASA FACT")
 			var line_col := soft_sky if is_heading else text_color
 			var current_size := body_size if is_heading else int(body_size * 0.9)
-			
+
 			draw_string(font, Vector2(tx, ty), line, HORIZONTAL_ALIGNMENT_LEFT, -1, current_size, line_col)
 			ty += current_size * 1.5
 
@@ -839,7 +890,7 @@ void fragment() {
 			var txt_col := soft_mint if i == 0 else (soft_amber if is_sel else muted_text)
 			if i == 0 and is_sel:
 				txt_col = Color.WHITE
-			
+
 			var text_y := btn_rect.position.y + (btn_h + font.get_ascent(font_size) - font.get_descent(font_size)) * 0.5
 			draw_string(font, Vector2(btn_rect.position.x + 28.0, text_y), label, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, txt_col)
 
@@ -1396,7 +1447,7 @@ func _start_rover_transition() -> void:
 	var trans = get_node_or_null("/root/Transition")
 
 	if trans != null:
-		await trans.shutter_close(0.6, Color(1.0, 0.82, 0.35))   # shop -> blinds slam shut
+		await trans.shutter_close(0.6, Color(1.0, 0.82, 0.35))
 
 	if shop_layer != null:
 		shop_layer.queue_free()
@@ -1437,7 +1488,7 @@ func _start_rover_transition() -> void:
 	_ignore_mars_trigger = false
 
 	if trans != null:
-		await trans.shutter_open(0.7, Color(1.0, 0.82, 0.35))    # blinds open on Mars
+		await trans.shutter_open(0.7, Color(1.0, 0.82, 0.35))
 	await day_loop.banner("SUPPLIES ARRIVING", "The rover is bringing what you asked for", Color(1.0, 0.82, 0.35), 1.8)
 
 	if rover != null:
@@ -1465,7 +1516,7 @@ func _start_rover_transition() -> void:
 		_set_rover_frame(0)
 
 	if trans != null:
-		await trans.shutter_close(0.55, Color(1.0, 0.35, 0.3))   # rover gone -> blinds close (red = danger)
+		await trans.shutter_close(0.55, Color(1.0, 0.35, 0.3))
 		await trans.shutter_open(0.6, Color(1.0, 0.35, 0.3))
 	await day_loop.banner("HOLD THE BASE", day_loop.survive_sub(), Color(1.0, 0.35, 0.3), 2.2)
 
