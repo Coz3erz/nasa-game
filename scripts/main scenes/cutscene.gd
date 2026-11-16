@@ -87,6 +87,7 @@ const FONT_PATH := "res://resources/fonts/Monospace.ttf"
 
 const BG_SHADER := """
 shader_type canvas_item;
+uniform int noise_octaves = 5;
 uniform float time = 0.0;
 uniform float aspect = 1.7778;
 uniform vec2 lens_center = vec2(2.67, 0.5);
@@ -111,7 +112,7 @@ float noise(vec2 p) {
 float fbm(vec2 p) {
 	float v = 0.0;
 	float a = 0.5;
-	for (int i = 0; i < 5; i++) { v += a * noise(p); p = p * 2.03 + vec2(1.7, 9.2); a *= 0.5; }
+	for (int i = 0; i < 5; i++) { if (i >= noise_octaves) { break; } v += a * noise(p); p = p * 2.03 + vec2(1.7, 9.2); a *= 0.5; }
 	return v;
 }
 
@@ -171,6 +172,7 @@ void fragment() {
 
 const MARS_SHADER := """
 shader_type canvas_item;
+uniform int noise_octaves = 5;
 uniform float time = 0.0;
 uniform float rotation_speed = 0.025;
 uniform vec2 light_dir = vec2(0.85, -0.35);
@@ -191,7 +193,7 @@ float noise(vec2 p) {
 float fbm(vec2 p) {
 	float v = 0.0;
 	float a = 0.5;
-	for (int i = 0; i < 5; i++) {
+	for (int i = 0; i < 5; i++) { if (i >= noise_octaves) { break; }
 		v += a * noise(p);
 		p = p * 2.03 + vec2(2.3, 5.7);
 		a *= 0.5;
@@ -262,6 +264,7 @@ void fragment() {
 
 const SUN_INNER_SHADER := """
 shader_type canvas_item;
+uniform int noise_octaves = 4;
 uniform float time = 0.0;
 uniform float rotation_speed = 0.012;
 uniform bool low_detail = false;
@@ -299,7 +302,7 @@ float noise(vec2 p) {
 float fbm(vec2 p) {
 	float v = 0.0;
 	float a = 0.5;
-	for (int i = 0; i < 4; i++) { v += a * noise(p); p = p * 2.03 + vec2(3.1, 7.3); a *= 0.5; }
+	for (int i = 0; i < 4; i++) { if (i >= noise_octaves) { break; } v += a * noise(p); p = p * 2.03 + vec2(3.1, 7.3); a *= 0.5; }
 	return v;
 }
 vec3 voro(vec2 p, float t) {
@@ -543,8 +546,8 @@ class ShipRenderer extends Node2D:
 	var time: float = 0.0
 	var ship_texture: Texture2D
 
-	func _process(delta: float) -> void:
-		time += delta
+	func _ready() -> void:
+		set_process(false)
 		queue_redraw()
 
 	func _draw() -> void:
@@ -763,7 +766,7 @@ var sol_flash: float = 0.0
 var sol_base_pos: Vector2 = Vector2.ZERO
 
 func _ready() -> void:
-	get_viewport().use_hdr_2d = false
+	GameSettings.set_hdr_preference(false)
 	time = 0.0
 	breath = 0.0
 	breath_phase = 0.0
@@ -795,6 +798,8 @@ func _ready() -> void:
 	_build_sol_text()
 	_build_post()
 	_build_audio()
+	GameSettings.quality_changed.connect(_apply_quality)
+	_apply_quality()
 	_layout()
 	_apply_sun_uniforms()
 	_update_post()
@@ -894,12 +899,6 @@ func _build_sol_text() -> void:
 	add_child(skip_label)
 
 func _build_post() -> void:
-	# Skip the entire post-processing pass on low-detail / mobile.
-	# This is the single biggest framerate win in the cutscene.
-	if bool(GameSettings.settings.get("low_detail", false)):
-		post_layer = null
-		post_mat = null
-		return
 	post_layer = ColorRect.new()
 	post_layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	post_layer.color = Color.WHITE
@@ -965,7 +964,7 @@ func _layout() -> void:
 			ship_placed = true
 
 	if embers:
-		var count := maxi(24, int(ember_count * 0.5)) if bool(GameSettings.settings.get("low_detail", false)) else ember_count
+		var count := int(ember_count * GameSettings.particle_scale()) if GameSettings.particles_enabled() else 0
 		if embers.pos.size() != count:
 			embers.setup(count, view_size)
 		embers.view_size = view_size
@@ -1059,7 +1058,7 @@ func _apply_sun_uniforms() -> void:
 	sun_inner_mat.set_shader_parameter("time", time)
 	sun_inner_mat.set_shader_parameter("sun_aspect", Vector2(sun_radius_a, sun_radius_b))
 	sun_inner_mat.set_shader_parameter("rotation_speed", sun_rotation_speed)
-	sun_inner_mat.set_shader_parameter("low_detail", bool(GameSettings.settings.get("low_detail", false)))
+	sun_inner_mat.set_shader_parameter("low_detail", GameSettings.reduced_detail() or GameSettings.mobile_quality())
 	sun_inner_mat.set_shader_parameter("core_col", sun_core_color)
 	sun_inner_mat.set_shader_parameter("mid_col", sun_mid_color)
 	sun_inner_mat.set_shader_parameter("edge_col", sun_edge_color)
@@ -1207,3 +1206,56 @@ func _process(delta: float) -> void:
 	_update_post()
 	_update_text(delta)
 	_update_audio()
+
+const FLAT_BACKGROUND := """shader_type canvas_item;
+render_mode unshaded;
+uniform vec4 nebula_a : source_color = vec4(0.02, 0.01, 0.04, 1.0);
+void fragment() { COLOR = vec4(nebula_a.rgb, 1.0); }
+"""
+const FLAT_SUN := """shader_type canvas_item;
+render_mode unshaded;
+uniform vec2 sun_aspect = vec2(1.0);
+uniform vec4 core_col : source_color = vec4(1.0, 0.75, 0.3, 1.0);
+void fragment() {
+	vec2 p = (UV - 0.5) * 2.0 / sun_aspect;
+	if (dot(p, p) > 1.0) { discard; }
+	COLOR = core_col;
+}
+"""
+const FLAT_MARS := """shader_type canvas_item;
+render_mode unshaded;
+void fragment() {
+	vec2 p = (UV - 0.5) * 2.4;
+	if (dot(p, p) > 1.0) { discard; }
+	COLOR = vec4(0.76, 0.29, 0.13, 1.0);
+}
+"""
+const FLAT_SHIP := """shader_type canvas_item;
+render_mode unshaded;
+"""
+var _quality_shaders: Dictionary = {}
+var _quality_flat_shaders: Dictionary = {}
+
+func _apply_quality() -> void:
+	var ultra := GameSettings.ultra_enabled()
+	var cheap := GameSettings.reduced_detail() or GameSettings.mobile_quality()
+	for pair in [[bg_mat, FLAT_BACKGROUND], [sun_inner_mat, FLAT_SUN], [mars_mat, FLAT_MARS], [ship_mat, FLAT_SHIP]]:
+		var mat := pair[0] as ShaderMaterial
+		if mat == null:
+			continue
+		if not _quality_shaders.has(mat):
+			_quality_shaders[mat] = mat.shader
+			var flat := Shader.new()
+			flat.code = str(pair[1])
+			_quality_flat_shaders[mat] = flat
+		mat.shader = _quality_flat_shaders[mat] if ultra else _quality_shaders[mat]
+		mat.set_shader_parameter("noise_octaves", 2 if cheap else (4 if mat == sun_inner_mat else 5))
+	sun_outer.visible = not ultra
+	sun_outer_mat.set_shader_parameter("noise_octaves", 2 if cheap else 5)
+	post_layer.visible = not cheap
+	embers.visible = GameSettings.particles_enabled()
+	embers.set_process(embers.visible)
+	engine_glow.visible = not ultra
+	engine_glow.set_process(not ultra)
+	_layout()
+	_apply_sun_uniforms()

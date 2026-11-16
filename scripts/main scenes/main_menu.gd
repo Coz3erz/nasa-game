@@ -34,6 +34,8 @@ func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	_font = GameFont.get_font()
 	_logo_font = load("res://resources/fonts/Cynatar.otf")
+	if _logo_font == null:
+		_logo_font = _font
 	_bg = ColorRect.new()
 	_bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -51,6 +53,8 @@ func _ready() -> void:
 	mat.shader = sh
 	_glow.material = mat
 	add_child(_glow)
+	GameSettings.quality_changed.connect(_apply_quality)
+	_apply_quality()
 	_blip = AudioStreamPlayer.new()
 	_blip.bus = &"SFX"
 	_blip.stream = SynthSfx.beep_wav()
@@ -80,6 +84,8 @@ func _process(delta: float) -> void:
 	queue_redraw()
 
 func _push_shader() -> void:
+	if not _glow.visible:
+		return
 	var mat := _glow.material as ShaderMaterial
 	var vs := get_viewport_rect().size
 	var count := mini(_glow_pts.size(), 32)
@@ -131,7 +137,7 @@ func _draw() -> void:
 
 	# title
 	var tf := _float(0.0) * 1.8
-	tfs = mini(tfs, int((vs.x - lx * 2.0) / maxf(_logo_font.get_string_size(game_title, HORIZONTAL_ALIGNMENT_LEFT, -1, 1).x, 0.01)))
+	tfs = maxi(1, mini(tfs, int((vs.x - lx * 2.0) / maxf(_logo_font.get_string_size(game_title, HORIZONTAL_ALIGNMENT_LEFT, -1, 1).x, 0.01))))
 	var tsize := _logo_font.get_string_size(game_title, HORIZONTAL_ALIGNMENT_LEFT, -1, tfs)
 	var tpos := Vector2(lx, vs.y * 0.37) + tf
 	var g := _glitch / 0.22
@@ -255,3 +261,8 @@ func _on_options_closed() -> void:
 	_in_options = false
 	_glow.show()
 	_bg.show()
+
+func _apply_quality() -> void:
+	if is_instance_valid(_glow):
+		_glow.visible = not GameSettings.reduced_detail() and not GameSettings.mobile_quality()
+	queue_redraw()

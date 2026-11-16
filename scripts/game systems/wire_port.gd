@@ -25,6 +25,7 @@ var _center := Vector2.ZERO
 var _half := Vector2(64, 64)
 var _rot_target: float = 0.0
 var _tween: Tween
+var _fx_was_visible := false
 var _tag_style: StyleBoxFlat
 
 func _ready() -> void:
@@ -124,7 +125,10 @@ func _process(delta: float) -> void:
 			else:
 				hover_count = maxi(0, hover_count - 1)
 			Input.set_default_cursor_shape(Input.CURSOR_POINTING_HAND if hover_count > 0 else Input.CURSOR_ARROW)
-	queue_redraw()
+	var needs_fx := hovered or flash > 0.0 or (not Engine.is_editor_hint() and _interactive())
+	if needs_fx or _fx_was_visible or Engine.is_editor_hint() or not GameSettings.baseline_enabled():
+		queue_redraw()
+	_fx_was_visible = needs_fx
 
 func _unhandled_input(event: InputEvent) -> void:
 	if Engine.is_editor_hint() or not hovered:

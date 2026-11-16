@@ -67,6 +67,7 @@ func _ready() -> void:
 	ring_tex = _radial_tex(64, 0.0)
 	ui_theme = _build_theme()
 	get_tree().node_added.connect(_on_node_added)
+	GameSettings.quality_changed.connect(_apply_quality)
 
 func _process(delta: float) -> void:
 	_t += delta
@@ -79,8 +80,6 @@ func _process(delta: float) -> void:
 			_install(cs)
 	if not _installed or get_tree().paused:
 		return
-	if _post_mat != null:
-		_post_mat.set_shader_parameter("bloom_amount", 0.55 if bool(GameSettings.settings.get("glow", true)) else 0.0)
 	_update_lighting(delta)
 	_update_particles()
 	_update_shop(delta)
@@ -88,7 +87,9 @@ func _process(delta: float) -> void:
 
 func _teardown() -> void:
 	# The root viewport outlives scenes. Reset before another scene draws.
-	get_viewport().use_hdr_2d = false
+	GameSettings.set_hdr_preference(false)
+	_post_rect = null
+	_post_mat = null
 	_module_lights.clear()
 	_shop_labels.clear()
 	_shop_seen = null
@@ -104,6 +105,7 @@ func _install(game: Node) -> void:
 	_setup_particles()
 	_setup_post_fx()
 	_setup_hud()
+	_apply_quality()
 	# connect signals once per install
 	if not EventBus.module_broken.is_connected(_on_module_broken):
 		EventBus.module_broken.connect(_on_module_broken)
@@ -137,17 +139,21 @@ func _bloom_wire(l: Line2D) -> void:
 
 # - environment/bloom -
 func _setup_environment() -> void:
-	get_viewport().use_hdr_2d = RenderingServer.get_current_rendering_method() != "gl_compatibility"
+	GameSettings.set_hdr_preference(true)
 	var we := _game.get_node_or_null("WorldEnvironment") as WorldEnvironment
 	if we == null:
 		we = WorldEnvironment.new()
 		we.name = "WorldEnvironment"
 		_game.add_child(we)
 	var env := we.environment.duplicate() as Environment if we.environment != null else Environment.new()
+	# duplicate() also copies metadata from the scene's previous environment.
+	# Snapshot the configured Polish defaults, not that resource's older profile.
+	if env.has_meta("crashfall_defaults"):
+		env.remove_meta("crashfall_defaults")
 	we.environment = env
 	env.background_mode = Environment.BG_CANVAS      # required for 2D glow
 	env.tonemap_mode = Environment.TONE_MAPPER_LINEAR   # keep your original colours
-	env.glow_enabled = bool(GameSettings.settings.get("glow", true))
+	env.glow_enabled = true
 	env.glow_intensity = 0.45
 	env.glow_strength = 0.45
 	env.glow_bloom = 0.02
@@ -159,6 +165,7 @@ func _setup_environment() -> void:
 	env.adjustment_enabled = true
 	env.adjustment_contrast = 1.08
 	env.adjustment_saturation = 1.12
+	GameSettings._apply_visual_node(we)
 
 # - lighting -
 func _setup_lighting() -> void:
@@ -200,7 +207,7 @@ func _make_light(col: Color, energy: float, scl: float, shadows: bool) -> PointL
 	l.texture_scale = scl
 	l.color = col
 	l.energy = energy
-	l.shadow_enabled = shadows and not bool(GameSettings.settings.get("low_detail", false))
+	l.shadow_enabled = shadows
 	if shadows:
 		l.shadow_filter = Light2D.SHADOW_FILTER_PCF5
 		l.shadow_filter_smooth = 2.0
@@ -315,7 +322,7 @@ func _emitter(amount: int, life: float, add_mat: Material) -> CPUParticles2D:
 	var p := CPUParticles2D.new()
 	p.texture = ring_tex
 	p.material = add_mat
-	p.amount = maxi(8, int(amount * 0.5)) if bool(GameSettings.settings.get("low_detail", false)) else amount
+	p.amount = amount
 	p.lifetime = life
 	p.preprocess = life
 	p.emission_shape = CPUParticles2D.EMISSION_SHAPE_RECTANGLE
@@ -333,7 +340,7 @@ func _world_motes(parent: Node, pts: PackedVector2Array, amount: int, life: floa
 	var e := CPUParticles2D.new()
 	e.texture = ring_tex
 	e.material = mat
-	e.amount = maxi(8, int(amount * 0.5)) if bool(GameSettings.settings.get("low_detail", false)) else amount
+	e.amount = amount
 	e.lifetime = life
 	e.preprocess = life
 	e.local_coords = true                       # they move WITH the station, not with the screen
@@ -401,14 +408,15 @@ func _setup_particles() -> void:
 
 func _update_particles() -> void:
 	if _sparks != null and is_instance_valid(_sparks):
-		_sparks.emitting = BaseManager.reactor_energy > 0.0 and bool(GameSettings.settings.get("particles", true))
+		_sparks.emitting = BaseManager.reactor_energy > 0.0 and GameSettings.particles_enabled()
 
 # - post-process -
 const POST_SHADER := """
 shader_type canvas_item;
-uniform sampler2D screen_tex : hint_screen_texture, filter_linear_mipmap;
+uniform sampler2D screen_tex : hint_screen_texture, filter_linear;
 uniform float vignette = 0.30;
 uniform float aberration = 0.0;
+uniform bool optimize_samples = true;
 uniform float scan = 0.0;
 uniform float grain = 0.0;
 uniform float danger = 0.0;
@@ -420,9 +428,13 @@ void fragment(){
 	float d = dot(c, c);
 	vec2 off = c * d * aberration * 0.012;
 	vec3 col;
-	col.r = texture(screen_tex, uv + off).r;
-	col.g = texture(screen_tex, uv).g;
-	col.b = texture(screen_tex, uv - off).b;
+	if (optimize_samples && aberration == 0.0) {
+		col = texture(screen_tex, uv).rgb;
+	} else {
+		col.r = texture(screen_tex, uv + off).r;
+		col.g = texture(screen_tex, uv).g;
+		col.b = texture(screen_tex, uv - off).b;
+	}
 	// Small fixed tap count; works on WebGL 2 without HDR framebuffer support.
 	if (bloom_amount > 0.0) {
 		vec2 px = SCREEN_PIXEL_SIZE * 5.0;
@@ -442,6 +454,7 @@ void fragment(){
 	COLOR = vec4(col, 1.0);
 }
 """
+var _post_rect: ColorRect
 var _post_mat: ShaderMaterial
 
 func _setup_post_fx() -> void:
@@ -458,6 +471,13 @@ func _setup_post_fx() -> void:
 	_post_mat.shader = sh
 	rect.material = _post_mat
 	layer.add_child(rect)
+	_post_rect = rect
+
+func _apply_quality() -> void:
+	if is_instance_valid(_post_rect):
+		_post_rect.visible = not GameSettings.reduced_detail() and not GameSettings.mobile_quality()
+		_post_mat.set_shader_parameter("bloom_amount", 0.55 if GameSettings.glow_enabled() else 0.0)
+		_post_mat.set_shader_parameter("optimize_samples", GameSettings.baseline_enabled())
 
 # - theme -
 func _build_theme() -> Theme:

@@ -4,6 +4,8 @@ extends RefCounted
 
 const SHADER := """
 shader_type canvas_item;
+uniform int noise_octaves = 5;
+uniform bool flat_quality = false;
 render_mode blend_add;
 uniform float time = 0.0;
 uniform float opacity = 1.0;
@@ -24,11 +26,12 @@ float noise(vec2 p) {
 float fbm(vec2 p) {
 	float v = 0.0;
 	float a = 0.5;
-	for (int i = 0; i < 5; i++) { v += a * noise(p); p *= 2.0; a *= 0.5; }
+	for (int i = 0; i < 5; i++) { if (i >= noise_octaves) { break; } v += a * noise(p); p *= 2.0; a *= 0.5; }
 	return v;
 }
 
 void fragment() {
+	if (flat_quality) { COLOR = vec4(0.0); } else {
 	vec2 uv = (UV - 0.5) * 2.0;
 	uv.x /= sun_aspect.x;
 	uv.y /= sun_aspect.y;
@@ -63,5 +66,6 @@ void fragment() {
 	col += near_col.rgb * prom_mask * prom_band * 0.85;
 
 	COLOR = vec4(col * intensity * 1.6, opacity);
+	}
 }
 """

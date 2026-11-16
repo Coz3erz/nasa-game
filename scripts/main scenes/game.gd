@@ -254,6 +254,8 @@ class SupplyCrate extends Node2D:
 		box_scale = box_scale.lerp(Vector2.ONE, 1.0 - exp(-14.0 * delta))
 
 	func _spawn_impact_dust(strength: float) -> void:
+		if not GameSettings.particles_enabled():
+			return
 		for i in range(6):
 			var ang := TAU * float(i) / 6.0 + randf_range(-0.3, 0.3)
 			dust_rings.append({
@@ -301,7 +303,7 @@ class SupplyCrate extends Node2D:
 
 		var pulse := 0.5 + 0.5 * sin(time * 5.5)
 
-		for d in dust_rings:
+		for d in (dust_rings if GameSettings.particles_enabled() else []):
 			var t01: float = clampf(d["age"] / d["life"], 0.0, 1.0)
 			var ease_out: float = 1.0 - pow(1.0 - t01, 2.5)
 			var local_origin: Vector2 = d["origin"] - global_position
@@ -589,6 +591,8 @@ void fragment() {
 		mat.shader = sh
 		glow_layer.material = mat
 		add_child(glow_layer)
+		GameSettings.quality_changed.connect(_apply_quality)
+		_apply_quality()
 
 		sfx_player = AudioStreamPlayer.new()
 		sfx_player.bus = &"SFX"
@@ -683,8 +687,13 @@ void fragment() {
 
 	func _process(delta: float) -> void:
 		time += delta
-		if glow_layer != null:
+		if glow_layer != null and glow_layer.visible:
 			(glow_layer.material as ShaderMaterial).set_shader_parameter("time", time)
+		queue_redraw()
+
+	func _apply_quality() -> void:
+		if is_instance_valid(glow_layer):
+			glow_layer.visible = not GameSettings.reduced_detail() and not GameSettings.mobile_quality()
 		queue_redraw()
 
 	func _compute_float(phase: float) -> Vector2:
@@ -898,7 +907,7 @@ void fragment() {
 			x += btn_w + 20.0
 
 	func _update_glow_shader() -> void:
-		if glow_layer == null:
+		if glow_layer == null or not glow_layer.visible:
 			return
 		var mat := glow_layer.material as ShaderMaterial
 		var vs := get_viewport_rect().size
@@ -1072,6 +1081,17 @@ void fragment() {
 		return wav
 
 class MarsWindRenderer extends Node2D:
+	var _quality_count := -1
+
+	func _ready() -> void:
+		GameSettings.quality_changed.connect(_apply_quality)
+		_apply_quality()
+
+	func _apply_quality() -> void:
+		setup(bounds)
+		visible = GameSettings.particles_enabled()
+		set_process(visible)
+		queue_redraw()
 	var particles: Array[Dictionary] = []
 	var time: float = 0.0
 	var active: bool = false
@@ -1081,8 +1101,12 @@ class MarsWindRenderer extends Node2D:
 	func setup(area_bounds: Rect2) -> void:
 		bounds = area_bounds
 		z_index = 40
+		var count := (60 if GameSettings.mobile_quality() else 260) if GameSettings.particles_enabled() else 0
+		if count == _quality_count:
+			return
+		_quality_count = count
 		particles.clear()
-		for i in range(260):
+		for i in range(count):
 			particles.append({
 				"pos": Vector2(
 					randf_range(bounds.position.x, bounds.end.x),
@@ -1098,8 +1122,12 @@ class MarsWindRenderer extends Node2D:
 
 	func _process(delta: float) -> void:
 		var target_a: float = 1.0 if active else 0.0
+		if target_a == 0.0 and alpha_fade <= 0.001:
+			return
 		alpha_fade = move_toward(alpha_fade, target_a, delta * 1.5)
 		if alpha_fade <= 0.001:
+			# Clear the last retained draw commands when the fade finishes.
+			queue_redraw()
 			return
 
 		time += delta

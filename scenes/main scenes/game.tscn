@@ -9,6 +9,7 @@
 [ext_resource type="PackedScene" uid="uid://cjisgeknfhwem" path="res://scenes/modules/reactor.tscn" id="5_nhvkb"]
 [ext_resource type="TileSet" uid="uid://be55b3rv3vtgs" path="res://resources/wiring.tres" id="6_3y2b4"]
 [ext_resource type="Texture2D" uid="uid://c5ft7uinh8vfy" path="res://sprites/modules/pixor-library-sci-rover-selout-64px-8-sides.png" id="6_pfq10"]
+[ext_resource type="Script" uid="uid://dwmcnm743qp8w" path="res://scripts/main scenes/ship.gd" id="10_hxrxh"]
 
 [sub_resource type="Environment" id="Environment_nhvkb"]
 tonemap_mode = 3
@@ -98,3 +99,7 @@ shape = SubResource("RectangleShape2D_3y2b4")
 position = Vector2(413.00003, 897.00006)
 scale = Vector2(46.328125, 28.27476)
 texture = SubResource("GradientTexture2D_hxrxh")
+
+[node name="ship" type="Node2D" parent="." unique_id=95614475]
+position = Vector2(23189, -2154)
+script = ExtResource("10_hxrxh")

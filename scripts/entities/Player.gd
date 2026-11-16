@@ -84,6 +84,7 @@ var _hint_panel: PanelContainer
 var _hint_box: VBoxContainer
 var _hint_key_cache := ""
 var _hint_kind := ""
+var _hint_row_state: Array = []
 var _hint_marks: Array = []
 var _hints_node: Hints
 var _ghost_origin := Vector2.ZERO
@@ -98,6 +99,11 @@ var _build_hint: Label
 var _toast: Label
 var _hud_key := ""
 var _panel_ok: StyleBoxFlat
+var _receiver_shape := CircleShape2D.new()
+var _receiver_query := PhysicsShapeQueryParameters2D.new()
+var _ghost_query := PhysicsShapeQueryParameters2D.new()
+var _outside_area: Area2D
+var _outside_checked := false
 var _panel_bad: StyleBoxFlat
 
 func _ready() -> void:
@@ -114,6 +120,7 @@ func _ready() -> void:
 	if player_camera != null:
 		_cam_base = player_camera.position
 		_cam_zoom = player_camera.zoom
+	get_tree().tree_changed.connect(_invalidate_scene_cache)
 	_make_dust()
 	_make_build_hud()
 	_make_hint_panel()
@@ -121,6 +128,9 @@ func _ready() -> void:
 	_hints_node = Hints.new()
 	_hints_node.p = self
 	add_child(_hints_node)
+
+func _invalidate_scene_cache() -> void:
+	_outside_checked = false
 
 func _exit_tree() -> void:
 	if is_instance_valid(ghost_module):
@@ -306,7 +316,6 @@ func _process(delta: float) -> void:
 	_update_hints()
 	if is_build_mode:
 		_update_hud_text()
-		queue_redraw()
 
 func _update_facing() -> void:
 	for i in range(held_dirs.size() - 1, -1, -1):
@@ -370,7 +379,7 @@ func _update_squash(d: float) -> void:
 		sprite.position = _sprite_base_pos + Vector2(0.0, (1.0 - sc.y) * _sprite_half_h)
 		sprite.rotation = lerp_angle(sprite.rotation, clampf(_move_vel.x / speed, -1.0, 1.0) * 0.07, 1.0 - exp(-12.0 * d))
 	if _dust != null:
-		_dust.emitting = is_active and not input_locked and spd > 0.5
+		_dust.emitting = GameSettings.particles_enabled() and is_active and not input_locked and spd > 0.5
 		_dust.position = Vector2(0.0, _sprite_half_h * 0.85)
 		if moving:
 			_dust.direction = -_move_vel.normalized()
@@ -448,7 +457,7 @@ func _unhandled_input(event: InputEvent) -> void:
 			elif event.button_index == MOUSE_BUTTON_LEFT and WirePort.hover_count == 0:
 				_attempt_place()
 
-# rotate function kept — called by rotate_port action and gamepad X
+# rotate function kept â€” called by rotate_port action and gamepad X
 func _rotate_aimed_port() -> void:
 	var target: Node2D = null
 	var distance := 90.0
@@ -567,6 +576,7 @@ func _neutralize_ghost(n: Node) -> void:
 			n.remove_from_group(grp)
 	for c in n.get_children():
 		_neutralize_ghost(c)
+	GameSettings.invalidate_group_cache()
 
 static func _snap_out(v: float, dir: float, grid: float) -> float:
 	if dir > 0.0:
@@ -593,7 +603,7 @@ func _update_build_ghost(delta: float, snap_now: bool = false) -> void:
 		ghost_module.global_position = ghost_module.global_position.lerp(origin, 1.0 - exp(-ghost_glide * delta))
 	can_place = not is_outside
 	if can_place and _ghost_test_shape != null:
-		var q := PhysicsShapeQueryParameters2D.new()
+		var q := _ghost_query if GameSettings.baseline_enabled() else PhysicsShapeQueryParameters2D.new()
 		q.shape = _ghost_test_shape
 		q.transform = Transform2D(0.0, origin + _ghost_center_off)
 		q.collide_with_bodies = true
@@ -602,7 +612,7 @@ func _update_build_ghost(delta: float, snap_now: bool = false) -> void:
 		can_place = get_world_2d().direct_space_state.intersect_shape(q, 1).is_empty()
 	if can_place:
 		var mine := Rect2(center - _ghost_half, _ghost_half * 2.0).grow(-3.0)
-		for mm in get_tree().get_nodes_in_group("modules"):
+		for mm in GameSettings.group_nodes("modules"):
 			if is_instance_valid(mm) and mm is BaseModule and mine.intersects((mm as BaseModule).get_footprint()):
 				can_place = false
 				break
@@ -633,7 +643,7 @@ func _deny() -> void:
 	_flash_hint("Can't build there - something's in the way!", C_RED)
 
 func _reactor_node() -> BaseModule:
-	for candidate in get_tree().get_nodes_in_group("modules"):
+	for candidate in GameSettings.group_nodes("modules"):
 		if candidate is BaseModule and candidate.module_name == "Reactor":
 			return candidate
 	return null
@@ -642,7 +652,10 @@ func _exit_rect() -> Rect2:
 	var scene := get_tree().current_scene
 	if scene == null:
 		return Rect2()
-	var area := scene.find_child("outside", true, false) as Area2D
+	if not _outside_checked or not GameSettings.baseline_enabled():
+		_outside_area = scene.find_child("outside", true, false) as Area2D
+		_outside_checked = true
+	var area := _outside_area
 	if area == null:
 		return Rect2()
 	var cs := area.get_node_or_null("CollisionShape2D") as CollisionShape2D
@@ -875,7 +888,7 @@ func _grab_fx() -> void:
 	Fx.burst(get_parent(), global_position + facing_vec * 20.0, Color(1.4, 1.4, 1.6, 0.9), 8, 30.0, 90.0, 0.3, 0.03, 0.06, true)
 
 func _get_all_wires() -> Array[Node]:
-	return get_tree().get_nodes_in_group("wires")
+	return GameSettings.group_nodes("wires")
 
 func _find_closest_dropped_wire() -> Node2D:
 	var closest_wire: Node2D = null
@@ -902,7 +915,7 @@ func _find_closest_plugged_wire() -> Node2D:
 func _find_closest_wire_source() -> Node2D:
 	var closest_source: Node2D = null
 	var min_dist: float = grab_range
-	for node in get_tree().get_nodes_in_group("wire_sources"):
+	for node in GameSettings.group_nodes("wire_sources"):
 		if node is Node2D and node.has_method("spawn_wire") and node.has_method("can_spawn_wire"):
 			if not node.can_spawn_wire():
 				continue
@@ -915,7 +928,7 @@ func _find_closest_wire_source() -> Node2D:
 func _find_nearby_receiver(w: Node2D = null) -> Node2D:
 	var closest_receiver: Node2D = null
 	var min_dist: float = plug_range
-	for node in get_tree().get_nodes_in_group("wire_receivers"):
+	for node in GameSettings.group_nodes("wire_receivers"):
 		if node is Node2D and node.has_method("can_accept_wire") and node.can_accept_wire(w):
 			var target_pos: Vector2 = node.get_receiver_position() if node.has_method("get_receiver_position") else node.global_position
 			var dist: float = global_position.distance_to(target_pos)
@@ -924,9 +937,9 @@ func _find_nearby_receiver(w: Node2D = null) -> Node2D:
 				closest_receiver = node
 	if closest_receiver != null:
 		return closest_receiver
-	var shape: CircleShape2D = CircleShape2D.new()
+	var shape: CircleShape2D = _receiver_shape if GameSettings.baseline_enabled() else CircleShape2D.new()
 	shape.radius = plug_range
-	var query: PhysicsShapeQueryParameters2D = PhysicsShapeQueryParameters2D.new()
+	var query: PhysicsShapeQueryParameters2D = _receiver_query if GameSettings.baseline_enabled() else PhysicsShapeQueryParameters2D.new()
 	query.shape = shape
 	query.transform = Transform2D(0.0, global_position)
 	query.collide_with_areas = true
@@ -967,7 +980,7 @@ func _reactor_full(w: Node2D, r: Node2D) -> bool:
 	return BaseManager.current_power_draw + need > BaseManager.total_power + 0.01
 
 func _wrong_receiver_near(w: Node2D) -> Node2D:
-	for node in get_tree().get_nodes_in_group("wire_receivers"):
+	for node in GameSettings.group_nodes("wire_receivers"):
 		if node is Node2D and node.has_method("accepts_wire") and not node.accepts_wire(w):
 			var rp: Vector2 = node.get_receiver_position() if node.has_method("get_receiver_position") else node.global_position
 			if global_position.distance_to(rp) <= plug_range:
@@ -1048,7 +1061,7 @@ func _compute_hint_rows() -> Array:
 		rows.append([InputSupport.label("interact"), "Place it"])
 		if build_options.size() > 1:
 			rows.append([InputSupport.label("cycle_module"), "Pick another"])
-		# rotate_port row removed — rotate is no longer advertised
+		# rotate_port row removed â€” rotate is no longer advertised
 		rows.append([InputSupport.label("build_mode"), "Stop building"])
 		return rows
 	rows.append([InputSupport.movement_label(), "Walk"])
@@ -1075,7 +1088,7 @@ func _update_hints() -> void:
 		return
 	if _hint_panel != null:
 		_hint_panel.offset_bottom = -20
-	if _hint_panel != null and (not is_active or input_locked or get_tree().get_nodes_in_group("shop_ui").any(func(n): return n.is_visible_in_tree())):
+	if _hint_panel != null and (not is_active or input_locked or GameSettings.group_nodes("shop_ui").any(func(n): return n.is_visible_in_tree())):
 		_hint_panel.hide()
 		_hint_marks.clear()
 		return
@@ -1118,7 +1131,10 @@ func _update_hints() -> void:
 							_hint_marks.append({"pos": src.global_position, "col": C_CYAN, "text": InputSupport.label("interact") + "  grab wire"})
 	var show_build := _has_buildables() and not is_outside and not input_locked and (GameManager.current_phase in [GameManager.Phase.BUILD, GameManager.Phase.SURVIVE])
 	_hint_panel.visible = show_build or _hint_kind != "" or is_build_mode
-	_set_hint_rows(_compute_hint_rows())
+	var row_state: Array = [is_build_mode, _hint_kind, build_options.size(), _has_buildables(), is_outside, InputSupport.device_kind, InputSupport.labels_revision]
+	if row_state != _hint_row_state or not GameSettings.baseline_enabled():
+		_hint_row_state = row_state
+		_set_hint_rows(_compute_hint_rows())
 
 func _overlay_draw(c: Node2D) -> void:
 	if not is_build_mode or not is_instance_valid(ghost_module):
@@ -1147,6 +1163,7 @@ func _overlay_draw(c: Node2D) -> void:
 	c.draw_string(f, ctr + Vector2(-w * 0.5, -_ghost_zone - 14.0), msg, HORIZONTAL_ALIGNMENT_LEFT, -1, 18, Color(col.r, col.g, col.b, 0.95))
 
 class Hints extends Node2D:
+	var _had_content := false
 	var p: Node
 	var t := 0.0
 	func _ready() -> void:
@@ -1156,7 +1173,10 @@ class Hints extends Node2D:
 		z_index = 300
 	func _process(d: float) -> void:
 		t += d
-		queue_redraw()
+		var has_content: bool = is_instance_valid(p) and (p.is_build_mode or not p._hint_marks.is_empty())
+		if has_content or _had_content or not GameSettings.baseline_enabled():
+			queue_redraw()
+		_had_content = has_content
 	func _draw() -> void:
 		if p == null or not is_instance_valid(p):
 			return
@@ -1192,7 +1212,7 @@ class Fx:
 		return _soft
 
 	static func burst(parent: Node, pos: Vector2, col: Color, amount: int, v_min: float, v_max: float, life: float, s_min: float, s_max: float, additive: bool = false, grav: Vector2 = Vector2.ZERO) -> void:
-		if parent == null or not parent.is_inside_tree():
+		if parent == null or not parent.is_inside_tree() or not GameSettings.particles_enabled():
 			return
 		var p := CPUParticles2D.new()
 		p.texture = tex()
@@ -1340,8 +1360,8 @@ class ConstructionFX extends Node2D:
 			_finish()
 			return
 		near = is_instance_valid(player) and target.get_center().distance_to(player.global_position) <= target.interact_radius()
-		smoke.emitting = near
-		sparks.emitting = near
+		smoke.emitting = near and GameSettings.particles_enabled()
+		sparks.emitting = near and GameSettings.particles_enabled()
 		shown = lerpf(shown, clampf(target.build_progress / 100.0, 0.0, 1.0), 1.0 - exp(-16.0 * delta))
 		if target.progress_bar != null:
 			target.progress_bar.visible = false

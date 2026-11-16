@@ -37,6 +37,10 @@ var ignored_rids: Array[RID] = []
 var collision_shape: CircleShape2D
 var shape_query: PhysicsShapeQueryParameters2D
 
+var _collision_bounds := RectangleShape2D.new()
+var _bounds_query := PhysicsShapeQueryParameters2D.new()
+var _player_cache: Node2D
+
 var plug_body_style: StyleBoxFlat
 var plug_boot_style: StyleBoxFlat
 var plug_shadow_style: StyleBoxFlat
@@ -191,9 +195,12 @@ func _process(delta: float) -> void:
 	if is_instance_valid(source_node):
 		socket_pos = source_node.global_position
 
-	var player: Node2D = get_tree().get_first_node_in_group("player") as Node2D
+	if not is_instance_valid(_player_cache) or not GameSettings.baseline_enabled():
+		_player_cache = get_tree().get_first_node_in_group("player") as Node2D
+	var player: Node2D = _player_cache
 	if player == null and get_tree().current_scene != null:
 		player = get_tree().current_scene.get_node_or_null("Player") as Node2D
+		_player_cache = player
 	if player != null and player.has_method("get_rid"):
 		register_ignored_rid(player.call("get_rid"))
 
@@ -277,6 +284,8 @@ func _simulate_rope(delta: float) -> void:
 	shadow.points = packed
 
 func _solve_collisions(space_state: PhysicsDirectSpaceState2D, end_locked: bool) -> void:
+	if GameSettings.baseline_enabled() and not _rope_bounds_overlap(space_state):
+		return
 	var last_idx: int = rope_segments
 	var max_point_idx: int = last_idx if end_locked else last_idx + 1
 
@@ -304,6 +313,26 @@ func _solve_collisions(space_state: PhysicsDirectSpaceState2D, end_locked: bool)
 			rope_points[i + 1] += push * 0.5
 			old_rope_points[i] = old_rope_points[i].lerp(rope_points[i], 0.5)
 			old_rope_points[i + 1] = old_rope_points[i + 1].lerp(rope_points[i + 1], 0.5)
+
+func _rope_bounds_overlap(space_state: PhysicsDirectSpaceState2D) -> bool:
+	if rope_points.is_empty():
+		return false
+	var lo: Vector2 = rope_points[0]
+	var hi: Vector2 = lo
+	for point in rope_points:
+		lo = lo.min(point)
+		hi = hi.max(point)
+	# Both segment midpoints and all point circles are enclosed, with extra
+	# numerical padding. Recompute on EVERY collision pass, after constraints.
+	var padding := collision_shape.radius + maxf(shape_query.margin, 0.0) + 0.1
+	_collision_bounds.size = hi - lo + Vector2.ONE * padding * 2.0
+	_bounds_query.shape = _collision_bounds
+	_bounds_query.transform = Transform2D(0.0, (lo + hi) * 0.5)
+	_bounds_query.collision_mask = shape_query.collision_mask
+	_bounds_query.collide_with_bodies = shape_query.collide_with_bodies
+	_bounds_query.collide_with_areas = shape_query.collide_with_areas
+	_bounds_query.exclude = shape_query.exclude
+	return not space_state.intersect_shape(_bounds_query, 1).is_empty()
 
 func _draw() -> void:
 	if rope_points.size() < 2:

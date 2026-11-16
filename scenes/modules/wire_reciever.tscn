@@ -1,17 +1,17 @@
 [gd_scene format=3 uid="uid://byhs3dvmk7nry"]
 
 [ext_resource type="Script" uid="uid://iitiljnh8teo" path="res://scripts/game systems/wire_reciever.gd" id="1_luswk"]
-[ext_resource type="Texture2D" uid="uid://dv7y8qqsv4ybs" path="res://sprites/modules/wire_module_sprite_white.png" id="2_lrxii"]
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_gshy3"]
 size = Vector2(32, 64)
 
 [node name="WireReciever" type="StaticBody2D" unique_id=1806018912]
 script = ExtResource("1_luswk")
+accepted_sources = PackedStringArray()
 
 [node name="Sprite2D" type="Sprite2D" parent="." unique_id=1084800216]
+visible = false
 texture_filter = 1
-texture = ExtResource("2_lrxii")
 
 [node name="RecieverPoint" type="Marker2D" parent="." unique_id=1892892952]
 position = Vector2(16, 0)

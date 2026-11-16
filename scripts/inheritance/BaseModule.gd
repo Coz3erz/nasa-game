@@ -251,6 +251,8 @@ func face_reactor() -> void:
 
 ## Real sparks: little bright particles that fly OUT of the module, arc and fall.
 func _tick_sparks(delta: float) -> void:
+	if not GameSettings.particles_enabled():
+		return
 	_spark_timer -= delta
 	if _spark_timer > 0.0:
 		return

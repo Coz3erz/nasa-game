@@ -209,6 +209,7 @@ func _damage(amount: float, reason: String) -> void:
 class HazardFX extends CanvasLayer:
 	const STORM_SHADER := """
 shader_type canvas_item;
+uniform bool cheap_quality = false;
 uniform float intensity = 0.0;
 uniform float gust = 0.0;
 float h21(vec2 p){ p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }
@@ -216,6 +217,9 @@ float vn(vec2 p){ vec2 i = floor(p); vec2 f = fract(p); vec2 u = f * f * (3.0 - 
 	return mix(mix(h21(i), h21(i + vec2(1.0, 0.0)), u.x), mix(h21(i + vec2(0.0, 1.0)), h21(i + vec2(1.0, 1.0)), u.x), u.y); }
 float fbm(vec2 p){ float v = 0.0; float a = 0.5; for (int i = 0; i < 4; i++){ v += a * vn(p); p = p * 2.02 + vec2(5.1, 2.7); a *= 0.5; } return v; }
 void fragment(){
+	if (cheap_quality) {
+		COLOR = vec4(0.60, 0.30, 0.12, intensity * 0.20);
+	} else {
 	vec2 res = 1.0 / SCREEN_PIXEL_SIZE;
 	float asp = res.x / res.y;
 	vec2 uv = UV;
@@ -240,11 +244,13 @@ void fragment(){
 	dust = mix(dust, vec3(1.0, 0.72, 0.38), clamp(st * 0.6 + grit, 0.0, 1.0));
 	dust *= mix(1.0, 0.55, e);
 	COLOR = vec4(dust, clamp(a, 0.0, 0.88));
+	}
 }
 """
 	# Flare look adapted from the opening cutscene's sun shader (same fbm, flare_burst blob + ring, same colour ramp).
 	const FLARE_SHADER := """
 shader_type canvas_item;
+uniform bool cheap_quality = false;
 render_mode blend_add;
 uniform float age = -1.0;
 uniform float strength = 1.0;
@@ -266,6 +272,10 @@ float flare_burst(vec2 p, vec2 c, float a, float w){
 	return (blob * 1.9 + ring * 0.5) * env * w;
 }
 void fragment(){
+	if (cheap_quality) {
+		float a = age < 0.0 ? 0.0 : opacity * exp(-max(age, 0.0) * 1.5) * 0.22;
+		COLOR = vec4(edge_col.rgb, a);
+	} else {
 	vec2 res = 1.0 / SCREEN_PIXEL_SIZE;
 	float asp = res.x / res.y;
 	vec2 p = (UV - 0.5) * 2.0;
@@ -285,10 +295,12 @@ void fragment(){
 	c1 = mix(c1, mid_col.rgb, smoothstep(0.50, 1.15, x));
 	c1 = mix(c1, core_col.rgb, smoothstep(1.05, 1.90, x));
 	COLOR = (age < 0.0) ? vec4(0.0) : vec4(c1 * clamp(x, 0.0, 1.4), opacity);
+	}
 }
 """
 	const EDGE_SHADER := """
 shader_type canvas_item;
+uniform bool cheap_quality = false;
 uniform float pulse = 0.0;
 uniform vec4 col : source_color = vec4(1.0, 0.7, 0.2, 1.0);
 void fragment(){
@@ -384,6 +396,15 @@ void fragment(){
 		if AudioServer.get_bus_index("SFX") != -1:
 			sfx.bus = &"SFX"
 			beep.bus = &"SFX"
+		GameSettings.quality_changed.connect(_apply_quality)
+		_apply_quality()
+
+	func _apply_quality() -> void:
+		var cheap := GameSettings.reduced_detail() or GameSettings.mobile_quality()
+		(storm.material as ShaderMaterial).set_shader_parameter("cheap_quality", cheap)
+		(flare.material as ShaderMaterial).set_shader_parameter("cheap_quality", cheap)
+		(corona.material as ShaderMaterial).set_shader_parameter("flat_quality", GameSettings.ultra_enabled())
+		(corona.material as ShaderMaterial).set_shader_parameter("noise_octaves", 2 if cheap else 5)
 
 	func _process(delta: float) -> void:
 		_t += delta

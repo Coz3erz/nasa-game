@@ -113,6 +113,8 @@ func _rbox(r: Rect2, fill: Color, border: Color = Color(0, 0, 0, 0), radius: int
 	draw_style_box(box, r)
 
 func _glow(p: Vector2, rad: float, col: Color, a: float) -> void:
+	if not GameSettings.glow_enabled():
+		return
 	for i in 5:
 		var k := float(i) / 4.0
 		draw_circle(p, rad * (1.0 + k * 1.3), Color(col.r, col.g, col.b, a * (1.0 - k) * 0.28))

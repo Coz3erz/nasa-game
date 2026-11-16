@@ -36,6 +36,7 @@ const FONT_PATH := "res://resources/fonts/Monospace.ttf"
 
 const SKY_SHADER := """
 shader_type canvas_item;
+uniform bool flat_quality = false;
 uniform float dawn = 0.0;
 uniform float ship_t = -1.0;
 uniform float aspect = 1.7778;
@@ -44,6 +45,15 @@ vec3 glow(vec2 p, vec2 c, float k) { float d = distance(p, c); return vec3(0.75,
 void fragment() {
 	vec2 uv = UV;
 	vec2 p = vec2(uv.x * aspect, uv.y);
+	if (flat_quality) {
+		vec3 flat_col = uv.y > 0.80 ? vec3(0.18, 0.07, 0.04) : mix(vec3(0.008, 0.012, 0.035), vec3(0.30, 0.15, 0.12), dawn);
+		if (ship_t >= 0.0) {
+			vec2 ship = mix(vec2(0.98 * aspect, 0.04), vec2(0.82 * aspect, 0.30), clamp(ship_t, 0.0, 1.0));
+			ship.y += sin(max(ship_t, 0.0) * 3.0) * 0.02;
+			if (abs(p.x - ship.x) < 0.035 && abs(p.y - ship.y) < 0.012) { flat_col = vec3(0.75, 0.92, 1.0); }
+		}
+		COLOR = vec4(flat_col, 1.0);
+	} else {
 	float horizon = 0.80 + 0.018 * sin(uv.x * 6.0 + 1.0) + 0.01 * sin(uv.x * 19.0) + 0.006 * sin(uv.x * 43.0);
 	vec3 night = mix(vec3(0.008, 0.012, 0.035), vec3(0.05, 0.035, 0.10), uv.y);
 	vec3 morning = mix(vec3(0.06, 0.09, 0.22), vec3(1.0, 0.50, 0.22), pow(smoothstep(0.25, horizon, uv.y), 1.7));
@@ -79,6 +89,7 @@ void fragment() {
 	}
 	col *= 1.0 - smoothstep(0.45, 1.0, distance(uv, vec2(0.5))) * 0.55;
 	COLOR = vec4(col, 1.0);
+	}
 }
 """
 
@@ -103,7 +114,7 @@ func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 
 	# soft bloom, only for this scene
-	get_viewport().use_hdr_2d = true
+	GameSettings.set_hdr_preference(true)
 	var we := WorldEnvironment.new()
 	var env := Environment.new()
 	env.background_mode = Environment.BG_CANVAS
@@ -122,6 +133,8 @@ func _ready() -> void:
 	sh.code = SKY_SHADER
 	sky_mat = ShaderMaterial.new()
 	sky_mat.shader = sh
+	GameSettings.quality_changed.connect(_apply_quality)
+	_apply_quality()
 	sky.material = sky_mat
 	add_child(sky)
 
@@ -303,3 +316,10 @@ func _unhandled_input(event: InputEvent) -> void:
 			await trans.change_scene(next_scene, 1.5)
 		else:
 			get_tree().change_scene_to_file(next_scene)
+
+func _apply_quality() -> void:
+	if sky_mat != null:
+		sky_mat.set_shader_parameter("flat_quality", GameSettings.ultra_enabled())
+
+func _exit_tree() -> void:
+	GameSettings.set_hdr_preference(false)

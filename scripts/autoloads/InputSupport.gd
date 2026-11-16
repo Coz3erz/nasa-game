@@ -11,12 +11,25 @@ var _touch_controls: CanvasLayer
 var _scene: Node
 var _has_touch_cached: int = -1
 var _web_fs_installed := false
+var _label_cache: Dictionary = {}
+var labels_revision := 0
+var _mobile_browser := -1
 
 func is_web() -> bool:
 	return OS.has_feature("web")
 
 func is_native_mobile() -> bool:
 	return OS.has_feature("android") or OS.has_feature("ios")
+
+func is_mobile_device() -> bool:
+	if is_native_mobile():
+		return true
+	if _mobile_browser == -1:
+		_mobile_browser = 0
+		if is_web():
+			var detected: bool = JavaScriptBridge.eval("/Android|iPhone|iPad|iPod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)") == true
+			_mobile_browser = 1 if detected else 0
+	return _mobile_browser == 1
 
 func has_touch() -> bool:
 	if _saw_touch:
@@ -82,7 +95,7 @@ func _ready() -> void:
 	device_kind = "touch" if is_native_mobile() else "keyboard"
 	Input.joy_connection_changed.connect(_joy_changed)
 	# Add TouchControls as a child of /root (not InputSupport) so we can force
-	# it to be the LAST child of root — Godot processes `_input` in reverse
+	# it to be the LAST child of root â€” Godot processes `_input` in reverse
 	# tree order, so being last means touch events reach TouchControls BEFORE
 	# the game scene. Without this, aim touches trigger "place module".
 	_touch_controls = load("res://scripts/ui/TouchControls.gd").new()
@@ -133,6 +146,7 @@ func _joy_changed(_id: int, connected: bool) -> void:
 		device_kind = "touch" if has_touch() else "keyboard"
 	elif connected:
 		device_kind = "gamepad"
+	invalidate_labels()
 	device_changed.emit()
 
 func _input(event: InputEvent) -> void:
@@ -149,14 +163,27 @@ func _input(event: InputEvent) -> void:
 		kind = "keyboard"
 	elif event is InputEventMouseMotion and event.device != -1 and event.relative.length_squared() > 9.0 and Time.get_ticks_msec() - _last_touch_msec > 2500:
 		# Real mouse movement only. On a touch-capable device, mouse motion must
-		# never demote away from touch — this was causing the 10–15s glitch.
+		# never demote away from touch â€” this was causing the 10â€“15s glitch.
 		if not has_touch():
 			kind = "keyboard"
 	if kind != device_kind:
 		device_kind = kind
+		invalidate_labels()
 		device_changed.emit()
 
+func invalidate_labels() -> void:
+	labels_revision += 1
+	_label_cache.clear()
+
 func label(action: StringName) -> String:
+	var key := device_kind + ":" + str(action)
+	if not GameSettings.baseline_enabled():
+		return _uncached_label(action)
+	if not _label_cache.has(key):
+		_label_cache[key] = _uncached_label(action)
+	return str(_label_cache[key])
+
+func _uncached_label(action: StringName) -> String:
 	if device_kind == "touch":
 		return {"interact": "Use", "build_mode": "Build", "cycle_module": "Next", "rotate_port": "Rotate", "ui_accept": "Tap", "pause_game": "Pause", "use_medkit": "Heal"}.get(str(action), "Touch")
 	if not InputMap.has_action(action):

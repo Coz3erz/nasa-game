@@ -182,6 +182,15 @@ var awaiting_input: bool = false
 var rebinding_action: String = ""
 var _display_mode_seen := ""
 var binding_mode: bool = false
+var controls_device := "Keyboard & Mouse"
+var _binding_message := ""
+var _mobile_layout := false
+const CONTROL_ACTIONS := ["ui_up", "ui_down", "ui_left", "ui_right", "interact", "build_mode", "cycle_module", "use_medkit", "pause_game"]
+const CONTROL_NAMES := {
+	"ui_up": "Walk up", "ui_down": "Walk down", "ui_left": "Walk left", "ui_right": "Walk right",
+	"interact": "Use / repair / connect", "build_mode": "Start / stop building",
+	"cycle_module": "Next building", "use_medkit": "Use a medkit", "pause_game": "Pause"
+}
 
 var confirming_exit: bool = false
 var confirm_selected: int = 0
@@ -238,8 +247,7 @@ func _set_setting(key: String, val: Variant) -> void:
 	if gs != null and "settings" in gs:
 		gs.settings[key] = val
 		gs.dirty = true
-		if gs.has_method("apply_settings"):
-			gs.apply_settings()
+		# Do not auto-apply; wait until SAVE is pressed
 
 func _is_dirty() -> bool:
 	var gs := _gs()
@@ -252,6 +260,64 @@ func _set_dirty(val: bool) -> void:
 	if gs != null and "dirty" in gs:
 		gs.dirty = val
 
+# ---- Graphics Quality tier helpers ----
+
+func _is_pc_platform() -> bool:
+	return OS.has_feature("windows") or OS.has_feature("macos") or OS.has_feature("linuxbsd")
+
+func _init_hardware_graphics_tier() -> void:
+	var gs := _gs()
+	if gs == null or not ("settings" in gs):
+		return
+	if gs.settings.get("graphics_tier_initialized", false):
+		return
+	
+	if _is_pc_platform():
+		# Condition 1: PC -> Automatically put highest tier ("Normal" = full quality)
+		_set_graphics_tier("Normal", false)
+	else:
+		# Condition 2: Not PC -> Switch to "Low Detail" or "Light" depending on hardware
+		var low_end_hw := OS.get_processor_count() <= 4
+		_set_graphics_tier("Low Detail" if low_end_hw else "Light", false)
+	
+	gs.settings["graphics_tier_initialized"] = true
+	if gs.has_method("apply_settings"):
+		gs.apply_settings()
+
+func _get_graphics_tier() -> String:
+	if bool(_get_setting("ultra_performance", false)):
+		return "Ultra"
+	if bool(_get_setting("low_detail", false)):
+		return "Low Detail"
+	if str(_get_setting("mobile_quality", "Auto")) == "On":
+		return "Light"
+	return "Normal"
+
+func _set_graphics_tier(tier: String, mark_dirty: bool = true) -> void:
+	var gs := _gs()
+	if gs == null or not ("settings" in gs):
+		return
+	match tier:
+		"Normal":
+			gs.settings["mobile_quality"] = "Off"
+			gs.settings["low_detail"] = false
+			gs.settings["ultra_performance"] = false
+		"Light":
+			gs.settings["mobile_quality"] = "On"
+			gs.settings["low_detail"] = false
+			gs.settings["ultra_performance"] = false
+		"Low Detail":
+			gs.settings["mobile_quality"] = "On"
+			gs.settings["low_detail"] = true
+			gs.settings["ultra_performance"] = false
+		"Ultra":
+			gs.settings["mobile_quality"] = "On"
+			gs.settings["low_detail"] = false
+			gs.settings["ultra_performance"] = true
+	if mark_dirty:
+		gs.dirty = true
+	# Do not auto-apply; wait until SAVE is pressed
+
 func _ready() -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_STOP
@@ -260,6 +326,9 @@ func _ready() -> void:
 	clip_contents = false
 
 	_gs()
+	_init_hardware_graphics_tier()
+	_configure_sections()
+	GameSettings.quality_changed.connect(_apply_quality)
 
 	set_meta("no_polish", true)
 	font = load("res://resources/fonts/Monospace.ttf")
@@ -268,6 +337,7 @@ func _ready() -> void:
 		font = ThemeDB.fallback_font
 	_create_background_layer()
 	_create_glow_layer()
+	_apply_quality()
 
 	_build_gameplay_page()
 	reveal = 0.0
@@ -310,16 +380,21 @@ func _process(delta: float) -> void:
 	elif animate_reveal and reveal >= 1.0:
 		animate_reveal = false
 
-	queue_redraw()
+	if not GameSettings.reduced_detail() and not GameSettings.mobile_quality():
+		queue_redraw()
 
-	if glow_layer:
+	if glow_layer and glow_layer.visible:
 		var mat := glow_layer.material as ShaderMaterial
 		mat.set_shader_parameter("time", time)
 
 func _on_resized() -> void:
 	var vs := get_viewport_rect().size
 	var base := minf(vs.x, vs.y)
-	font_size = clampi(int(base * 0.05), 28, 48)
+	font_size = clampi(int(base * 0.045), 18, 40)
+	var tab_width := (vs.x - 2.0 * font_size) / maxf(1.0, section_names.size())
+	for label in section_names:
+		while font_size > 14 and font.get_string_size("[ " + label + " ]", HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x > tab_width - 12.0:
+			font_size -= 1
 	line_height = int(font_size * 1.3)
 	padding = font_size
 
@@ -336,6 +411,8 @@ func _update_scroll_range() -> void:
 	scroll_offset = clampi(scroll_offset, 0, max_scroll)
 
 func _compute_float(phase: float) -> Vector3:
+	if GameSettings.reduced_detail() or GameSettings.mobile_quality():
+		return Vector3.ZERO
 	var y_offset := sin(time * float_speed_y * TAU + phase) * float_amp_y + sin(time * float_speed_y * 1.7 + phase * 2.0) * float_amp_y * 0.4
 	var x_offset := sin(time * float_speed_x * TAU + phase * 0.7) * float_amp_x + cos(time * float_speed_x * 1.3 + phase) * float_amp_x * 0.5
 	var rot_offset := sin(time * float_rot_speed * TAU + phase) * float_rot_amp
@@ -371,6 +448,8 @@ func _draw() -> void:
 		var line_text: String = layout["text"]
 		var is_rebind_target = binding_mode and i == selected_index and entries[i].action == "rebind"
 		var col := highlight_color if layout["active"] else text_color
+		if entries[i].action == "info":
+			col = dim_color
 		if is_rebind_target:
 			col = accent_cyan
 		var display_text := line_text
@@ -393,11 +472,13 @@ func _draw() -> void:
 	_update_glow_shader()
 
 func _draw_binding_prompt() -> void:
-	var friendly_name := rebinding_action.replace("_", " ").capitalize()
-	var line1 := "Press any button to bind it to %s" % friendly_name
-	var line2 := "Press ESC to cancel, press DELETE to remove last input"
+	var friendly_name: String = CONTROL_NAMES.get(rebinding_action, "this action")
+	var line1 := "Press a controller button for %s" % friendly_name if controls_device == "Controller" else "Press a key or mouse button for %s" % friendly_name
+	var line2 := "Back / Select cancels. Keyboard controls stay unchanged." if controls_device == "Controller" else "Esc cancels. Controller controls stay unchanged."
+	if _binding_message != "":
+		line2 = _binding_message
 
-	var box_width := minf(size.x * 0.45, 520.0)
+	var box_width := minf(size.x - padding * 2.0, 720.0)
 	var box_padding := dropdown_padding * 2.0
 	var max_line_width := box_width - 2.0 * box_padding
 	var wrapped_lines: Array[String] = []
@@ -445,7 +526,7 @@ func _wrap_text(text: String, max_width: float) -> Array[String]:
 
 func _draw_bottom_actions() -> void:
 	var bottom_y := size.y - line_height * 2
-	var gap := font_size * 5
+	var gap := maxf(12.0, minf(font_size * 5.0, (size.x - padding * 2.0 - font.get_string_size("  SAVE  BACK  RESET ALL", HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x) * 0.5))
 	var x := padding
 
 	for i in range(bottom_actions.size()):
@@ -499,8 +580,10 @@ func _get_dropdown_rect() -> Rect2:
 		if w > max_width:
 			max_width = w
 
-	var dd_width := minf(max_width + 2.0 * dropdown_padding, size.x - dd_x - padding)
+	var dd_width := minf(max_width + 2.0 * dropdown_padding, size.x - padding * 2.0)
 	var dd_height := dropdown_options.size() * line_height + 2.0 * dropdown_padding
+	dd_x = clampf(dd_x, padding, maxf(padding, size.x - padding - dd_width))
+	dd_y = clampf(dd_y, padding, maxf(padding, size.y - padding - dd_height))
 	return Rect2(dd_x, dd_y, dd_width, dd_height)
 
 func _draw_dropdown() -> void:
@@ -527,7 +610,7 @@ func _draw_dropdown() -> void:
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 func _update_glow_shader() -> void:
-	if glow_layer == null:
+	if glow_layer == null or not glow_layer.visible:
 		return
 	var mat := glow_layer.material as ShaderMaterial
 	var vs := get_viewport_rect().size
@@ -558,7 +641,7 @@ func _update_glow_shader() -> void:
 
 func _draw_confirm_dialog() -> void:
 	draw_rect(Rect2(Vector2.ZERO, size), Color(0.0, 0.0, 0.0, 0.90))
-	var prompt := "Unsaved telemetry changes! Confirm action:"
+	var prompt := "You have unsaved changes."
 	var options := ["Save & Exit", "Exit Without Saving", "Cancel"]
 	var px := padding
 	var py := size.y * 0.3
@@ -574,8 +657,21 @@ func _draw_confirm_dialog() -> void:
 func _build_gameplay_page() -> void:
 	current_page = "gameplay"
 	entries.clear()
+	entries.append({
+		"text": "Graphics Quality: < %s >" % _get_graphics_tier(),
+		"action": "graphics_tier_cycle",
+		"param": "graphics_tier",
+		"options": ["Normal", "Light", "Low Detail", "Ultra"]
+	})
 	entries.append({"text": _bool_text("Particles", _get_setting("particles", true)), "action": "toggle", "param": "particles"})
-	entries.append({"text": _bool_text("Low Detail", _get_setting("low_detail", false)), "action": "toggle", "param": "low_detail"})
+	entries.append({"text": _bool_text("Baseline Optimizations", _get_setting("baseline_optimizations", true)), "action": "toggle", "param": "baseline_optimizations"})
+	entries.append({"text": "Detail modes keep your chosen Max FPS.", "action": "info"})
+	entries.append({"text": "Normal: full quality. Light: mobile tier on all devices.", "action": "info"})
+	entries.append({"text": "Low Detail / Ultra: heavier cuts, still playable.", "action": "info"})
+	if _mobile_layout:
+		entries.append({"text": "TOUCH PLAY - ready automatically", "action": "info"})
+		entries.append({"text": "Left side: walk. Build mode: aim on the right.", "action": "info"})
+		entries.append({"text": "Use the on-screen Use, Build and Next buttons.", "action": "info"})
 	scroll_offset = 0
 	_update_scroll_range()
 	queue_redraw()
@@ -593,55 +689,67 @@ func _build_audio_page() -> void:
 func _build_graphics_page() -> void:
 	current_page = "graphics"
 	entries.clear()
-	# VSync + FPS — always visible, including web
 	entries.append({"text": _bool_text("VSync", _get_setting("vsync", true)), "action": "toggle", "param": "vsync"})
 	entries.append(_cycle_entry("Max FPS", "max_fps", [0, 30, 60, 120, 144, 240]))
 	entries.append(_cycle_entry("MSAA", "msaa", ["Off", "2x", "4x", "8x"]))
 	entries.append(_slider_entry("Brightness", "brightness", 20, 200))
-	# Desktop-only: resolution + window mode
 	if InputSupport.desktop_window_controls():
 		entries.append(_cycle_entry("Resolution", "resolution", ["1280x720", "1600x900", "1920x1080", "2560x1440"]))
 		entries.append(_cycle_entry("Window Mode", "window_mode", ["Windowed", "Fullscreen", "Borderless"]))
 	scroll_offset = 0
 	_update_scroll_range()
 	queue_redraw()
+
+func _configure_sections() -> void:
+	_mobile_layout = InputSupport.is_mobile_device()
+	section_names.assign(["GAMEPLAY", "AUDIO", "GRAPHICS"] if _mobile_layout else ["GAMEPLAY", "AUDIO", "GRAPHICS", "CONTROLS"])
+	if selected_section >= section_names.size():
+		selected_section = 0
+		current_page = "gameplay"
+		binding_mode = false
+		awaiting_input = false
+		rebinding_action = ""
+
+func _apply_quality() -> void:
+	if is_instance_valid(glow_layer):
+		glow_layer.visible = not GameSettings.reduced_detail() and not GameSettings.mobile_quality()
+	queue_redraw()
+
 func _build_controls_page() -> void:
+	if _mobile_layout:
+		_build_gameplay_page()
+		return
 	current_page = "controls"
 	entries.clear()
-	var actions := _get_custom_actions()
-	if actions.is_empty():
-		entries.append({"text": "No custom actions found", "action": "back"})
-	else:
-		for action in actions:
-			var bindings_display := _get_action_bindings_display(action)
-			var friendly_name := action.replace("_", " ").capitalize()
-			entries.append({
-				"text": "%s: %s" % [friendly_name, bindings_display],
-				"action": "rebind",
-				"param": action
-			})
-	entries.append({"text": "Reset Keybinds", "action": "reset_keys"})
+	entries.append({"text": "Show: " + controls_device + "  [change]", "action": "control_device"})
+	entries.append({"text": "Select an action to change its button.", "action": "info"})
+	for action in _get_custom_actions():
+		entries.append({"text": "%s: %s" % [CONTROL_NAMES.get(action, action), _get_action_bindings_display(action)], "action": "rebind", "param": action})
+	entries.append({"text": "Restore default controls", "action": "reset_keys_confirm"})
 	_update_scroll_range()
 	queue_redraw()
 
+func _binding_matches_device(event: InputEvent) -> bool:
+	if controls_device == "Controller":
+		return event is InputEventJoypadButton or event is InputEventJoypadMotion
+	return event is InputEventKey or event is InputEventMouseButton
+
 func _get_action_bindings_display(action: String) -> String:
-	var events := InputMap.action_get_events(action)
-	if events.is_empty():
-		return "[None]"
-	var parts := []
-	for e in events:
-		var label := _get_event_display(e)
-		if label != "":
-			parts.append("[%s]" % label)
+	var parts: Array[String] = []
+	for event in InputMap.action_get_events(action):
+		if not _binding_matches_device(event):
+			continue
+		var label := _get_event_display(event)
+		if label != "" and not parts.has(label):
+			parts.append(label)
 	if parts.is_empty():
-		return "[None]"
-	return " ".join(parts)
+		return "Not assigned"
+	return " / ".join(parts)
 
 func _get_event_display(event: InputEvent) -> String:
 	if event is InputEventKey:
 		var kc = event.keycode
 		if kc == KEY_NONE and event.physical_keycode != KEY_NONE:
-			# keyboard_get_keycode_from_physical is NOT implemented on Web or headless.
 			var ds := DisplayServer.get_name()
 			if ds == "headless" or ds == "web" or OS.has_feature("web"):
 				kc = event.physical_keycode
@@ -655,31 +763,35 @@ func _get_event_display(event: InputEvent) -> String:
 			MOUSE_BUTTON_MIDDLE: return "Middle Mouse"
 			_: return "Mouse " + str(event.button_index)
 	elif event is InputEventJoypadButton:
-		return "%s (Joypad)" % _get_joypad_button_name(event.button_index)
+		return _get_joypad_button_name(event.button_index)
 	elif event is InputEventJoypadMotion:
-		var axis_name := _get_joypad_axis_name(event.axis)
-		var sgn := " +" if event.axis_value > 0 else " -"
-		return "%s%s" % [axis_name, sgn]
+		match event.axis:
+			JOY_AXIS_LEFT_X: return "Left stick right" if event.axis_value > 0 else "Left stick left"
+			JOY_AXIS_LEFT_Y: return "Left stick down" if event.axis_value > 0 else "Left stick up"
+			JOY_AXIS_RIGHT_X: return "Right stick right" if event.axis_value > 0 else "Right stick left"
+			JOY_AXIS_RIGHT_Y: return "Right stick down" if event.axis_value > 0 else "Right stick up"
+			JOY_AXIS_TRIGGER_LEFT: return "LT / L2"
+			JOY_AXIS_TRIGGER_RIGHT: return "RT / R2"
+		return "Controller direction"
 	return ""
+
 func _get_joypad_button_name(button: int) -> String:
 	match button:
-		0: return "A"
-		1: return "B"
-		2: return "X"
-		3: return "Y"
-		4: return "L1"
-		5: return "R1"
-		6: return "L2"
-		7: return "R2"
-		8: return "Back"
-		9: return "Start"
-		10: return "L3"
-		11: return "R3"
-		12: return "D-Pad Up"
-		13: return "D-Pad Down"
-		14: return "D-Pad Left"
-		15: return "D-Pad Right"
-		16: return "Guide"
+		JOY_BUTTON_A: return "A / Cross"
+		JOY_BUTTON_B: return "B / Circle"
+		JOY_BUTTON_X: return "X / Square"
+		JOY_BUTTON_Y: return "Y / Triangle"
+		JOY_BUTTON_LEFT_SHOULDER: return "LB / L1"
+		JOY_BUTTON_RIGHT_SHOULDER: return "RB / R1"
+		JOY_BUTTON_BACK: return "Back / Select"
+		JOY_BUTTON_START: return "Start / Options"
+		JOY_BUTTON_LEFT_STICK: return "Left stick click"
+		JOY_BUTTON_RIGHT_STICK: return "Right stick click"
+		JOY_BUTTON_DPAD_UP: return "D-pad up"
+		JOY_BUTTON_DPAD_DOWN: return "D-pad down"
+		JOY_BUTTON_DPAD_LEFT: return "D-pad left"
+		JOY_BUTTON_DPAD_RIGHT: return "D-pad right"
+		JOY_BUTTON_GUIDE: return "Guide"
 		_: return "Button %d" % button
 
 func _get_joypad_axis_name(axis: int) -> String:
@@ -724,7 +836,7 @@ func _open_section(idx: int) -> void:
 
 func _get_entry_layout(i: int, line_y: float) -> Dictionary:
 	var is_active := (i == selected_index and not focus_on_sections and not focus_on_bottom)
-	var prefix := "> " if is_active else "  "
+	var prefix := "> " if is_active and entries[i].action != "info" else "  "
 	var full_text: String = prefix + entries[i].text
 	var layout := {
 		"y": line_y,
@@ -787,7 +899,7 @@ func _bottom_action_index(pos: Vector2) -> int:
 	if pos.y < size.y - line_height * 2 or pos.y >= size.y - line_height:
 		return -1
 	var x := padding
-	var gap := font_size * 5
+	var gap := maxf(12.0, minf(font_size * 5.0, (size.x - padding * 2.0 - font.get_string_size("  SAVE  BACK  RESET ALL", HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x) * 0.5))
 	for i in range(bottom_actions.size()):
 		var display_text := ("> " if focus_on_bottom and i == selected_bottom_index else "  ") + bottom_actions[i]
 		var width := font.get_string_size(display_text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x
@@ -799,7 +911,7 @@ func _bottom_action_index(pos: Vector2) -> int:
 
 func _input(event: InputEvent) -> void:
 	if event is InputEventKey and event.keycode == KEY_F11:
-		return # reserved global shortcut, never bind it as a gameplay key
+		return
 	if not binding_mode and not awaiting_input:
 		event = InputSupport.menu_event(event)
 	if confirming_exit:
@@ -885,10 +997,7 @@ func _input(event: InputEvent) -> void:
 		else:
 			if event.button_index == MOUSE_BUTTON_LEFT and dragging_slider:
 				dragging_slider = false
-				# Apply the new value once, now that the drag is over.
-				var gs := _gs()
-				if gs != null and gs.has_method("apply_settings"):
-					gs.apply_settings()
+				# Do not auto-apply on slider release; wait until SAVE is pressed
 	elif event is InputEventKey and event.pressed:
 		using_mouse = false
 		match event.keycode:
@@ -942,6 +1051,7 @@ func _navigate_left() -> void:
 	if focus_on_sections:
 		selected_section = (selected_section - 1 + section_names.size()) % section_names.size()
 		_open_section(selected_section)
+		focus_on_sections = true
 	elif focus_on_bottom:
 		selected_bottom_index = (selected_bottom_index - 1 + bottom_actions.size()) % bottom_actions.size()
 	else:
@@ -952,6 +1062,7 @@ func _navigate_right() -> void:
 	if focus_on_sections:
 		selected_section = (selected_section + 1) % section_names.size()
 		_open_section(selected_section)
+		focus_on_sections = true
 	elif focus_on_bottom:
 		selected_bottom_index = (selected_bottom_index + 1) % bottom_actions.size()
 	else:
@@ -961,6 +1072,7 @@ func _navigate_right() -> void:
 func _activate_focused() -> void:
 	if focus_on_sections:
 		_open_section(selected_section)
+		focus_on_sections = true
 	elif focus_on_bottom:
 		_handle_bottom_action(selected_bottom_index)
 	else:
@@ -1036,10 +1148,6 @@ func _handle_mouse_motion(pos: Vector2) -> void:
 	var actual_rect := Rect2(base_rect.position + float_offset, base_rect.size).grow(5)
 	var ratio := clampf((pos.x - actual_rect.position.x) / actual_rect.size.x, 0.0, 1.0)
 	var entry := entries[selected_index]
-	# Do NOT call _set_setting during a drag — it triggers apply_settings()
-	# 60 times per second, which re-walks the whole scene tree and can hit
-	# freed nodes (GameSettings.gd:165 _apply_recursive crash).
-	# Just update the dict; apply_settings runs once on release.
 	var gs := _gs()
 	if gs != null and "settings" in gs:
 		gs.settings[entry.param] = int(entry.min + ratio * (entry.max - entry.min))
@@ -1101,36 +1209,42 @@ func _confirm_execute(index: int) -> void:
 			_rebuild_current_page()
 
 func _input_binding(event: InputEvent) -> void:
-	if event is InputEventKey and event.pressed and not event.echo:
-		if event.keycode == KEY_ESCAPE:
-			binding_mode = false
-			rebinding_action = ""
-			_rebuild_current_page()
-		elif event.keycode == KEY_DELETE or event.keycode == KEY_BACKSPACE:
-			_remove_last_binding(rebinding_action)
-			binding_mode = false
-			rebinding_action = ""
-			_rebuild_current_page()
-		else:
-			_add_binding(rebinding_action, event)
-	elif event is InputEventMouseButton and event.pressed:
-		if event.button_index in [MOUSE_BUTTON_LEFT, MOUSE_BUTTON_RIGHT, MOUSE_BUTTON_MIDDLE]:
-			_add_binding(rebinding_action, event)
-	elif event is InputEventJoypadButton and event.pressed:
-		_add_binding(rebinding_action, event)
-	elif event is InputEventJoypadMotion and absf(event.axis_value) >= 0.5:
-		var ev := InputEventJoypadMotion.new()
-		ev.axis = event.axis
-		ev.axis_value = 1.0 if event.axis_value > 0 else -1.0
-		_add_binding(rebinding_action, ev)
-
-func _add_binding(action: String, event: InputEvent) -> void:
-	if not InputMap.has_action(action):
+	get_viewport().set_input_as_handled()
+	var cancel_key: bool = event is InputEventKey and event.pressed and event.keycode == KEY_ESCAPE
+	var cancel_pad: bool = event is InputEventJoypadButton and event.pressed and event.button_index == JOY_BUTTON_BACK
+	if cancel_key or cancel_pad:
+		binding_mode = false
+		rebinding_action = ""
+		_rebuild_current_page()
 		return
-	for e in InputMap.action_get_events(action):
-		if _events_equal(e, event):
-			return
-	InputMap.action_add_event(action, event)
+	if not _binding_matches_device(event):
+		return
+	if event is InputEventKey and (not event.pressed or event.echo):
+		return
+	if event is InputEventMouseButton and not event.pressed:
+		return
+	if event is InputEventJoypadButton and not event.pressed:
+		return
+	if event is InputEventJoypadMotion and absf(event.axis_value) < 0.75:
+		return
+	for action in CONTROL_ACTIONS:
+		if action != rebinding_action and InputMap.has_action(action):
+			if InputMap.action_has_event(action, event):
+				_binding_message = "Already used for %s. Try another button, or Esc." % CONTROL_NAMES.get(action, action)
+				queue_redraw()
+				return
+	var new_event := event.duplicate() as InputEvent
+	if new_event is InputEventKey:
+		var key := new_event as InputEventKey
+		if key.physical_keycode != KEY_NONE:
+			key.keycode = KEY_NONE
+	if new_event is InputEventJoypadButton or new_event is InputEventJoypadMotion:
+		new_event.device = -1
+	for old_event in InputMap.action_get_events(rebinding_action):
+		if _binding_matches_device(old_event):
+			InputMap.action_erase_event(rebinding_action, old_event)
+	InputMap.action_add_event(rebinding_action, new_event)
+	InputSupport.invalidate_labels()
 	_set_dirty(true)
 	binding_mode = false
 	rebinding_action = ""
@@ -1170,7 +1284,10 @@ func _input_dropdown(event: InputEvent) -> void:
 				dropdown_selected = (dropdown_selected + 1) % dropdown_options.size()
 				queue_redraw()
 			KEY_ENTER, KEY_KP_ENTER, KEY_SPACE:
-				_set_setting(dropdown_target, dropdown_options[dropdown_selected])
+				if dropdown_target == "graphics_tier_cycle":
+					_set_graphics_tier(str(dropdown_options[dropdown_selected]))
+				else:
+					_set_setting(dropdown_target, dropdown_options[dropdown_selected])
 				dropdown_open = false
 				_rebuild_current_page()
 			KEY_ESCAPE:
@@ -1182,7 +1299,10 @@ func _input_dropdown(event: InputEvent) -> void:
 		if dd_rect.has_point(local_pos):
 			var idx := int((local_pos.y - dd_rect.position.y - dropdown_padding) / line_height)
 			if idx >= 0 and idx < dropdown_options.size():
-				_set_setting(dropdown_target, dropdown_options[idx])
+				if dropdown_target == "graphics_tier_cycle":
+					_set_graphics_tier(str(dropdown_options[idx]))
+				else:
+					_set_setting(dropdown_target, dropdown_options[idx])
 		dropdown_open = false
 		_rebuild_current_page()
 	elif event is InputEventMouseMotion:
@@ -1229,6 +1349,15 @@ func _activate_selected() -> void:
 			var key: String = entry.param
 			_set_setting(key, not bool(_get_setting(key, false)))
 			_rebuild_current_page()
+		"graphics_tier_cycle":
+			dropdown_open = true
+			dropdown_target = "graphics_tier_cycle"
+			dropdown_options = entry.options
+			dropdown_selected = maxi(0, entry.options.find(_get_graphics_tier()))
+			dropdown_parent_index = selected_index
+			var line_y := padding + line_height * 2 + (selected_index - scroll_offset) * line_height
+			dropdown_anchor = Vector2(padding + 200, line_y + line_height)
+			queue_redraw()
 		"cycle":
 			dropdown_open = true
 			dropdown_target = entry.param
@@ -1238,8 +1367,16 @@ func _activate_selected() -> void:
 			var line_y := padding + line_height * 2 + (selected_index - scroll_offset) * line_height
 			dropdown_anchor = Vector2(padding + 200, line_y + line_height)
 			queue_redraw()
+		"control_device":
+			controls_device = "Controller" if controls_device == "Keyboard & Mouse" else "Keyboard & Mouse"
+			_rebuild_current_page()
+		"reset_keys_confirm":
+			entries[selected_index] = {"text": "Restore all controls? Select again to confirm.", "action": "reset_keys"}
+		"info":
+			return
 		"rebind":
 			binding_mode = true
+			_binding_message = ""
 			rebinding_action = entry.param
 			queue_redraw()
 		"reset_keys":
@@ -1249,7 +1386,18 @@ func _adjust_option(dir: int) -> void:
 	if selected_index < 0 or selected_index >= entries.size():
 		return
 	var entry := entries[selected_index]
-	if entry.action == "adjust":
+	if entry.action == "graphics_tier_cycle":
+		var tiers: Array = entry.options
+		var current := _get_graphics_tier()
+		var idx := tiers.find(current)
+		idx = (idx + dir + tiers.size()) % tiers.size()
+		_set_graphics_tier(tiers[idx])
+		_rebuild_current_page()
+		return
+	if entry.action == "control_device":
+		controls_device = "Controller" if controls_device == "Keyboard & Mouse" else "Keyboard & Mouse"
+		_rebuild_current_page()
+	elif entry.action == "adjust":
 		var key: String = entry.param
 		var val := clampi(int(_get_setting(key, 0)) + dir * 5, int(entry.min), int(entry.max))
 		_set_setting(key, val)
@@ -1278,14 +1426,14 @@ func _exit_to_main_menu() -> void:
 		Transition.change_scene("res://scenes/main scenes/main_menu.tscn")
 
 func _get_custom_actions() -> Array[String]:
-	var result: Array[String] = []
-	for action in InputMap.get_actions():
-		if not str(action).begins_with("ui_") or str(action) in ["ui_left", "ui_right", "ui_up", "ui_down"]:
-			result.append(str(action))
-	return result
+	var actions: Array[String] = []
+	for action in CONTROL_ACTIONS:
+		if InputMap.has_action(action):
+			actions.append(action)
+	return actions
 
 func _bool_text(label: String, value: bool) -> String:
-	return "%s: [%s]" % [label, "X" if value else " "]
+	return "%s: %s" % [label, "On" if value else "Off"]
 
 func _slider_entry(label: String, key: String, min_val: float, max_val: float) -> Dictionary:
 	var value := int(_get_setting(key, min_val))
